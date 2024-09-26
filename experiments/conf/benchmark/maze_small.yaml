@@ -1,5 +1,0 @@
-_target_: "tamp_improv.benchmarks.maze_benchmark.MazeBenchmark"
-min_height: 5
-max_height: 8
-min_width: 5
-max_width: 8

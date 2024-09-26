@@ -5,9 +5,9 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "tamp_improv"
 version = "0.1.0"
-description = "A basic starter for Python packages."
+description = "TAMP physical improvisation."
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 dependencies = [
    "matplotlib",
    "numpy",
@@ -15,7 +15,10 @@ dependencies = [
    "pandas-stubs",
    "hydra-core",
    "omegaconf",
-   "tomsutils@git+https://github.com/isabelliu0/toms-utils.git",
+   "tomsutils@git+https://github.com/tomsilver/toms-utils.git",
+   "tomsgeoms2d@git+https://github.com/tomsilver/toms-geoms-2d",
+   "gymnasium",
+   "moviepy",
 ]
 
 [project.optional-dependencies]
@@ -37,10 +40,10 @@ tamp_improv = ["py.typed"]
 
 [tool.black]
 line-length = 88
-target-version = ["py312"]
+target-version = ["py310"]
 
 [tool.isort]
-py_version = 312
+py_version = 310
 profile = "black"
 multi_line_output = 2
 skip_glob = ["venv/*"]
