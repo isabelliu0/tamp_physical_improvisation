@@ -40,10 +40,10 @@ tamp_improv = ["py.typed"]
 
 [tool.black]
 line-length = 88
-target-version = ["py310"]
+target-version = ["py312"]
 
 [tool.isort]
-py_version = 310
+py_version = 312
 profile = "black"
 multi_line_output = 2
 skip_glob = ["venv/*"]
