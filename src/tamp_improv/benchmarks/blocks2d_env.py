@@ -1,6 +1,6 @@
 """A block environment in 2D."""
 
-from typing import Any, SupportsFloat
+from typing import Any, SupportsFloat, Tuple
 
 import gymnasium as gym
 import numpy as np
@@ -70,8 +70,10 @@ class Blocks2DEnv(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
         )
 
     def _calculate_distance_to_block(self) -> float:
-        return np.linalg.norm(
-            np.array(self._robot_position) - np.array(self._block_position)
+        return float(
+            np.linalg.norm(
+                np.array(self._robot_position) - np.array(self._block_position)
+            )
         )
 
     def _get_info(self) -> dict[str, Any]:
@@ -80,7 +82,7 @@ class Blocks2DEnv(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
     def step(
         self,
         action: NDArray[np.float32],
-    ) -> tuple[NDArray[np.float32], SupportsFloat, bool, bool, dict[str, Any]]:
+    ) -> Tuple[NDArray[np.float32], SupportsFloat, bool, bool, dict[str, Any]]:
 
         # Update the position of the robot.
         dx, dy, new_gripper_status = action
@@ -90,7 +92,7 @@ class Blocks2DEnv(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
         new_y = np.clip(self._robot_position[1] + dy, 0.0, 1.0).astype(np.float32)
 
         # Update the position and the gripper status of the robot.
-        self._robot_position = (new_x, new_y)
+        self._robot_position = np.array([new_x, new_y], dtype=np.float32)
         self._gripper_status = new_gripper_status.astype(np.float32)
 
         distance_to_block = self._calculate_distance_to_block()
@@ -109,9 +111,11 @@ class Blocks2DEnv(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
 
         # Update the position of the block if the gripper suffices the conditions to move the block.
         if self._gripper_status > 0.0 and distance_to_block <= 0.25:
-            self._block_position = self._robot_position
+            self._block_position = self._robot_position.copy()
         elif self._gripper_status < 0.0 and distance_to_block <= 0.1:
-            self._block_position = (self._robot_position[0], 0.0)
+            self._block_position = np.array(
+                [self._robot_position[0], 0.0], dtype=np.float32
+            )
 
         # Check if the robot has reached the goal and if the gripper is deactivated.
         goal_reached = np.array_equal(
@@ -134,7 +138,7 @@ class Blocks2DEnv(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
         *,
         seed: int | None = None,
         options: dict[str, Any] | None = None,
-    ) -> tuple[NDArray[np.float32], dict[str, Any]]:
+    ) -> Tuple[NDArray[np.float32], dict[str, Any]]:
         super().reset(seed=seed)
 
         self._robot_position = np.array([0.5, 1.0], dtype=np.float32)
