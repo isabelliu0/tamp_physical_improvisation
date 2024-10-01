@@ -2,10 +2,12 @@
 
 import numpy as np
 from gymnasium.wrappers import RecordVideo, TimeLimit
-
 from task_then_motion_planning.planning import TaskThenMotionPlanner
+
 from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
-from tamp_improv.blocks2d_planning import Blocks2DPerceiver, types, predicates, operators, skills
+from tamp_improv.blocks2d_planning import Blocks2DPerceiver, operators, predicates, \
+    skills, types
+
 
 def test_blocks_2d_env_with_planner():
     env = Blocks2DEnv(render_mode="rgb_array")
@@ -15,7 +17,7 @@ def test_blocks_2d_env_with_planner():
     perceiver = Blocks2DPerceiver(env)
 
     planner = TaskThenMotionPlanner(
-        types, predicates, perceiver, operators, skills, planner_id="blocks2d"
+        types, predicates, perceiver, operators, skills, planner_id="pyperplan"
     )
 
     obs, _ = env.reset()
@@ -36,6 +38,3 @@ def test_blocks_2d_env_with_planner():
         print("Episode didn't finish within 100 steps")
 
     env.close()
-
-if __name__ == "__main__":
-    test_blocks_2d_env_with_planner()

@@ -41,7 +41,6 @@ def test_blocks_2d_env():
         np.array([0.1, 0.0, 1.0]),  # Move right
         np.array([0.1, 0.0, 1.0]),  # Move right
         np.array([0.0, 0.0, -1.0]),  # Drop block
-        np.array([0.0, 0.0, 0.0]),  # Deactivate gripper
     ]
 
     for action in actions:
