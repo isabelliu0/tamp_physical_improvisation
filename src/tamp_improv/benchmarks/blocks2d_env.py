@@ -1,6 +1,7 @@
 """A block environment in 2D."""
 
 from typing import Any, SupportsFloat, Tuple
+from typing import Any, SupportsFloat, Tuple
 
 import gymnasium as gym
 import numpy as np
@@ -110,7 +111,7 @@ class Blocks2DEnv(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
                 return observation, reward, False, True, info
 
         # Update the position of the block if the gripper suffices the conditions to move the block.
-        if self._gripper_status > 0.0 and distance_to_block <= 0.25:
+        if self._gripper_status > 0.0 and distance_to_block <= 0.3:
             self._block_position = self._robot_position.copy()
         elif self._gripper_status < 0.0 and distance_to_block <= 0.1:
             self._block_position = np.array(
@@ -118,9 +119,7 @@ class Blocks2DEnv(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
             )
 
         # Check if the robot has reached the goal and if the gripper is deactivated.
-        goal_reached = np.array_equal(
-            self._block_position, self._target_block_position
-        ) and np.isclose(self._gripper_status, 0.0, atol=1e-6)
+        goal_reached = np.array_equal(self._block_position, self._target_block_position)
 
         # Calculate reward
         reward = np.float32(1.0) if goal_reached else np.float32(0.0)

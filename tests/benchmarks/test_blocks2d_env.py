@@ -2,6 +2,7 @@
 
 import numpy as np
 from gymnasium.wrappers import RecordVideo, TimeLimit
+from gymnasium.wrappers import RecordVideo, TimeLimit
 
 from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
 
@@ -41,7 +42,6 @@ def test_blocks_2d_env():
         np.array([0.1, 0.0, 1.0]),  # Move right
         np.array([0.1, 0.0, 1.0]),  # Move right
         np.array([0.0, 0.0, -1.0]),  # Drop block
-        np.array([0.0, 0.0, 0.0]),  # Deactivate gripper
     ]
 
     for action in actions:

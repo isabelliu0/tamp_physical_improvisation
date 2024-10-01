@@ -7,7 +7,7 @@ name = "tamp_improv"
 version = "0.1.0"
 description = "TAMP physical improvisation."
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = [
    "matplotlib",
    "numpy",
@@ -17,6 +17,8 @@ dependencies = [
    "omegaconf",
    "tomsutils@git+https://github.com/tomsilver/toms-utils.git",
    "tomsgeoms2d@git+https://github.com/tomsilver/toms-geoms-2d",
+   "task-then-motion-planning@git+https://github.com/tomsilver/task-then-motion-planning.git",
+   "relational-structs@git+https://github.com/tomsilver/relational-structs.git",
    "gymnasium",
    "moviepy",
 ]
@@ -40,10 +42,10 @@ tamp_improv = ["py.typed"]
 
 [tool.black]
 line-length = 88
-target-version = ["py312"]
+target-version = ["py311"]
 
 [tool.isort]
-py_version = 312
+py_version = 311
 profile = "black"
 multi_line_output = 2
 skip_glob = ["venv/*"]
