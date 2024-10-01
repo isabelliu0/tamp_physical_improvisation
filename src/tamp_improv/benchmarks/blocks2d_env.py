@@ -1,6 +1,7 @@
 """A block environment in 2D."""
 
 from typing import Any, SupportsFloat, Tuple
+from typing import Any, SupportsFloat, Tuple
 
 import gymnasium as gym
 import numpy as np

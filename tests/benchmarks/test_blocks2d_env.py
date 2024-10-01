@@ -2,6 +2,7 @@
 
 import numpy as np
 from gymnasium.wrappers import RecordVideo, TimeLimit
+from gymnasium.wrappers import RecordVideo, TimeLimit
 
 from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
 
