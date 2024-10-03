@@ -122,10 +122,10 @@ class Blocks2DEnv(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
         distance = self._calculate_distance_to_block(self._block_1_position)
         if self._gripper_status > 0.0 and distance <= (self._robot_width + self._block_width) / 2:
             # Robot fetches and holds the block.
-            self._block_position = self._robot_position.copy()
+            self._block_1_position = self._robot_position.copy()
         elif self._gripper_status < 0.0 and np.isclose(distance, 0.0, atol=1e-3):
             # Robot drops the block.
-            self._block_position = np.array(
+            self._block_1_position = np.array(
                 [self._robot_position[0], 0.0], dtype=np.float32
             )
 

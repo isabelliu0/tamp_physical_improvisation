@@ -34,6 +34,8 @@ def test_blocks_2d_env_with_planner():
         print("Error during planner reset:", str(e))
         print("Current problem:")
         print(planner._current_problem)
+        print("Current domain:")
+        print(planner._domain)
         raise
 
     total_reward = 0
