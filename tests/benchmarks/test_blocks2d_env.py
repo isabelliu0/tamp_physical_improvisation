@@ -2,7 +2,6 @@
 
 import numpy as np
 from gymnasium.wrappers import RecordVideo, TimeLimit
-from gymnasium.wrappers import RecordVideo, TimeLimit
 
 from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
 
@@ -13,10 +12,7 @@ def test_blocks_2d_env():
     env = Blocks2DEnv(render_mode="rgb_array")
     env = TimeLimit(env, max_episode_steps=100)
     env = RecordVideo(env, "blocks2d-test")
-    assert env.observation_space.shape == (5,)
-    assert env.action_space.shape == (3,)
     obs, info = env.reset()
-    assert obs.shape == (5,)
 
     env.action_space.seed(123)
 

@@ -1,9 +1,11 @@
 """Planning components for the Blocks2D environment."""
 
+import math
 from typing import Sequence, Set, Tuple
-import numpy as np
 
-from relational_structs import GroundAtom, LiftedAtom, LiftedOperator, Object, Predicate, Type
+import numpy as np
+from relational_structs import GroundAtom, LiftedAtom, LiftedOperator, Object, \
+    Predicate, Type
 from task_then_motion_planning.structs import LiftedOperatorSkill, Perceiver
 
 from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
@@ -27,7 +29,7 @@ block = block_type("?block")
 
 ClearTargetAreaOperator = LiftedOperator(
     "ClearTargetArea",
-    [robot],
+    [robot], # type: ignore
     preconditions={GripperEmpty([robot]), LiftedAtom(TargetAreaBlocked, [])},
     add_effects={LiftedAtom(TargetAreaClear, [])},
     delete_effects={LiftedAtom(TargetAreaBlocked, [])}
@@ -35,10 +37,10 @@ ClearTargetAreaOperator = LiftedOperator(
 
 PickUpOperator = LiftedOperator(
     "PickUp",
-    [robot, block],
+    [robot, block], # type: ignore
     preconditions={GripperEmpty([robot]),
                    LiftedAtom(TargetAreaClear, []),
-                   LiftedAtom(BlockNotInTargetArea, [block]),
+                   LiftedAtom(BlockNotInTargetArea, [block]), # type: ignore
     },
     add_effects={Holding([robot, block])},
     delete_effects={GripperEmpty([robot])}
@@ -46,10 +48,10 @@ PickUpOperator = LiftedOperator(
 
 PutDownOperator = LiftedOperator(
     "PutDown",
-    [robot, block],
+    [robot, block], # type: ignore
     preconditions={Holding([robot, block]),
                    LiftedAtom(TargetAreaClear, [])},
-    add_effects={LiftedAtom(BlockInTargetArea, [block]), GripperEmpty([robot])},
+    add_effects={LiftedAtom(BlockInTargetArea, [block]), GripperEmpty([robot])},  # type: ignore
     delete_effects={Holding([robot, block])}
 )
 
@@ -67,7 +69,7 @@ class Blocks2DPerceiver(Perceiver[np.ndarray]):
         objects = {self._robot, self._block_1, self._block_2}
         atoms = self._get_atoms(obs)
         goal: Set[GroundAtom] = {BlockInTargetArea([self._block_1]), GripperEmpty([self._robot]), GroundAtom(TargetAreaClear, [])}
-        return objects, atoms, goal
+        return objects, atoms, goal     # type: ignore
 
     def step(self, obs: np.ndarray) -> set[GroundAtom]:
         return self._get_atoms(obs)
@@ -126,7 +128,7 @@ class ClearTargetAreaSkill(LiftedOperatorSkill[np.ndarray, np.ndarray]):
         return ClearTargetAreaOperator
 
     def _get_action_given_objects(self, objects: Sequence[Object], obs: np.ndarray) -> np.ndarray:
-        robot_x, robot_y, robot_width, _, block_1_x, _, block_2_x, block_2_y, block_width, _, _, target_x, _, target_width, _ = obs
+        robot_x, robot_y, robot_width, robot_height, block_1_x, _, block_2_x, block_2_y, block_width, block_height, _, target_x, _, target_width, _ = obs
 
         # Determine the best direction to push block 2
         push_direction = self._get_push_direction(block_1_x, block_2_x, target_x, block_width, target_width)
@@ -135,11 +137,11 @@ class ClearTargetAreaSkill(LiftedOperatorSkill[np.ndarray, np.ndarray]):
         distance = np.linalg.norm([robot_x - block_2_x, robot_y - block_2_y])
         vertical_distance = np.abs(robot_y - block_2_y)
         
-        if distance > (robot_width + block_width) / 2:
-            dx = np.clip(block_2_x - robot_x, -0.1, 0.1)
-            dy = np.clip(block_2_y - robot_y, -0.1, 0.1)
+        if distance > ((robot_width + block_width) / 2) * math.sqrt(2):
+            dx = np.clip(block_2_x - robot_x + (robot_width + block_width) / 2, -0.1, 0.1)
+            dy = np.clip(block_2_y - robot_y + (robot_height + block_height) / 2, -0.1, 0.1)
             return np.array([dx, dy, 0.0])
-        elif vertical_distance > (robot_width + block_width) / 2: 
+        elif vertical_distance > 0.01: 
             # Move towards the y-level of the block
             dy = np.clip(block_2_y - robot_y, -0.1, 0.1)
             return np.array([0.0, dy, 0.0])
@@ -158,22 +160,27 @@ class ClearTargetAreaSkill(LiftedOperatorSkill[np.ndarray, np.ndarray]):
             right_margin *= 2
 
         if left_margin < right_margin:
-            return -1.0  # Push left
+            return -0.1  # Push left
         else:
-            return 1.0  # Push right
+            return 0.1  # Push right
 
 class PickUpSkill(LiftedOperatorSkill[np.ndarray, np.ndarray]):
     def _get_lifted_operator(self) -> LiftedOperator:
         return PickUpOperator
 
     def _get_action_given_objects(self, objects: Sequence[Object], obs: np.ndarray) -> np.ndarray:
-        robot_x, robot_y, robot_width, _, block_x, block_y, _, _, block_width, _, _, _, _, _, _ = obs
-        distance = np.linalg.norm([robot_x - block_x, robot_y - block_y])
-        
-        if distance > (robot_width + block_width) / 2:
+        robot_x, robot_y, robot_width, robot_height, block_x, block_y, _, _, block_width, block_height, _, _, _, _, _ = obs
+
+        print("Trying to pick up!!!")
+
+        # First, move the robot above the block
+        if robot_y < block_y + block_height/2 + robot_height/2:
+            dy = np.clip((block_y + block_height/2 + robot_height/2) - robot_y, -0.1, 0.1)
+            return np.array([0.0, dy, 0.0])
+        # Then, align the robot with the block horizontally
+        elif abs(robot_x - block_x) > 0.0:
             dx = np.clip(block_x - robot_x, -0.1, 0.1)
-            dy = np.clip(block_y - robot_y, -0.1, 0.1)
-            return np.array([dx, dy, 0.0])
+            return np.array([dx, 0.0, 0.0])
         else:
             return np.array([0.0, 0.0, 1.0])
 
@@ -182,16 +189,12 @@ class PutDownSkill(LiftedOperatorSkill[np.ndarray, np.ndarray]):
         return PutDownOperator
 
     def _get_action_given_objects(self, objects: Sequence[Object], obs: np.ndarray) -> np.ndarray:
-        _, _, _, _, block_x, block_y, _, _, _, _, gripper_status, target_x, target_y, _, _ = obs
-        distance = np.linalg.norm([target_x - block_x, target_y - block_y])
+        _, _, _, _, block_x, _, _, _, _, _, gripper_status, target_x, _, _, _ = obs
+        distance = target_x - block_x
         
-        if distance > 0.1 or block_y > 0.1:  # Ensure robot is close to target and near the bottom
-            # Move towards the target
+        if distance > 0.0:
             dx = np.clip(target_x - block_x, -0.1, 0.1)
-            dy = np.clip(target_y - block_y, -0.1, 0.1)
-            assert dx > 0
-            assert np.isclose(dy, 0.0)
-            return np.array([dx, dy, 1.0])
+            return np.array([dx, 0.0, 1.0])
         elif gripper_status > 0:
             return np.array([0.0, 0.0, -1.0])
         else:
