@@ -1,6 +1,7 @@
 .DS_Store
 .python-version
 .vscode
+videos/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

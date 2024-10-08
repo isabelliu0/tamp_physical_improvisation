@@ -11,7 +11,7 @@ def test_blocks_2d_env():
 
     env = Blocks2DEnv(render_mode="rgb_array")
     env = TimeLimit(env, max_episode_steps=100)
-    env = RecordVideo(env, "blocks2d-test")
+    env = RecordVideo(env, "videos/blocks2d-test")
     obs, info = env.reset()
 
     env.action_space.seed(123)
