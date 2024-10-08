@@ -11,6 +11,7 @@ from relational_structs import (
     Object,
     Predicate,
     Type,
+    Variable,
 )
 from task_then_motion_planning.structs import LiftedOperatorSkill, Perceiver
 
@@ -37,12 +38,12 @@ predicates = {
 }
 
 # Create operators
-robot = robot_type("?robot")
-block = block_type("?block")
+robot = Variable("?robot", robot_type)
+block = Variable("?block", block_type)
 
 ClearTargetAreaOperator = LiftedOperator(
     "ClearTargetArea",
-    [robot],  # type: ignore
+    [robot],
     preconditions={GripperEmpty([robot]), LiftedAtom(TargetAreaBlocked, [])},
     add_effects={LiftedAtom(TargetAreaClear, [])},
     delete_effects={LiftedAtom(TargetAreaBlocked, [])},
@@ -50,11 +51,11 @@ ClearTargetAreaOperator = LiftedOperator(
 
 PickUpOperator = LiftedOperator(
     "PickUp",
-    [robot, block],  # type: ignore
+    [robot, block],
     preconditions={
         GripperEmpty([robot]),
         LiftedAtom(TargetAreaClear, []),
-        LiftedAtom(BlockNotInTargetArea, [block]),  # type: ignore
+        LiftedAtom(BlockNotInTargetArea, [block]),
     },
     add_effects={Holding([robot, block])},
     delete_effects={GripperEmpty([robot])},
@@ -62,9 +63,12 @@ PickUpOperator = LiftedOperator(
 
 PutDownOperator = LiftedOperator(
     "PutDown",
-    [robot, block],  # type: ignore
+    [robot, block],
     preconditions={Holding([robot, block]), LiftedAtom(TargetAreaClear, [])},
-    add_effects={LiftedAtom(BlockInTargetArea, [block]), GripperEmpty([robot])},  # type: ignore
+    add_effects={
+        LiftedAtom(BlockInTargetArea, [block]),
+        LiftedAtom(GripperEmpty, [robot]),
+    },
     delete_effects={Holding([robot, block])},
 )
 
@@ -73,6 +77,8 @@ operators = {ClearTargetAreaOperator, PickUpOperator, PutDownOperator}
 
 # Create perceiver
 class Blocks2DPerceiver(Perceiver[np.ndarray]):
+    """Perceiver for the Blocks2D env."""
+
     def __init__(self, env: "Blocks2DEnv"):
         self.env = env
         self._robot = robot_type("robot")
@@ -189,7 +195,8 @@ class Blocks2DPerceiver(Perceiver[np.ndarray]):
             free_height = target_height - max(
                 0, min(block_top, target_top) - max(block_bottom, target_bottom)
             )
-            # If the free width/height is less than the width/height of block_1, it's blocking
+            # If the free width/height is less than the width/height of block_1,
+            # it's blocking.
             return (free_width < block_width) or (free_height < block_height)
 
         return False
@@ -197,6 +204,8 @@ class Blocks2DPerceiver(Perceiver[np.ndarray]):
 
 # Update the skills
 class ClearTargetAreaSkill(LiftedOperatorSkill[np.ndarray, np.ndarray]):
+    """Skill for clearing the target area."""
+
     def _get_lifted_operator(self) -> LiftedOperator:
         return ClearTargetAreaOperator
 
@@ -238,14 +247,13 @@ class ClearTargetAreaSkill(LiftedOperatorSkill[np.ndarray, np.ndarray]):
                 block_2_y - robot_y + (robot_height + block_height) / 2, -0.1, 0.1
             )
             return np.array([dx, dy, 0.0])
-        elif vertical_distance > 0.01:
+        if vertical_distance > 0.01:
             # Move towards the y-level of the block
             dy = np.clip(block_2_y - robot_y, -0.1, 0.1)
             return np.array([0.0, dy, 0.0])
-        else:
-            # Push the block horizontally
-            dx = np.clip(push_direction, -0.1, 0.1)
-            return np.array([dx, 0.0, 0.0])
+        # Push the block horizontally
+        dx = np.clip(push_direction, -0.1, 0.1)
+        return np.array([dx, 0.0, 0.0])
 
     def _get_push_direction(
         self,
@@ -269,11 +277,12 @@ class ClearTargetAreaSkill(LiftedOperatorSkill[np.ndarray, np.ndarray]):
 
         if left_margin < right_margin:
             return -0.1  # Push left
-        else:
-            return 0.1  # Push right
+        return 0.1  # Push right
 
 
 class PickUpSkill(LiftedOperatorSkill[np.ndarray, np.ndarray]):
+    """Skill for picking up a block."""
+
     def _get_lifted_operator(self) -> LiftedOperator:
         return PickUpOperator
 
@@ -283,13 +292,13 @@ class PickUpSkill(LiftedOperatorSkill[np.ndarray, np.ndarray]):
         (
             robot_x,
             robot_y,
-            robot_width,
+            _,
             robot_height,
             block_x,
             block_y,
             _,
             _,
-            block_width,
+            _,
             block_height,
             _,
             _,
@@ -307,14 +316,15 @@ class PickUpSkill(LiftedOperatorSkill[np.ndarray, np.ndarray]):
             )
             return np.array([0.0, dy, 0.0])
         # Then, align the robot with the block horizontally
-        elif abs(robot_x - block_x) > 0.0:
+        if abs(robot_x - block_x) > 0.0:
             dx = np.clip(block_x - robot_x, -0.1, 0.1)
             return np.array([dx, 0.0, 0.0])
-        else:
-            return np.array([0.0, 0.0, 1.0])
+        return np.array([0.0, 0.0, 1.0])
 
 
 class PutDownSkill(LiftedOperatorSkill[np.ndarray, np.ndarray]):
+    """Skill for putting down a block."""
+
     def _get_lifted_operator(self) -> LiftedOperator:
         return PutDownOperator
 
@@ -327,10 +337,9 @@ class PutDownSkill(LiftedOperatorSkill[np.ndarray, np.ndarray]):
         if distance > 0.0:
             dx = np.clip(target_x - block_x, -0.1, 0.1)
             return np.array([dx, 0.0, 1.0])
-        elif gripper_status > 0:
+        if gripper_status > 0:
             return np.array([0.0, 0.0, -1.0])
-        else:
-            return np.array([0.0, 0.0, 0.0])
+        return np.array([0.0, 0.0, 0.0])
 
 
 skills = {ClearTargetAreaSkill(), PickUpSkill(), PutDownSkill()}

@@ -136,7 +136,8 @@ class Blocks2DEnv(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
         if terminated or truncated:
             return obs, reward, terminated, truncated, info
 
-        # Update block 1's position if the gripper suffices the conditions to move the block.
+        # Update block 1's position if the gripper suffices the conditions to move
+        # the block.
         distance = self._calculate_distance_to_block(self._block_1_position)
         print("distance to block 1:", distance)
         if (
@@ -189,9 +190,8 @@ class Blocks2DEnv(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
             observation = self._get_obs()
             info = self._get_info()
             return observation, reward, False, True, info
-        else:
-            # If there's no collision, return the current state without changes
-            return self._get_obs(), 0.0, False, False, self._get_info()
+        # If there's no collision, return the current state without changes
+        return self._get_obs(), 0.0, False, False, self._get_info()
 
     def _is_adjacent(
         self, robot_position: NDArray[np.float32], block_position: NDArray[np.float32]
@@ -222,6 +222,7 @@ class Blocks2DEnv(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
         target_width: float,
         target_height: float,
     ) -> bool:
+        """Checks if the block is in the target area."""
         target_left = target_x - target_width / 2
         target_right = target_x + target_width / 2
         target_bottom = target_y - target_height / 2
