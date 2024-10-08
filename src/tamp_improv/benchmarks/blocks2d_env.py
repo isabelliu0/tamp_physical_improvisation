@@ -1,7 +1,6 @@
 """A block environment in 2D."""
 
 from typing import Any, SupportsFloat, Tuple
-from typing import Any, SupportsFloat, Tuple
 
 import gymnasium as gym
 import numpy as np
@@ -33,7 +32,9 @@ class Blocks2DEnv(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
     metadata = {"render_modes": ["rgb_array"], "render_fps": 4}
 
     def __init__(self, render_mode: str | None = None) -> None:
-        self.observation_space = spaces.Box(low=0, high=1, shape=(15,), dtype=np.float32)
+        self.observation_space = spaces.Box(
+            low=0, high=1, shape=(15,), dtype=np.float32
+        )
         self.action_space = spaces.Box(
             low=np.array([-0.1, -0.1, -1.0]),
             high=np.array([0.1, 0.1, 1.0]),
@@ -86,13 +87,19 @@ class Blocks2DEnv(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
             dtype=np.float32,
         )
 
-    def _calculate_distance_to_block(self, block_position: NDArray[np.float32]) -> float:
+    def _calculate_distance_to_block(
+        self, block_position: NDArray[np.float32]
+    ) -> float:
         return float(np.linalg.norm(self._robot_position - block_position))
 
     def _get_info(self) -> dict[str, Any]:
         return {
-            "distance_to_block1": self._calculate_distance_to_block(self._block_1_position),
-            "distance_to_block2": self._calculate_distance_to_block(self._block_2_position),
+            "distance_to_block1": self._calculate_distance_to_block(
+                self._block_1_position
+            ),
+            "distance_to_block2": self._calculate_distance_to_block(
+                self._block_2_position
+            ),
         }
 
     def step(
@@ -116,17 +123,26 @@ class Blocks2DEnv(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
         self._gripper_status = new_gripper_status.astype(np.float32)
 
         # Check for collisions with the blocks
-        obs, reward, terminated, truncated, info = self._check_collisions(self._block_1_position)
-        if (terminated or truncated) and np.isclose(self._gripper_status, 0.0, atol=1e-6):
+        obs, reward, terminated, truncated, info = self._check_collisions(
+            self._block_1_position
+        )
+        if (terminated or truncated) and np.isclose(
+            self._gripper_status, 0.0, atol=1e-6
+        ):
             return obs, reward, terminated, truncated, info
-        obs, reward, terminated, truncated, info = self._check_collisions(self._block_2_position)
+        obs, reward, terminated, truncated, info = self._check_collisions(
+            self._block_2_position
+        )
         if terminated or truncated:
             return obs, reward, terminated, truncated, info
-        
+
         # Update block 1's position if the gripper suffices the conditions to move the block.
         distance = self._calculate_distance_to_block(self._block_1_position)
         print("distance to block 1:", distance)
-        if self._gripper_status > 0.0 and distance <= ((self._robot_width + self._block_width) / 2) + 1e-5:
+        if (
+            self._gripper_status > 0.0
+            and distance <= ((self._robot_width + self._block_width) / 2) + 1e-5
+        ):
             # Robot fetches and holds the block.
             self._block_1_position = self._robot_position.copy()
             print("picking up!!!")
@@ -137,7 +153,16 @@ class Blocks2DEnv(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
             )
 
         # Check if the robot has reached the goal
-        goal_reached = self.is_block_in_target_area(self._block_1_position[0], self._block_1_position[1], self._block_width, self._block_height, self._target_area["x"], self._target_area["y"], self._target_area["width"], self._target_area["height"])
+        goal_reached = self.is_block_in_target_area(
+            self._block_1_position[0],
+            self._block_1_position[1],
+            self._block_width,
+            self._block_height,
+            self._target_area["x"],
+            self._target_area["y"],
+            self._target_area["width"],
+            self._target_area["height"],
+        )
 
         # Calculate reward
         reward = float(1.0) if goal_reached else float(0.0)
@@ -150,11 +175,15 @@ class Blocks2DEnv(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
 
         return observation, reward, terminated, truncated, info
 
-    def _check_collisions(self, block_position: NDArray[np.float32]) -> Tuple[NDArray[np.float32], float, bool, bool, dict[str, Any]]:
+    def _check_collisions(
+        self, block_position: NDArray[np.float32]
+    ) -> Tuple[NDArray[np.float32], float, bool, bool, dict[str, Any]]:
         distance = self._calculate_distance_to_block(block_position)
 
         collision_threshold = (self._robot_width + self._block_width) / 2
-        collision = distance < (collision_threshold - 1e-5)  # Margin for floating point errors
+        collision = distance < (
+            collision_threshold - 1e-5
+        )  # Margin for floating point errors
         if collision:
             reward = float(-1.0)
             observation = self._get_obs()
@@ -163,28 +192,52 @@ class Blocks2DEnv(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
         else:
             # If there's no collision, return the current state without changes
             return self._get_obs(), 0.0, False, False, self._get_info()
-        
-    def _is_adjacent(self, robot_position: NDArray[np.float32], block_position: NDArray[np.float32]) -> bool:
-        return (np.abs(robot_position[1] - block_position[1]) <= self._block_height / 2) and np.isclose(np.abs(robot_position[0] - block_position[0]), (self._robot_width + self._block_width) / 2, atol=1e-3)
-    
+
+    def _is_adjacent(
+        self, robot_position: NDArray[np.float32], block_position: NDArray[np.float32]
+    ) -> bool:
+        return (
+            np.abs(robot_position[1] - block_position[1]) <= self._block_height / 2
+        ) and np.isclose(
+            np.abs(robot_position[0] - block_position[0]),
+            (self._robot_width + self._block_width) / 2,
+            atol=1e-3,
+        )
+
     def _push_block(self, new_robot_x: float):
         push_dx = new_robot_x - self._robot_position[0]
-        new_block_x = np.clip(self._block_2_position[0] + push_dx, 0.0, 1.0).astype(np.float32)
+        new_block_x = np.clip(self._block_2_position[0] + push_dx, 0.0, 1.0).astype(
+            np.float32
+        )
         self._block_2_position[0] = new_block_x
-    
-    def is_block_in_target_area(self, block_x: float, block_y: float, block_width: float, block_height: float, target_x: float, target_y: float, target_width: float, target_height: float) -> bool:
+
+    def is_block_in_target_area(
+        self,
+        block_x: float,
+        block_y: float,
+        block_width: float,
+        block_height: float,
+        target_x: float,
+        target_y: float,
+        target_width: float,
+        target_height: float,
+    ) -> bool:
         target_left = target_x - target_width / 2
         target_right = target_x + target_width / 2
         target_bottom = target_y - target_height / 2
         target_top = target_y + target_height / 2
-        
+
         block_left = block_x - block_width / 2
         block_right = block_x + block_width / 2
         block_bottom = block_y - block_height / 2
         block_top = block_y + block_height / 2
-        
-        return (target_left <= block_left and block_right <= target_right
-                and target_bottom <= block_bottom and block_top <= target_top)
+
+        return (
+            target_left <= block_left
+            and block_right <= target_right
+            and target_bottom <= block_bottom
+            and block_top <= target_top
+        )
 
     def reset(
         self,

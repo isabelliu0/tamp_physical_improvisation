@@ -5,8 +5,13 @@ from gymnasium.wrappers import RecordVideo, TimeLimit
 from task_then_motion_planning.planning import TaskThenMotionPlanner
 
 from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
-from tamp_improv.blocks2d_planning import Blocks2DPerceiver, operators, predicates, \
-    skills, types
+from tamp_improv.blocks2d_planning import (
+    Blocks2DPerceiver,
+    operators,
+    predicates,
+    skills,
+    types,
+)
 
 
 def test_blocks_2d_env_with_planner():
@@ -44,7 +49,7 @@ def test_blocks_2d_env_with_planner():
         obs, reward, terminated, truncated, info = env.step(action)
         total_reward += reward
         print(f"Step {step + 1}: Action: {action}, Obs: {obs}, Reward: {reward}")
-        
+
         if terminated or truncated:
             print(f"Episode finished after {step + 1} steps")
             print(f"Total reward: {total_reward}")
@@ -54,6 +59,7 @@ def test_blocks_2d_env_with_planner():
 
     env.close()
 
+
 """Tests for Blocks2DEnv with TaskThenMotionPlanner."""
 
 import numpy as np
@@ -61,8 +67,13 @@ from gymnasium.wrappers import RecordVideo, TimeLimit
 from task_then_motion_planning.planning import TaskThenMotionPlanner
 
 from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
-from tamp_improv.blocks2d_planning import Blocks2DPerceiver, operators, predicates, \
-    skills, types
+from tamp_improv.blocks2d_planning import (
+    Blocks2DPerceiver,
+    operators,
+    predicates,
+    skills,
+    types,
+)
 
 
 def test_blocks_2d_env_with_planner():
@@ -84,8 +95,10 @@ def test_blocks_2d_env_with_planner():
         action = planner.step(obs)
         obs, reward, terminated, truncated, info = env.step(action)
         total_reward += reward
-        print(f"Step {step + 1}: Action: {action}, Obs: {obs}, Reward: {reward}, Info: {info}")
-        
+        print(
+            f"Step {step + 1}: Action: {action}, Obs: {obs}, Reward: {reward}, Info: {info}"
+        )
+
         if terminated or truncated:
             print(f"Episode finished after {step + 1} steps")
             print(f"Total reward: {total_reward}")
