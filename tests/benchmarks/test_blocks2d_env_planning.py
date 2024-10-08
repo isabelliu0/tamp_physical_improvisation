@@ -17,9 +17,11 @@ def test_blocks_2d_env_with_planner():
     """Tests for block2d planning."""
     env = Blocks2DEnv(render_mode="rgb_array")
     env = TimeLimit(env, max_episode_steps=100)
-    env = RecordVideo(env, "blocks2d-planning-test-2")
 
-    perceiver = Blocks2DPerceiver(env)
+    # Uncomment to generate videos.
+    # env = RecordVideo(env, "blocks2d-planning-test-2")
+
+    perceiver = Blocks2DPerceiver(env.unwrapped)
 
     planner = TaskThenMotionPlanner(
         types, predicates, perceiver, operators, skills, planner_id="pyperplan"
