@@ -20,7 +20,7 @@ def test_blocks_2d_env_with_planner():
 
     # Uncomment to generate videos.
     # from gymnasium.wrappers import RecordVideo
-    # env = RecordVideo(env, "blocks2d-planning-test-2")
+    # env = RecordVideo(env, "videos/blocks2d-planning-test-2")
 
     perceiver = Blocks2DPerceiver(env.unwrapped)
 
