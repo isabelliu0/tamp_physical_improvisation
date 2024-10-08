@@ -11,6 +11,35 @@ from tomsgeoms2d.structs import Rectangle
 from tomsutils.utils import fig2data
 
 
+def is_block_in_target_area(
+        block_x: float,
+        block_y: float,
+        block_width: float,
+        block_height: float,
+        target_x: float,
+        target_y: float,
+        target_width: float,
+        target_height: float,
+    ) -> bool:
+    """Checks if the block is in the target area."""
+    target_left = target_x - target_width / 2
+    target_right = target_x + target_width / 2
+    target_bottom = target_y - target_height / 2
+    target_top = target_y + target_height / 2
+
+    block_left = block_x - block_width / 2
+    block_right = block_x + block_width / 2
+    block_bottom = block_y - block_height / 2
+    block_top = block_y + block_height / 2
+
+    return (
+        target_left <= block_left
+        and block_right <= target_right
+        and target_bottom <= block_bottom
+        and block_top <= target_top
+    )
+
+
 class Blocks2DEnv(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
     """A block environment in 2D.
 
@@ -152,7 +181,7 @@ class Blocks2DEnv(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
             )
 
         # Check if the robot has reached the goal
-        goal_reached = self.is_block_in_target_area(
+        goal_reached = is_block_in_target_area(
             self._block_1_position[0],
             self._block_1_position[1],
             self._block_width,
@@ -208,35 +237,6 @@ class Blocks2DEnv(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
             np.float32
         )
         self._block_2_position[0] = new_block_x
-
-    def is_block_in_target_area(
-        self,
-        block_x: float,
-        block_y: float,
-        block_width: float,
-        block_height: float,
-        target_x: float,
-        target_y: float,
-        target_width: float,
-        target_height: float,
-    ) -> bool:
-        """Checks if the block is in the target area."""
-        target_left = target_x - target_width / 2
-        target_right = target_x + target_width / 2
-        target_bottom = target_y - target_height / 2
-        target_top = target_y + target_height / 2
-
-        block_left = block_x - block_width / 2
-        block_right = block_x + block_width / 2
-        block_bottom = block_y - block_height / 2
-        block_top = block_y + block_height / 2
-
-        return (
-            target_left <= block_left
-            and block_right <= target_right
-            and target_bottom <= block_bottom
-            and block_top <= target_top
-        )
 
     def reset(
         self,
