@@ -139,14 +139,12 @@ class Blocks2DEnv(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
         # Update block 1's position if the gripper suffices the conditions to move
         # the block.
         distance = self._calculate_distance_to_block(self._block_1_position)
-        print("distance to block 1:", distance)
         if (
             self._gripper_status > 0.0
             and distance <= ((self._robot_width + self._block_width) / 2) + 1e-5
         ):
             # Robot fetches and holds the block.
             self._block_1_position = self._robot_position.copy()
-            print("picking up!!!")
         elif self._gripper_status < 0.0 and np.isclose(distance, 0.0, atol=1e-3):
             # Robot drops the block.
             self._block_1_position = np.array(
