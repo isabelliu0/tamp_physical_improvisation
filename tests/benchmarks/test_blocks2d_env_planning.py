@@ -1,6 +1,6 @@
 """Tests for Blocks2DEnv with TaskThenMotionPlanner."""
 
-from gymnasium.wrappers import RecordVideo, TimeLimit
+from gymnasium.wrappers import TimeLimit
 from task_then_motion_planning.planning import TaskThenMotionPlanner
 
 from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
@@ -19,6 +19,7 @@ def test_blocks_2d_env_with_planner():
     env = TimeLimit(env, max_episode_steps=100)
 
     # Uncomment to generate videos.
+    # from gymnasium.wrappers import RecordVideo
     # env = RecordVideo(env, "blocks2d-planning-test-2")
 
     perceiver = Blocks2DPerceiver(env.unwrapped)
