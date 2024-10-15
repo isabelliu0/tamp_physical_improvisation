@@ -12,15 +12,15 @@ from tomsutils.utils import fig2data
 
 
 def is_block_in_target_area(
-        block_x: float,
-        block_y: float,
-        block_width: float,
-        block_height: float,
-        target_x: float,
-        target_y: float,
-        target_width: float,
-        target_height: float,
-    ) -> bool:
+    block_x: float,
+    block_y: float,
+    block_width: float,
+    block_height: float,
+    target_x: float,
+    target_y: float,
+    target_width: float,
+    target_height: float,
+) -> bool:
     """Checks if the block is in the target area."""
     target_left = target_x - target_width / 2
     target_right = target_x + target_width / 2

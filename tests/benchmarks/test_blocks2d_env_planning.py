@@ -18,8 +18,9 @@ def test_blocks_2d_env_with_planner():
     env = Blocks2DEnv(render_mode="rgb_array")
     env = TimeLimit(env, max_episode_steps=100)
 
-    # Uncomment to generate videos.
+    # # Uncomment to generate videos.
     # from gymnasium.wrappers import RecordVideo
+
     # env = RecordVideo(env, "videos/blocks2d-planning-test-2")
 
     perceiver = Blocks2DPerceiver(env.unwrapped)
