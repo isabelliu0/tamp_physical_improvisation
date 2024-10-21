@@ -15,8 +15,8 @@ def test_random_approach():
 
     approach = RandomApproach(env.observation_space, env.action_space, seed=123)
 
-    obs, info = env.reset()
-    action = approach.reset(obs, info)
+    obs, _ = env.reset()
+    action = approach.reset(obs)
 
     for _ in range(100):
         obs, reward, terminated, truncated, info = env.step(action)

@@ -10,7 +10,7 @@ from tamp_improv.approaches.base_approach import BaseApproach
 class RandomApproach(BaseApproach[ObsType, ActType]):
     """An approach that takes random actions."""
 
-    def reset(self, obs: ObsType, info: dict[str, Any]) -> ActType:
+    def reset(self, obs: ObsType) -> ActType:
         return self._action_space.sample()
 
     def step(
