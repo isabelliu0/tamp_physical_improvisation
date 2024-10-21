@@ -24,7 +24,7 @@ def test_task_then_motion_planning_approach():
     )
 
     obs, info = env.reset()
-    approach.reset(obs)
+    approach.reset(obs, info)
 
     total_reward = 0
     for step in range(100):  # should terminate earlier

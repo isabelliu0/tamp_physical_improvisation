@@ -19,7 +19,7 @@ class BaseApproach(abc.ABC, Generic[ObsType, ActType]):
         self._action_space.seed(seed)
 
     @abc.abstractmethod
-    def reset(self, obs: ObsType) -> ActType:
+    def reset(self, obs: ObsType, info: dict[str, Any]) -> ActType:
         """Reset to start a new episode and return an initial action."""
 
     @abc.abstractmethod

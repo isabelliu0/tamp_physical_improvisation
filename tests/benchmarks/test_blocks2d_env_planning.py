@@ -29,16 +29,16 @@ def test_blocks_2d_env_with_planner():
         types, predicates, perceiver, operators, skills, planner_id="pyperplan"
     )
 
-    obs, _ = env.reset()
+    obs, info = env.reset()
     print("Initial observation:", obs)
 
-    objects, atoms, goal = perceiver.reset(obs)
+    objects, atoms, goal = perceiver.reset(obs, info)
     print("Objects:", objects)
     print("Initial atoms:", atoms)
     print("Goal:", goal)
 
     try:
-        planner.reset(obs)
+        planner.reset(obs, info)
     except Exception as e:
         print("Error during planner reset:", str(e))
         print("Current problem:")

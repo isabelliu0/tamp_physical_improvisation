@@ -1,7 +1,7 @@
 """Planning components for the Blocks2D environment."""
 
 import math
-from typing import Sequence, Set, Tuple
+from typing import Any, Sequence, Set, Tuple
 
 import numpy as np
 from relational_structs import (
@@ -86,7 +86,7 @@ class Blocks2DPerceiver(Perceiver[np.ndarray]):
         self._block_2 = block_type("block2")
 
     def reset(
-        self, obs: np.ndarray
+        self, obs: np.ndarray, info: dict[str, Any]
     ) -> Tuple[Set[Object], Set[GroundAtom], Set[GroundAtom]]:
         objects = {self._robot, self._block_1, self._block_2}
         atoms = self._get_atoms(obs)

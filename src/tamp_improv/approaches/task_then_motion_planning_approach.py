@@ -39,9 +39,11 @@ class TaskThenMotionPlanningApproach(
             planner_id="pyperplan",
         )
 
-    def reset(self, obs: NDArray[np.float32]) -> NDArray[np.float32]:
+    def reset(
+        self, obs: NDArray[np.float32], info: dict[str, Any]
+    ) -> NDArray[np.float32]:
         try:
-            self.planner.reset(obs)
+            self.planner.reset(obs, info)
         except Exception as e:
             print("Error during planner reset:", str(e))
             print("Current problem:")
@@ -50,9 +52,10 @@ class TaskThenMotionPlanningApproach(
             print(self.planner._domain)  # pylint: disable=protected-access
             raise
 
-        return self.step(
-            obs, 0.0, False, False, {}
+        init = self.step(
+            obs, 0.0, False, False, info
         )  # placeholder values before the first env step
+        return init
 
     def step(
         self,
