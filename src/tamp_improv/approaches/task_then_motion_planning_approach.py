@@ -5,7 +5,6 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-# from gymnasium.core import ActType, ObsType
 from task_then_motion_planning.planning import (
     TaskThenMotionPlanner,
 )
