@@ -18,8 +18,9 @@ def test_blocks_2d_env_with_planner():
     env = Blocks2DEnv(render_mode="rgb_array")
     env = TimeLimit(env, max_episode_steps=100)
 
-    # Uncomment to generate videos.
+    # # Uncomment to generate videos.
     # from gymnasium.wrappers import RecordVideo
+
     # env = RecordVideo(env, "videos/blocks2d-planning-test-2")
 
     perceiver = Blocks2DPerceiver(env.unwrapped)
@@ -28,16 +29,16 @@ def test_blocks_2d_env_with_planner():
         types, predicates, perceiver, operators, skills, planner_id="pyperplan"
     )
 
-    obs, _ = env.reset()
+    obs, info = env.reset()
     print("Initial observation:", obs)
 
-    objects, atoms, goal = perceiver.reset(obs)
+    objects, atoms, goal = perceiver.reset(obs, info)
     print("Objects:", objects)
     print("Initial atoms:", atoms)
     print("Goal:", goal)
 
     try:
-        planner.reset(obs)
+        planner.reset(obs, info)
     except Exception as e:
         print("Error during planner reset:", str(e))
         print("Current problem:")

@@ -1,7 +1,7 @@
 """Planning components for the Blocks2D environment."""
 
 import math
-from typing import Sequence, Set, Tuple
+from typing import Any, Sequence, Set, Tuple
 
 import numpy as np
 from relational_structs import (
@@ -15,7 +15,7 @@ from relational_structs import (
 )
 from task_then_motion_planning.structs import LiftedOperatorSkill, Perceiver
 
-from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
+from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv, is_block_in_target_area
 
 # Create types and predicates
 robot_type = Type("robot")
@@ -86,7 +86,7 @@ class Blocks2DPerceiver(Perceiver[np.ndarray]):
         self._block_2 = block_type("block2")
 
     def reset(
-        self, obs: np.ndarray
+        self, obs: np.ndarray, info: dict[str, Any]
     ) -> Tuple[Set[Object], Set[GroundAtom], Set[GroundAtom]]:
         objects = {self._robot, self._block_1, self._block_2}
         atoms = self._get_atoms(obs)
@@ -121,7 +121,7 @@ class Blocks2DPerceiver(Perceiver[np.ndarray]):
 
         atoms = set()
 
-        if self.env.is_block_in_target_area(
+        if is_block_in_target_area(
             block_1_x,
             block_1_y,
             block_width,
