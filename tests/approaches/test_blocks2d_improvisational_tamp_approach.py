@@ -1,15 +1,15 @@
-"""Test improvisational_tamp_approach.py."""
+"""Test blocks2d_improvisational_tamp_approach.py."""
 
 from gymnasium.wrappers import TimeLimit
 
-from tamp_improv.approaches.improvisational_tamp_approach import (
-    ImprovisationalTAMPApproach,
+from tamp_improv.approaches.blocks2d_improvisational_tamp_approach import (
+    Blocks2DImprovisationalTAMPApproach,
 )
 from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
 
 
-def test_improvisational_tamp_approach():
-    """Tests for ImprovisationalTAMPApproach()."""
+def test_blocks2d_improvisational_tamp_approach():
+    """Tests for Blocks2DImprovisationalTAMPApproach()."""
 
     env = Blocks2DEnv(render_mode="rgb_array")
     env = TimeLimit(env, max_episode_steps=100)
@@ -17,9 +17,9 @@ def test_improvisational_tamp_approach():
     # # Uncomment to watch a video.
     # from gymnasium.wrappers import RecordVideo
 
-    # env = RecordVideo(env, "videos/improvisational-tamp-approach-test")
+    # env = RecordVideo(env, "videos/blocks2d-improvisational-tamp-test")
 
-    approach = ImprovisationalTAMPApproach(
+    approach = Blocks2DImprovisationalTAMPApproach(
         env.observation_space, env.action_space, seed=123
     )
 
