@@ -4,13 +4,7 @@ from gymnasium.wrappers import TimeLimit
 from task_then_motion_planning.planning import TaskThenMotionPlanner
 
 from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
-from tamp_improv.blocks2d_planning import (
-    Blocks2DPerceiver,
-    operators,
-    predicates,
-    skills,
-    types,
-)
+from tamp_improv.blocks2d_planning import create_blocks2d_planning_models
 
 
 def test_blocks_2d_env_with_planner():
@@ -23,7 +17,9 @@ def test_blocks_2d_env_with_planner():
 
     # env = RecordVideo(env, "videos/blocks2d-planning-test-2")
 
-    perceiver = Blocks2DPerceiver(env.unwrapped)
+    types, predicates, perceiver, operators, skills = create_blocks2d_planning_models(
+        include_pushing_models=True
+    )
 
     planner = TaskThenMotionPlanner(
         types, predicates, perceiver, operators, skills, planner_id="pyperplan"

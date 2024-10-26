@@ -18,8 +18,11 @@ from task_then_motion_planning.structs import LiftedOperatorSkill, Perceiver, Sk
 from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv, is_block_in_target_area
 
 
-def create_blocks2d_planning_models(include_pushing_models: bool = True) -> tuple[set[Type], set[Predicate], Perceiver,
-                                                                                  set[LiftedOperator], set[Skill]]:
+def create_blocks2d_planning_models(
+    include_pushing_models: bool = True,
+) -> tuple[set[Type], set[Predicate], Perceiver, set[LiftedOperator], set[Skill]]:
+    """Create types, predicates, perceiver, operators, and skills for the
+    Blocks2D environment."""
 
     # Create types and predicates
     robot_type = Type("robot")
@@ -55,8 +58,8 @@ def create_blocks2d_planning_models(include_pushing_models: bool = True) -> tupl
     )
 
     pick_up_operator_preconditions = {
-            GripperEmpty([robot]),
-            LiftedAtom(BlockNotInTargetArea, [block]),
+        GripperEmpty([robot]),
+        LiftedAtom(BlockNotInTargetArea, [block]),
     }
     if include_pushing_models:
         pick_up_operator_preconditions.add(LiftedAtom(TargetAreaClear, []))
@@ -89,7 +92,6 @@ def create_blocks2d_planning_models(include_pushing_models: bool = True) -> tupl
     operators = {PickUpOperator, PutDownOperator}
     if include_pushing_models:
         operators.add(ClearTargetAreaOperator)
-
 
     # Create perceiver
     class Blocks2DPerceiver(Perceiver[np.ndarray]):
@@ -217,7 +219,6 @@ def create_blocks2d_planning_models(include_pushing_models: bool = True) -> tupl
 
             return False
 
-
     # Update the skills
     class ClearTargetAreaSkill(LiftedOperatorSkill[np.ndarray, np.ndarray]):
         """Skill for clearing the target area."""
@@ -295,7 +296,6 @@ def create_blocks2d_planning_models(include_pushing_models: bool = True) -> tupl
                 return -0.1  # Push left
             return 0.1  # Push right
 
-
     class PickUpSkill(LiftedOperatorSkill[np.ndarray, np.ndarray]):
         """Skill for picking up a block."""
 
@@ -337,7 +337,6 @@ def create_blocks2d_planning_models(include_pushing_models: bool = True) -> tupl
                 return np.array([dx, 0.0, 0.0])
             return np.array([0.0, 0.0, 1.0])
 
-
     class PutDownSkill(LiftedOperatorSkill[np.ndarray, np.ndarray]):
         """Skill for putting down a block."""
 
@@ -357,11 +356,10 @@ def create_blocks2d_planning_models(include_pushing_models: bool = True) -> tupl
                 return np.array([0.0, 0.0, -1.0])
             return np.array([0.0, 0.0, 0.0])
 
-
     skills = {PickUpSkill(), PutDownSkill()}
     if include_pushing_models:
         skills.add(ClearTargetAreaSkill())
 
     perceiver = Blocks2DPerceiver(Blocks2DEnv())
 
-    return types, predicates, perceiver, operators, skills
+    return types, predicates, perceiver, operators, skills  # type: ignore

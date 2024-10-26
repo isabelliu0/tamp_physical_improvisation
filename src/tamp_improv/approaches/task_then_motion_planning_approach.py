@@ -9,7 +9,6 @@ from task_then_motion_planning.planning import (
 )
 
 from tamp_improv.approaches.base_approach import BaseApproach
-from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
 from tamp_improv.blocks2d_planning import create_blocks2d_planning_models
 
 
@@ -20,7 +19,9 @@ class TaskThenMotionPlanningApproach(
 
     def __init__(self, observation_space, action_space, seed: int) -> None:
         super().__init__(observation_space, action_space, seed)
-        types, predicates, perceiver, operators, skills = create_blocks2d_planning_models(include_pushing_models=True)
+        types, predicates, perceiver, operators, skills = (
+            create_blocks2d_planning_models(include_pushing_models=True)
+        )
         self.env_name = "blocks2d"
         self.perceiver = perceiver
         self.planner = TaskThenMotionPlanner(

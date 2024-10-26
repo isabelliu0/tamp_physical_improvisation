@@ -14,9 +14,10 @@ def test_improvisational_tamp_approach():
     env = Blocks2DEnv(render_mode="rgb_array")
     env = TimeLimit(env, max_episode_steps=100)
 
-    # Uncomment to watch a video.
-    from gymnasium.wrappers import RecordVideo
-    env = RecordVideo(env, "videos/improvisational-tamp-approach-test")
+    # # Uncomment to watch a video.
+    # from gymnasium.wrappers import RecordVideo
+
+    # env = RecordVideo(env, "videos/improvisational-tamp-approach-test")
 
     approach = ImprovisationalTAMPApproach(
         env.observation_space, env.action_space, seed=123
