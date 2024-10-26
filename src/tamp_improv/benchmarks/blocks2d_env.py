@@ -246,9 +246,19 @@ class Blocks2DEnv(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
     ) -> Tuple[NDArray[np.float32], dict[str, Any]]:
         super().reset(seed=seed)
 
-        self._robot_position = np.array([0.5, 1.0], dtype=np.float32)
-        self._block_1_position = np.array([0.0, 0.0], dtype=np.float32)
-        self._block_2_position = np.array([0.5, 0.0], dtype=np.float32)
+        if options is None:
+            options = {}
+
+        # Set positions from options if provided, or use defaults
+        self._robot_position = options.get(
+            "robot_pos", np.array([0.5, 1.0], dtype=np.float32)
+        )
+        self._block_1_position = options.get(
+            "block_1_pos", np.array([0.0, 0.0], dtype=np.float32)
+        )
+        self._block_2_position = options.get(
+            "block_2_pos", np.array([0.5, 0.0], dtype=np.float32)
+        )
         self._gripper_status = np.float32(0.0)
 
         observation = self._get_obs()
