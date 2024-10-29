@@ -2,6 +2,7 @@
 .python-version
 .vscode
 videos/
+trained_policies/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
