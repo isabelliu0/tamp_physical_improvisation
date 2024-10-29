@@ -7,7 +7,7 @@ import gymnasium as gym
 import numpy as np
 from numpy.typing import NDArray
 
-from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv, is_block_in_target_area
+from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
 
 
 class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
@@ -49,22 +49,34 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
         """
         self.env.render()
 
-    def _is_target_area_blocked(self, obs: NDArray[np.float32]) -> bool:
-        """Check if target area is blocked by block 2."""
-        block_2_x, block_2_y = obs[6:8]
-        block_width, block_height = obs[8:10]
-        target_x, target_y, target_width, target_height = obs[11:15]
+    def is_target_area_blocked(self, obs: NDArray[np.float32]) -> bool:
+        """Check if block 2 blocks the target area.
 
-        return is_block_in_target_area(
-            block_2_x,
-            block_2_y,
-            block_width,
-            block_height,
-            target_x,
-            target_y,
-            target_width,
-            target_height,
-        )
+        A block is considered blocking if it overlaps with the target
+        area enough that block 1 cannot fit in the remaining space.
+        """
+        # Get positions and dimensions
+        block_2_x = obs[6]
+        block_width = obs[8]
+        target_x = obs[11]
+        target_width = obs[13]
+
+        # Calculate boundaries
+        target_left = target_x - target_width / 2
+        target_right = target_x + target_width / 2
+        block_left = block_2_x - block_width / 2
+        block_right = block_2_x + block_width / 2
+
+        # Check if there's any overlap
+        if block_right <= target_left or block_left >= target_right:
+            return False  # No overlap
+
+        # Calculate remaining free width in target area
+        overlap_width = min(block_right, target_right) - max(block_left, target_left)
+        free_width = target_width - overlap_width
+
+        # Block 1 needs at least its width to fit
+        return free_width < block_width
 
     def _get_random_block_positions(
         self,
@@ -141,7 +153,7 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
         # Verify block 2 is blocking if required
         if self._custom_reset_options[
             "ensure_blocking"
-        ] and not self._is_target_area_blocked(obs):
+        ] and not self.is_target_area_blocked(obs):
             return self.reset(seed=seed, options=options)
 
         return obs, info
@@ -155,7 +167,7 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
         self.steps += 1
 
         # Check if target area is clear
-        is_blocked = self._is_target_area_blocked(obs)
+        is_blocked = self.is_target_area_blocked(obs)
 
         # Episode terminates if target area is clear or max steps exceeded
         terminated = not is_blocked
