@@ -76,7 +76,14 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
         free_width = target_width - overlap_width
 
         # Block 1 needs at least its width to fit
-        return free_width < block_width
+        is_blocked = free_width < block_width
+        if __debug__:
+            print(f"\nBlock checking details:")
+            print(f"Block 2: x={block_2_x:.2f}, width={block_width:.2f}")
+            print(f"Target: x={target_x:.2f}, width={target_width:.2f}")
+            print(f"Free width: {free_width:.2f}")
+            print(f"Is blocked: {is_blocked}")
+        return is_blocked
 
     def _get_random_block_positions(
         self,
@@ -175,6 +182,14 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
 
         # Reward: -1.0 per step, 0.0 for success
         reward = 0.0 if terminated else -1.0
+
+        if __debug__:
+            print(f"\nStep details:")
+            print(f"Action taken: {action}")
+            print(f"Is blocked: {is_blocked}")
+            print(f"Terminated: {terminated}")
+            print(f"Truncated: {truncated}")
+            print(f"Reward: {reward}")
 
         return obs, reward, terminated, truncated, info
 

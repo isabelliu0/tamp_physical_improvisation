@@ -1,6 +1,5 @@
 """Script for training the pushing policy."""
 
-import argparse
 from pathlib import Path
 
 from tamp_improv.approaches.rl_improvisational_policy import RLImprovisationalPolicy
@@ -35,25 +34,3 @@ def train_pushing_policy(
     # Save trained policy
     policy.save(save_path)
     print(f"Saved trained policy to {save_path}")
-
-
-def main():
-    """Parse arguments and train pushing policy."""
-
-    parser = argparse.ArgumentParser(description="Train a pushing policy.")
-    parser.add_argument(
-        "--timesteps",
-        type=int,
-        default=1_000_000,
-        help="Number of timesteps to train for",
-    )
-    parser.add_argument("--seed", type=int, default=42, help="Random seed")
-    parser.add_argument(
-        "--save-path",
-        type=str,
-        default="trained_policies/pushing_policy",
-        help="Where to save the trained policy",
-    )
-    args = parser.parse_args()
-
-    train_pushing_policy(args.timesteps, args.seed, args.save_path)
