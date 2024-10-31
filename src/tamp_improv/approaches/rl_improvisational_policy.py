@@ -75,7 +75,7 @@ class TrainingProgressCallback(BaseCallback):
 class RLImprovisationalPolicy(
     ImprovisationalPolicy[NDArray[np.float32], NDArray[np.float32]]
 ):
-    """The actual RL policy that learns to push block 2 away."""
+    """RL-based improvisational policy using PPO."""
 
     def __init__(self, env: PushingEnvWrapper):
         """Initialize policy with a PPO model.

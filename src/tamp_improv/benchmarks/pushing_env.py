@@ -42,10 +42,8 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
 
         # Override env's reset options with our custom options
         self._custom_reset_options = {
-            # "block_1_pos": None,  # will be randomly determined
-            # "block_2_pos": None,  # will be randomly determined
-            "block_1_pos": np.array([0.0, 0.0], dtype=np.float32),
-            "block_2_pos": np.array([0.5, 0.0], dtype=np.float32),
+            "block_1_pos": None,  # will be randomly determined
+            "block_2_pos": None,  # will be randomly determined
             "robot_pos": np.array([0.5, 1.0], dtype=np.float32),
             "ensure_blocking": True,  # Block 2 should block target area
         }
@@ -222,15 +220,14 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
             }
         )
 
-        # # Reset the base environment with our options
-        # obs, info = self.env.reset(seed=seed, options=reset_options)
-        obs, info = self.env.reset(seed=seed)
+        # Reset the base environment with our options
+        obs, info = self.env.reset(seed=seed, options=reset_options)
 
-        # # Verify block 2 is blocking if required
-        # if self._custom_reset_options[
-        #     "ensure_blocking"
-        # ] and not self.is_target_area_blocked(obs):
-        #     return self.reset(seed=seed, options=options)
+        # Verify block 2 is blocking if required
+        if self._custom_reset_options[
+            "ensure_blocking"
+        ] and not self.is_target_area_blocked(obs):
+            return self.reset(seed=seed, options=options)
 
         return obs, info
 

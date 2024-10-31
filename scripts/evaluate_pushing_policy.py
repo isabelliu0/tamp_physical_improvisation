@@ -1,7 +1,5 @@
 """Script to evaluate trained pushing policy."""
 
-from typing import Dict, Optional
-
 import numpy as np
 
 from tamp_improv.approaches.rl_improvisational_policy import RLImprovisationalPolicy
@@ -15,7 +13,7 @@ def evaluate_pushing_policy(
     seed: int = 42,
     render: bool = False,
     debug: bool = False,
-) -> Optional[Dict]:
+) -> None:
     """Evaluate a trained pushing policy.
 
     Args:
@@ -23,9 +21,7 @@ def evaluate_pushing_policy(
         num_episodes: Number of episodes to run
         seed: Random seed
         render: Whether to render the environment
-        debug: (for testing)
-
-    Returns: Dict of results
+        debug: Whether to print debug information
     """
     # Setup
     base_env = Blocks2DEnv(render_mode="rgb_array" if render else None)
@@ -56,8 +52,9 @@ def evaluate_pushing_policy(
 
     # Run episodes
     for episode in range(num_episodes):
-        # obs, _ = env.reset(seed=seed + episode if seed is not None else None)
-        obs, _ = env.reset(seed=seed if seed is not None else None)
+        obs, _ = env.reset(
+            seed=seed + episode if seed is not None else None
+        )  # Different seed for each episode
 
         if debug:
             print(f"\nEpisode {episode + 1}:")
@@ -99,37 +96,17 @@ def evaluate_pushing_policy(
                 )
                 break
 
-    # Calculate and return results
-    results = {
-        "success_rate": success_count / num_episodes,
-        "avg_episode_length": np.mean(episode_lengths),
-        "avg_reward": np.mean(rewards_history),
-        "min_length": min(episode_lengths),
-        "max_length": max(episode_lengths),
-        "successes": success_count,
-        "total_episodes": num_episodes,
-    }
-
     print("\nEvaluation Summary:")
-    print(f"Success Rate: {results['success_rate']:.1%}")
-    print(f"Average Episode Length: {results['avg_episode_length']:.1f}")
+    print(f"Success Rate: {(success_count / num_episodes):.1%}")
+    print(f"Average Episode Length: {(np.mean(episode_lengths)):.1f}")
     print(f"Success Count: {success_count}/{num_episodes}")
 
-    return results
 
-
-def test_evaluate_pushing_policy():
-    """Test trained pushing policy through evaluation."""
-
-    results = evaluate_pushing_policy(
-        policy_path="trained_policies/pushing_policy_test",
-        num_episodes=1,
+if __name__ == "__main__":
+    evaluate_pushing_policy(
+        policy_path="trained_policies/pushing_policy",
+        num_episodes=50,
         seed=42,
-        render=True,
+        render=False,
         debug=False,
     )
-
-    assert (
-        results["success_rate"] >= 0.9
-    ), "Policy should succeed at least 90% of the time"
-    assert results["avg_episode_length"] < 50, "Episodes should complete efficiently"

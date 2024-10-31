@@ -1,7 +1,6 @@
 """Blocks2D-specific implementation of improvisational TAMP approach."""
 
 import math
-from typing import Tuple
 
 import numpy as np
 from numpy.typing import NDArray
@@ -104,12 +103,12 @@ class Blocks2DImprovisationalPolicy(
         target_x: float,
         block_width: float,
         target_width: float,
-    ) -> Tuple[float, bool]:
+    ) -> tuple[float, bool]:
         """Determines the direction to move block 2 and whether to push or
         pull.
 
         Returns:
-            Tuple[float, bool]: (movement_direction, should_pull)
+            tuple[float, bool]: (movement_direction, should_pull)
             - movement_direction: -0.1 for left, 0.1 for right
             - should_pull: True if we should pull, False if we should push
         """

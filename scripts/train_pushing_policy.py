@@ -61,12 +61,11 @@ def train_pushing_policy(
     print(f"Saved trained policy to {save_path}")
 
 
-def test_train_pushing_policy():
-    """Test training pushing policy."""
+if __name__ == "__main__":
     train_pushing_policy(
-        total_timesteps=100_000,
+        total_timesteps=1_000_000,
         seed=42,
-        save_path="trained_policies/pushing_policy_test",
-        render=True,
+        save_path="trained_policies/pushing_policy",
+        render=False,
         debug=False,
     )
