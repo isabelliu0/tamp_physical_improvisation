@@ -21,6 +21,7 @@ dependencies = [
    "relational-structs@git+https://github.com/tomsilver/relational-structs.git",
    "gymnasium",
    "moviepy",
+   "stable_baselines3",
 ]
 
 [project.optional-dependencies]
