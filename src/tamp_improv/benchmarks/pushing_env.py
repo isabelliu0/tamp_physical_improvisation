@@ -1,10 +1,11 @@
 """Environment wrapper for learning the pushing policy in Blocks2D
 environment."""
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, Union, cast
 
 import gymnasium as gym
 import numpy as np
+from gymnasium.core import RenderFrame
 from numpy.typing import NDArray
 
 from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
@@ -30,24 +31,35 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
         self.max_episode_steps = 100
         self.steps = 0
 
+        # Initialize tracking variables
+        self._prev_block2_target_dist: Optional[float] = None
+        self._prev_robot_block2_dist: Optional[float] = None
+        self._prev_gripper_status: Optional[float] = None
+
         # Same spaces as base env
         self.observation_space = base_env.observation_space
         self.action_space = base_env.action_space
 
         # Override env's reset options with our custom options
         self._custom_reset_options = {
-            "block_1_pos": None,  # will be randomly determined
-            "block_2_pos": None,  # will be randomly determined
+            # "block_1_pos": None,  # will be randomly determined
+            # "block_2_pos": None,  # will be randomly determined
+            "block_1_pos": np.array([0.0, 0.0], dtype=np.float32),
+            "block_2_pos": np.array([0.5, 0.0], dtype=np.float32),
             "robot_pos": np.array([0.5, 1.0], dtype=np.float32),
             "ensure_blocking": True,  # Block 2 should block target area
         }
 
-    def render(self) -> None:
+        self.render_mode = self.env.render_mode
+
+    def render(self) -> Union[RenderFrame, list[RenderFrame], None]:
         """Render the environment.
 
-        We delegate rendering to the base environment.
+        Returns:
+            Union[RenderFrame, list[RenderFrame], None]: The rendered frame(s)
         """
-        self.env.render()
+        rendered = self.env.render()
+        return cast(Union[RenderFrame, list[RenderFrame], None], rendered)
 
     def is_target_area_blocked(self, obs: NDArray[np.float32]) -> bool:
         """Check if block 2 blocks the target area.
@@ -76,14 +88,7 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
         free_width = target_width - overlap_width
 
         # Block 1 needs at least its width to fit
-        is_blocked = free_width < block_width
-        if __debug__:
-            print(f"\nBlock checking details:")
-            print(f"Block 2: x={block_2_x:.2f}, width={block_width:.2f}")
-            print(f"Target: x={target_x:.2f}, width={target_width:.2f}")
-            print(f"Free width: {free_width:.2f}")
-            print(f"Is blocked: {is_blocked}")
-        return is_blocked
+        return free_width < block_width
 
     def _get_random_block_positions(
         self,
@@ -124,6 +129,71 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
 
         return block_1_pos, block_2_pos
 
+    def _calculate_reward(
+        self,
+        obs: NDArray[np.float32],
+        terminated: bool,
+        truncated: bool,
+    ) -> float:
+        """Calculate reward based on multiple factors.
+
+        1. Success reward: +10.0 for successfully clearing the target area
+        2. Step penalty: -0.1 per step to encourage efficiency
+        3. Distance-based rewards:
+            Positive reward for moving block 2 away when blocking
+            Small penalty for moving block 2 away when not blocking
+            Reward for robot approaching block 2 efficiently
+        4. Penalty for excessive gripper toggling (-0.2)
+        """
+        robot_x, robot_y = obs[0], obs[1]
+        block2_x, block2_y = obs[6], obs[7]
+        target_x, target_y = obs[11], obs[12]
+        gripper_status = obs[10]
+
+        # Base reward component: -1.0 per step to encourage faster completion
+        reward = -1.0
+
+        # Success reward
+        if terminated and not truncated:  # Successfully cleared target area
+            return 20.0
+
+        # Distance-based rewards
+        block2_target_dist = np.sqrt(
+            (block2_x - target_x) ** 2 + (block2_y - target_y) ** 2
+        )
+        robot_block2_dist = np.sqrt(
+            (robot_x - block2_x) ** 2 + (robot_y - block2_y) ** 2
+        )
+
+        # Reward for moving block 2 away from target
+        if self._prev_block2_target_dist is not None:
+            dist_improvement = self._prev_block2_target_dist - block2_target_dist
+            # If block is blocking, reward moving away; if not blocking, small penalty
+            if self.is_target_area_blocked(obs):
+                reward += 2.0 * dist_improvement
+            else:
+                reward -= 0.5 * dist_improvement
+
+        # Reward for robot approaching block 2 efficiently
+        if self._prev_robot_block2_dist is not None:
+            approach_improvement = self._prev_robot_block2_dist - robot_block2_dist
+            if robot_block2_dist > 0.3:  # Only reward approaching if not too close
+                reward += 0.5 * approach_improvement
+
+        # Store current distances for next step
+        self._prev_block2_target_dist = block2_target_dist
+        self._prev_robot_block2_dist = robot_block2_dist
+
+        # Penalize excessive gripper toggling
+        if (
+            self._prev_gripper_status is not None
+            and self._prev_gripper_status != gripper_status
+        ):
+            reward -= 0.2
+        self._prev_gripper_status = gripper_status
+
+        return reward
+
     def reset(
         self,
         *,
@@ -132,14 +202,12 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
     ) -> Tuple[NDArray[np.float32], Dict[str, Any]]:
         """Reset the environment with random block positions."""
         self.steps = 0
+        self._prev_block2_target_dist = None
+        self._prev_robot_block2_dist = None
+        self._prev_gripper_status = None
 
-        # Initialize RNG
-        if seed is not None:
-            rng = np.random.default_rng(seed)
-        else:
-            rng = np.random.default_rng()
-
-        # Get random block positions
+        # Initialize RNG and get random block positions
+        rng = np.random.default_rng(seed)
         block_1_pos, block_2_pos = self._get_random_block_positions(
             rng, ensure_blocking=bool(self._custom_reset_options["ensure_blocking"])
         )
@@ -154,14 +222,15 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
             }
         )
 
-        # Reset the base environment with our options
-        obs, info = self.env.reset(seed=seed, options=reset_options)
+        # # Reset the base environment with our options
+        # obs, info = self.env.reset(seed=seed, options=reset_options)
+        obs, info = self.env.reset(seed=seed)
 
-        # Verify block 2 is blocking if required
-        if self._custom_reset_options[
-            "ensure_blocking"
-        ] and not self.is_target_area_blocked(obs):
-            return self.reset(seed=seed, options=options)
+        # # Verify block 2 is blocking if required
+        # if self._custom_reset_options[
+        #     "ensure_blocking"
+        # ] and not self.is_target_area_blocked(obs):
+        #     return self.reset(seed=seed, options=options)
 
         return obs, info
 
@@ -169,27 +238,23 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
         self,
         action: NDArray[np.float32],
     ) -> Tuple[NDArray[np.float32], float, bool, bool, Dict[str, Any]]:
-        """Step the environment."""
-        obs, _, _, _, info = self.env.step(action)
+        """Step the environment with proper collision handling."""
+        obs, _, _, truncated, info = self.env.step(action)
         self.steps += 1
+
+        # If collision occurred, episode is truncated
+        if info["collision_occurred"]:
+            return obs, -10.0, False, True, info
 
         # Check if target area is clear
         is_blocked = self.is_target_area_blocked(obs)
 
-        # Episode terminates if target area is clear or max steps exceeded
+        # Determine episode termination
         terminated = not is_blocked
-        truncated = self.steps >= self.max_episode_steps
+        truncated = truncated or self.steps >= self.max_episode_steps
 
-        # Reward: -1.0 per step, 0.0 for success
-        reward = 0.0 if terminated else -1.0
-
-        if __debug__:
-            print(f"\nStep details:")
-            print(f"Action taken: {action}")
-            print(f"Is blocked: {is_blocked}")
-            print(f"Terminated: {terminated}")
-            print(f"Truncated: {truncated}")
-            print(f"Reward: {reward}")
+        # Calculate reward only if no collision occurred
+        reward = self._calculate_reward(obs, terminated, truncated)
 
         return obs, reward, terminated, truncated, info
 

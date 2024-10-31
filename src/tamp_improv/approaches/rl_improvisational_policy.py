@@ -21,12 +21,13 @@ class TrainingProgressCallback(BaseCallback):
     - Episode lengths (how many steps it takes to succeed)
     """
 
-    def __init__(self, check_freq: int = 1000, verbose: int = 1):
+    def __init__(self, check_freq: int = 1000, verbose: int = 1, debug: bool = False):
         super().__init__(verbose)
         self.check_freq = check_freq
         self.success_history: list[bool] = []
         self.episode_lengths: list[int] = []
         self.current_length = 0  # Counter for current episode
+        self.debug = debug
 
     def _on_step(self) -> bool:
         """Called after each training step."""
@@ -35,11 +36,26 @@ class TrainingProgressCallback(BaseCallback):
         dones = self.locals["dones"]
         infos = self.locals["infos"]
 
+        if self.debug:
+            # Get current observation and action
+            obs = self.locals["new_obs"][0]  # First env in vectorized envs
+            action = self.locals["actions"][0]
+            print(f"\nStep {self.num_timesteps}:")
+            print(f"Robot position: ({obs[0]:.3f}, {obs[1]:.3f})")
+            print(f"Block 2 position: ({obs[6]:.3f}, {obs[7]:.3f})")
+            print(f"Action taken: {action}")
+
         if dones[0]:  # If episode ended
             # Check if it ended due to success (clearing area) vs timeout
             success = not infos[0].get("TimeLimit.truncated", False)
             self.success_history.append(success)
             self.episode_lengths.append(self.current_length)
+
+            if self.debug:
+                print(f"\nEpisode {len(self.success_history)} completed:")
+                print(f"Success: {success}")
+                print(f"Length: {self.current_length}")
+
             self.current_length = 0
 
             # Print stats periodically
@@ -48,6 +64,7 @@ class TrainingProgressCallback(BaseCallback):
                 recent_lengths = self.episode_lengths[-self.check_freq :]
                 success_rate = sum(recent_successes) / len(recent_successes)
                 avg_length = sum(recent_lengths) / len(recent_lengths)
+                print(f"\nProgress at {self.num_timesteps} timesteps:")
                 print(f"Episodes: {len(self.success_history)}")
                 print(f"Success rate: {success_rate:.2%}")
                 print(f"Average episode length: {avg_length:.1f}")
@@ -70,9 +87,6 @@ class RLImprovisationalPolicy(
         - n_epochs: How many times to reuse each sample
         - gamma: Discount factor for future rewards
         """
-        if not isinstance(env, PushingEnvWrapper):
-            raise TypeError("Environment must be a PushingEnvWrapper instance")
-
         self.env = env
         # Create PPO model with the environment
         self.model = PPO(
@@ -87,7 +101,10 @@ class RLImprovisationalPolicy(
         )
 
     def train(
-        self, total_timesteps: int = 1_000_000, seed: Optional[int] = None
+        self,
+        total_timesteps: int = 1_000_000,
+        seed: Optional[int] = None,
+        callback: Optional[BaseCallback] = None,
     ) -> None:
         """Train the policy.
 
@@ -100,7 +117,6 @@ class RLImprovisationalPolicy(
         6. After n_steps, update policy to maximize reward
         7. Repeat until total_timesteps reached
         """
-        callback = TrainingProgressCallback()
         if seed is not None:
             self.model.set_random_seed(seed)
         # Start training loop

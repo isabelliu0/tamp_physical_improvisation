@@ -1,6 +1,7 @@
 """Blocks2D-specific implementation of improvisational TAMP approach."""
 
 import math
+from typing import Tuple
 
 import numpy as np
 from numpy.typing import NDArray
@@ -38,43 +39,18 @@ class Blocks2DImprovisationalPolicy(
         [2] - gripper activation
     """
 
-    def _get_push_direction(
-        self,
-        block_1_x: float,
-        block_2_x: float,
-        target_x: float,
-        block_width: float,
-        target_width: float,
-    ) -> float:
-        left_margin = (
-            (block_2_x - block_width / 2) - (target_x - target_width / 2) + 0.1
-        )  # Add a small margin
-        right_margin = (
-            (target_x + target_width / 2) - (block_2_x + block_width / 2) + 0.1
-        )
-
-        if block_1_x < block_2_x:
-            left_margin *= 2  # Discourage pushing left if block_1 is on the left
-        else:
-            right_margin *= 2
-
-        if left_margin < right_margin:
-            return -0.1  # Push left
-        return 0.1  # Push right
-
-    def get_action(self, obs: NDArray[np.float32]) -> NDArray[np.float32]:
-        """Get action from policy based on current observation."""
+    def get_action(self, obs: np.ndarray) -> np.ndarray:
         (
             robot_x,
             robot_y,
             robot_width,
-            robot_height,
+            _,
             block_1_x,
             _,
             block_2_x,
             block_2_y,
             block_width,
-            block_height,
+            _,
             _,
             target_x,
             _,
@@ -82,30 +58,89 @@ class Blocks2DImprovisationalPolicy(
             _,
         ) = obs
 
-        # Determine the best direction to push block 2
-        push_direction = self._get_push_direction(
-            block_1_x, block_2_x, target_x, block_width, target_width
+        # First, determine if we should push or pull and in which direction
+        move_direction, should_pull = self._get_movement_direction(
+            block_1_x,
+            block_2_x,
+            target_x,
+            block_width,
+            target_width,
         )
 
         # Calculate distances
         distance = np.linalg.norm([robot_x - block_2_x, robot_y - block_2_y])
         vertical_distance = np.abs(robot_y - block_2_y)
 
+        # If the robot is too far from block 2, move towards it
         if distance > ((robot_width + block_width) / 2) * math.sqrt(2):
-            dx = np.clip(
-                block_2_x - robot_x + (robot_width + block_width) / 2, -0.1, 0.1
-            )
-            dy = np.clip(
-                block_2_y - robot_y + (robot_height + block_height) / 2, -0.1, 0.1
-            )
-            return np.array([dx, dy, 0.0])
-        if vertical_distance > 0.01:
-            # Move towards the y-level of the block
+            # Position robot on the correct side based on push/pull strategy
+            target_x_offset = (robot_width + block_width) / 2
+            if should_pull:
+                # For pulling, position on the same side we want to move the block
+                target_x_offset *= np.sign(move_direction)
+            else:
+                # For pushing, position on the opposite side
+                target_x_offset *= -np.sign(move_direction)
+
+            dx = np.clip(block_2_x + target_x_offset - robot_x, -0.1, 0.1)
             dy = np.clip(block_2_y - robot_y, -0.1, 0.1)
-            return np.array([0.0, dy, 0.0])
-        # Push the block horizontally
-        dx = np.clip(push_direction, -0.1, 0.1)
-        return np.array([dx, 0.0, 0.0])
+            return np.array([dx, dy, 0.0])
+
+        # If the robot and block 2 not vertically aligned, align first
+        if vertical_distance > 0.01:
+            dy = np.clip(block_2_y - robot_y, -0.1, 0.1)
+            return np.array(
+                [0.0, dy, float(should_pull)]
+            )  # Activate gripper if pulling
+
+        # Robot is in position to push or pull
+        dx = np.clip(move_direction, -0.1, 0.1)
+        return np.array([dx, 0.0, float(should_pull)])  # Activate gripper if pulling
+
+    def _get_movement_direction(
+        self,
+        block_1_x: float,
+        block_2_x: float,
+        target_x: float,
+        block_width: float,
+        target_width: float,
+    ) -> Tuple[float, bool]:
+        """Determines the direction to move block 2 and whether to push or
+        pull.
+
+        Returns:
+            Tuple[float, bool]: (movement_direction, should_pull)
+            - movement_direction: -0.1 for left, 0.1 for right
+            - should_pull: True if we should pull, False if we should push
+        """
+        left_margin = (block_2_x - block_width / 2) - (target_x - target_width / 2)
+        right_margin = (target_x + target_width / 2) - (block_2_x + block_width / 2)
+
+        # Calculate the space needed between block 1 and target area
+        space_needed = block_width + 1e-3
+
+        # Check if there's enough space on either side
+        space_on_left = (
+            abs((target_x - target_width / 2) - (block_1_x + block_width / 2))
+            if block_1_x < target_x
+            else abs(target_x - target_width / 2)
+        )
+        space_on_right = (
+            abs((block_1_x - block_width / 2) - (target_x + target_width / 2))
+            if block_1_x > target_x
+            else abs(float(1.0) - (target_x + target_width / 2))
+        )
+
+        # Determine optimal direction and whether to push or pull
+        if left_margin < right_margin:
+            # Moving left is shorter
+            if space_on_left > space_needed:
+                return -0.1, False  # Push left
+            return 0.1, True  # Pull right
+        # Moving right is shorter
+        if space_on_right > space_needed:
+            return 0.1, False  # Push right
+        return -0.1, True  # Pull left
 
 
 class Blocks2DImprovisationalTAMPApproach(

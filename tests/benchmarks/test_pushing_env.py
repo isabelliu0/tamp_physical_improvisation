@@ -31,7 +31,7 @@ def test_pushing_env_basic():
     steps = 0
     while not (terminated or truncated):
         action = np.array([0.1, 0.0, 0.0])  # Try to push right
-        obs, reward, terminated, truncated, _ = env.step(action)
+        obs, _, terminated, truncated, _ = env.step(action)
         steps += 1
         assert steps <= env.max_episode_steps, "Episode should not exceed max steps"
 
@@ -39,9 +39,6 @@ def test_pushing_env_basic():
             assert not env.is_target_area_blocked(
                 obs
             ), "Episode should end when area is clear"
-            assert reward == 0.0, "Success reward should be 0.0"
-        elif not truncated:
-            assert reward == -1.0, "Step penalty should be -1.0"
 
 
 def test_random_policy():
