@@ -21,7 +21,7 @@ def is_block_in_target_area(
     target_width: float,
     target_height: float,
 ) -> bool:
-    """Checks if the block is in the target area."""
+    """Checks if the block 1 is in the target area."""
     target_left = target_x - target_width / 2
     target_right = target_x + target_width / 2
     target_bottom = target_y - target_height / 2
@@ -129,6 +129,7 @@ class Blocks2DEnv(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
             "distance_to_block2": self._calculate_distance_to_block(
                 self._block_2_position
             ),
+            "collision_occurred": False,
         }
 
     def step(
