@@ -31,11 +31,6 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
         self.max_episode_steps = 100
         self.steps = 0
 
-        # Initialize tracking variables
-        self._prev_block2_target_dist: Optional[float] = None
-        self._prev_robot_block2_dist: Optional[float] = None
-        self._prev_gripper_status: Optional[float] = None
-
         # Same spaces as base env
         self.observation_space = base_env.observation_space
         self.action_space = base_env.action_space
@@ -97,6 +92,7 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
         """Generate valid random positions for blocks."""
         obs, _ = self.env.reset()
         block_width = float(obs[8])
+        target_width = float(obs[13])
         margin = block_width / 2
 
         # Block 1 starts in left or right side, but not in target area
@@ -104,13 +100,14 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
             block_1_x = rng.uniform(0.0, target_x - margin)
         else:
             block_1_x = rng.uniform(target_x + margin, 1.0)
-        block_1_y = 0.0
-        block_1_pos = np.array([block_1_x, block_1_y], dtype=np.float32)
+        block_1_pos = np.array([block_1_x, 0.0], dtype=np.float32)
 
         # Block 2 position depends on whether it should block target area
         if ensure_blocking:
             # Place block 2 somewhere in or near target area
-            block_2_x = rng.uniform(target_x - margin, target_x + margin)
+            block_2_x = rng.uniform(
+                target_x - target_width / 2, target_x + target_width / 2
+            )  # determines the difficulty of the task for the RL agent
             block_2_pos = np.array([block_2_x, 0.0], dtype=np.float32)
         else:
             # Random position away from target and block 1
@@ -127,70 +124,46 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
 
         return block_1_pos, block_2_pos
 
-    def _calculate_reward(
-        self,
-        obs: NDArray[np.float32],
-        terminated: bool,
-        truncated: bool,
-    ) -> float:
-        """Calculate reward based on multiple factors.
+    def _check_collision(self, obs: NDArray[np.float32]) -> bool:
+        """Check for collisions in current step using observations."""
 
-        1. Success reward: +10.0 for successfully clearing the target area
-        2. Step penalty: -0.1 per step to encourage efficiency
-        3. Distance-based rewards:
-            Positive reward for moving block 2 away when blocking
-            Small penalty for moving block 2 away when not blocking
-            Reward for robot approaching block 2 efficiently
-        4. Penalty for excessive gripper toggling (-0.2)
-        """
-        robot_x, robot_y = obs[0], obs[1]
-        block2_x, block2_y = obs[6], obs[7]
-        target_x, target_y = obs[11], obs[12]
-        gripper_status = obs[10]
+        def check_rectangles_collision(
+            pos1: NDArray[np.float32], pos2: NDArray[np.float32]
+        ) -> bool:
+            dx = abs(pos1[0] - pos2[0])
+            dy = abs(pos1[1] - pos2[1])
 
-        # Base reward component: -1.0 per step to encourage faster completion
-        reward = -1.0
+            # Get widths based on whether robot is involved
+            block_width = obs[8]
+            block_height = obs[9]
+            width_sum = block_width + 1e-3
+            height_sum = block_height + 1e-3
 
-        # Success reward
-        if terminated and not truncated:  # Successfully cleared target area
-            return 20.0
+            # If robot involved, use robot-block dimensions
+            if np.array_equal(pos1, obs[0:2]) or np.array_equal(pos2, obs[0:2]):
+                width_sum = (
+                    obs[2] + block_width
+                ) / 2 + 1e-3  # robot_width + block_width
+                height_sum = (
+                    obs[3] + block_height
+                ) / 2 + 1e-3  # robot_height + block_height
 
-        # Distance-based rewards
-        block2_target_dist = np.sqrt(
-            (block2_x - target_x) ** 2 + (block2_y - target_y) ** 2
+            return dx < width_sum and dy < height_sum
+
+        # Get positions from observation
+        robot_pos = obs[0:2]  # robot x,y
+        block1_pos = obs[4:6]  # block 1 x,y
+        block2_pos = obs[6:8]  # block 2 x,y
+
+        # Check all collision pairs
+        return (
+            (
+                check_rectangles_collision(robot_pos, block1_pos)
+                and np.isclose(obs[10], 0.0, atol=1e-3)
+            )
+            or check_rectangles_collision(robot_pos, block2_pos)
+            or check_rectangles_collision(block1_pos, block2_pos)
         )
-        robot_block2_dist = np.sqrt(
-            (robot_x - block2_x) ** 2 + (robot_y - block2_y) ** 2
-        )
-
-        # Reward for moving block 2 away from target
-        if self._prev_block2_target_dist is not None:
-            dist_improvement = self._prev_block2_target_dist - block2_target_dist
-            # If block is blocking, reward moving away; if not blocking, small penalty
-            if self.is_target_area_blocked(obs):
-                reward += 2.0 * dist_improvement
-            else:
-                reward -= 0.5 * dist_improvement
-
-        # Reward for robot approaching block 2 efficiently
-        if self._prev_robot_block2_dist is not None:
-            approach_improvement = self._prev_robot_block2_dist - robot_block2_dist
-            if robot_block2_dist > 0.3:  # Only reward approaching if not too close
-                reward += 0.5 * approach_improvement
-
-        # Store current distances for next step
-        self._prev_block2_target_dist = block2_target_dist
-        self._prev_robot_block2_dist = robot_block2_dist
-
-        # Penalize excessive gripper toggling
-        if (
-            self._prev_gripper_status is not None
-            and self._prev_gripper_status != gripper_status
-        ):
-            reward -= 0.2
-        self._prev_gripper_status = gripper_status
-
-        return reward
 
     def reset(
         self,
@@ -200,12 +173,14 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
     ) -> Tuple[NDArray[np.float32], Dict[str, Any]]:
         """Reset the environment with random block positions."""
         self.steps = 0
-        self._prev_block2_target_dist = None
-        self._prev_robot_block2_dist = None
-        self._prev_gripper_status = None
 
-        # Initialize RNG and get random block positions
-        rng = np.random.default_rng(seed)
+        # Initialize RNG
+        if seed is not None:
+            rng = np.random.default_rng(seed)
+        else:
+            rng = np.random.default_rng()
+
+        # Get random block positions
         block_1_pos, block_2_pos = self._get_random_block_positions(
             rng, ensure_blocking=bool(self._custom_reset_options["ensure_blocking"])
         )
@@ -235,23 +210,23 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
         self,
         action: NDArray[np.float32],
     ) -> Tuple[NDArray[np.float32], float, bool, bool, Dict[str, Any]]:
-        """Step the environment with proper collision handling."""
-        obs, _, _, truncated, info = self.env.step(action)
+        """Step the environment."""
+        obs, _, _, _, info = self.env.step(action)
         self.steps += 1
-
-        # If collision occurred, episode is truncated
-        if info["collision_occurred"]:
-            return obs, -10.0, False, True, info
 
         # Check if target area is clear
         is_blocked = self.is_target_area_blocked(obs)
 
-        # Determine episode termination
+        # Episode terminates if target area is clear or max steps exceeded
         terminated = not is_blocked
-        truncated = truncated or self.steps >= self.max_episode_steps
+        truncated = self.steps >= self.max_episode_steps
 
-        # Calculate reward only if no collision occurred
-        reward = self._calculate_reward(obs, terminated, truncated)
+        # Base reward: 1.0 for success, -0.1 per step
+        reward = 1.0 if terminated else -0.1
+
+        # Add small collision penalty if collision occurred in this step
+        if self._check_collision(obs):
+            reward -= 0.5
 
         return obs, reward, terminated, truncated, info
 

@@ -142,6 +142,7 @@ class Blocks2DEnv(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
 
         # Save the previous robot position for push/pull interactions
         robot_position_prev = self._robot_position.copy()
+        prev_gripper_status = self._gripper_status
 
         # Update the position and the gripper status of the robot
         new_robot_x = np.clip(self._robot_position[0] + dx, 0.0, 1.0).astype(np.float32)
@@ -151,31 +152,35 @@ class Blocks2DEnv(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
 
         # Handle block 2 interactions (push/pull)
         if self._is_adjacent(robot_position_prev, self._block_2_position):
-            relative_pos = robot_position_prev[0] - self._block_2_position[0]
-            if (
-                relative_pos * dx > 0.0 and self._gripper_status > 0.0
-            ):  # Pull (gripper activated)
-                self._block_2_position[0] = np.clip(
-                    self._block_2_position[0] + dx, 0.0, 1.0
-                ).astype(np.float32)
-            elif relative_pos * dx < 0.0:  # Push
-                self._block_2_position[0] = np.clip(
-                    self._block_2_position[0] + dx, 0.0, 1.0
-                ).astype(np.float32)
+            self._block_2_position[0] = np.clip(
+                self._block_2_position[0] + dx, 0.0, 1.0
+            ).astype(np.float32)
 
         # Handle block 1 interactions (pick/drop)
         distance = self._calculate_distance_to_block(self._block_1_position)
+
+        # Case 1: Robot is picking up the block
         if (
             self._gripper_status > 0.0
             and distance <= ((self._robot_width + self._block_width) / 2) + 1e-3
         ):
-            # Robot fetches and holds the block.
             self._block_1_position = self._robot_position.copy()
-        elif self._gripper_status < 0.0 and np.isclose(distance, 0.0, atol=1e-3):
-            # Robot drops the block.
+
+        # Case 2: Robot was holding the block and gripper is deactivated
+        elif (
+            0.0 < prev_gripper_status
+            and self._gripper_status <= 0.0
+            and np.allclose(self._block_1_position, robot_position_prev, atol=1e-3)
+        ):
             self._block_1_position = np.array(
                 [self._robot_position[0], 0.0], dtype=np.float32
             )
+
+        # Case 3: Robot is holding the block (continue moving it)
+        elif self._gripper_status > 0.0 and np.allclose(
+            self._block_1_position, robot_position_prev, atol=1e-3
+        ):
+            self._block_1_position = self._robot_position.copy()
 
         # Check for collision between all pairs
         observation = self._get_obs()
@@ -183,18 +188,15 @@ class Blocks2DEnv(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
 
         # Robot-Block1 collision
         if self._check_collisions(self._robot_position, self._block_1_position):
-            if np.isclose(self._gripper_status, 0.0, atol=1e-6):
-                info["collision_occurred"] = True
+            if np.isclose(self._gripper_status, 0.0, atol=1e-3):
                 return observation, float(-1.0), False, True, info
 
         # Robot-Block2 collision
         if self._check_collisions(self._robot_position, self._block_2_position):
-            info["collision_occurred"] = True
             return observation, float(-1.0), False, True, info
 
         # Block1-Block2 collision
         if self._check_collisions(self._block_1_position, self._block_2_position):
-            info["collision_occurred"] = True
             return observation, float(-1.0), False, True, info
 
         # Check if the robot has reached the goal
@@ -245,12 +247,13 @@ class Blocks2DEnv(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
     ) -> bool:
         """Check if robot is adjacent to a block (for pushing/pulling)."""
         vertical_aligned = (
-            np.abs(robot_position[1] - block_position[1]) <= self._block_height / 2
+            np.abs(robot_position[1] - block_position[1])
+            < (self._robot_height + self._block_height) / 2
         )
         horizontal_adjacent = np.isclose(
             np.abs(robot_position[0] - block_position[0]),
             (self._robot_width + self._block_width) / 2,
-            atol=1e-3,
+            atol=1e-2,  # tolerance to make the task easier for RL agents
         )
         return vertical_aligned and horizontal_adjacent
 
