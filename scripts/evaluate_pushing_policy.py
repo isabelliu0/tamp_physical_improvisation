@@ -12,7 +12,6 @@ def evaluate_pushing_policy(
     num_episodes: int = 50,
     seed: int = 42,
     render: bool = False,
-    debug: bool = False,
 ) -> None:
     """Evaluate a trained pushing policy.
 
@@ -23,9 +22,12 @@ def evaluate_pushing_policy(
         render: Whether to render the environment
         debug: Whether to print debug information
     """
-    # Setup
+    # Create environment with evaluation seeds
     base_env = Blocks2DEnv(render_mode="rgb_array" if render else None)
-    env = make_pushing_env(base_env, seed=seed)
+    env = make_pushing_env(
+        base_env,
+        seed=seed,
+    )
 
     # # Uncomment to watch a video.
     # from pathlib import Path
@@ -38,7 +40,7 @@ def evaluate_pushing_policy(
     #     env = RecordVideo(
     #         env,
     #         video_folder,
-    #         episode_trigger=lambda _: True,  # Record all episodes
+    #         episode_trigger=lambda x: x % 10 == 0,  # Record every 10th episode
     #         name_prefix="evaluation",
     #     )
 
@@ -52,36 +54,21 @@ def evaluate_pushing_policy(
 
     # Run episodes
     for episode in range(num_episodes):
-        obs, _ = env.reset(
-            seed=seed + episode if seed is not None else None
-        )  # Different seed for each episode
-
-        if debug:
-            print(f"\nEpisode {episode + 1}:")
-            print(f"Initial robot position: ({obs[0]:.3f}, {obs[1]:.3f})")
-            print(f"Initial block 2 position: ({obs[6]:.3f}, {obs[7]:.3f})")
-            print(f"Target area: ({obs[11]:.3f}, {obs[12]:.3f})")
+        obs, _ = env.reset()
 
         episode_length = 0.0
         episode_reward = 0.0
+        step = 0
 
         while True:
             # Get action from policy
             action = policy.get_action(obs)
 
-            if debug:
-                print(f"\nStep {episode_length + 1}:")
-                print(f"Action: {action}")
-
             obs, reward, terminated, truncated, _ = env.step(action)
-
-            if debug:
-                print(f"New robot position: ({obs[0]:.3f}, {obs[1]:.3f})")
-                print(f"New block 2 position: ({obs[6]:.3f}, {obs[7]:.3f})")
-                print(f"Reward: {reward:.3f}")
 
             episode_length += 1
             episode_reward += reward
+            step += 1
 
             if terminated or truncated:
                 if terminated:  # Successfully cleared area
@@ -107,6 +94,5 @@ if __name__ == "__main__":
         policy_path="trained_policies/pushing_policy",
         num_episodes=50,
         seed=42,
-        render=False,
-        debug=False,
+        render=True,
     )

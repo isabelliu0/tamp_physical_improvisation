@@ -3,8 +3,7 @@
 .vscode
 videos/
 trained_policies/
-log.txt
-log_eval.txt
+logs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

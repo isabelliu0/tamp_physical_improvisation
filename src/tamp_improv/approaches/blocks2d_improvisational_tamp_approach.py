@@ -1,7 +1,5 @@
 """Blocks2D-specific implementation of improvisational TAMP approach."""
 
-import math
-
 import numpy as np
 from numpy.typing import NDArray
 from relational_structs import (
@@ -57,67 +55,50 @@ class Blocks2DImprovisationalPolicy(
             _,
         ) = obs
 
-        # First, determine if we should push or pull and in which direction
-        move_direction, should_pull = self._get_movement_direction(
+        # First, determine in which direction to move block 2
+        move_direction = self._get_movement_direction(
             block_1_x,
-            block_2_x,
             target_x,
             block_width,
             target_width,
         )
 
         # Calculate distances
-        distance = np.linalg.norm([robot_x - block_2_x, robot_y - block_2_y])
-        vertical_distance = np.abs(robot_y - block_2_y)
+        distance = abs(robot_x - block_2_x)
+        vertical_distance = abs(robot_y - block_2_y)
 
-        # If the robot is too far from block 2, move towards it
-        if distance > ((robot_width + block_width) / 2) * math.sqrt(2):
-            # Position robot on the correct side based on push/pull strategy
+        # If the robot is too far horizontally from block 2, move towards it
+        if abs(distance - (robot_width + block_width) / 2) > 0.01:
+            # Position robot on the correct side for pushing
             target_x_offset = (robot_width + block_width) / 2
-            if should_pull:
-                # For pulling, position on the same side we want to move the block
-                target_x_offset *= np.sign(move_direction)
-            else:
-                # For pushing, position on the opposite side
-                target_x_offset *= -np.sign(move_direction)
+            # Always position on the opposite side we want to move the block (push)
+            target_x_offset *= -np.sign(move_direction)
 
             dx = np.clip(block_2_x + target_x_offset - robot_x, -0.1, 0.1)
             dy = np.clip(block_2_y - robot_y, -0.1, 0.1)
             return np.array([dx, dy, 0.0])
 
-        # If the robot and block 2 not vertically aligned, align first
+        # If the robot and block 2 are not vertically aligned, align first
         if vertical_distance > 0.01:
             dy = np.clip(block_2_y - robot_y, -0.1, 0.1)
-            return np.array(
-                [0.0, dy, float(should_pull)]
-            )  # Activate gripper if pulling
+            return np.array([0.0, dy, 0.0])
 
-        # Robot is in position to push or pull
+        # Robot is in position to push
         dx = np.clip(move_direction, -0.1, 0.1)
-        return np.array([dx, 0.0, float(should_pull)])  # Activate gripper if pulling
+        return np.array([dx, 0.0, 0.0])
 
     def _get_movement_direction(
         self,
         block_1_x: float,
-        block_2_x: float,
         target_x: float,
         block_width: float,
         target_width: float,
-    ) -> tuple[float, bool]:
-        """Determines the direction to move block 2 and whether to push or
-        pull.
+    ) -> float:
+        """Determines the direction to move block 2.
 
         Returns:
-            tuple[float, bool]: (movement_direction, should_pull)
-            - movement_direction: -0.1 for left, 0.1 for right
-            - should_pull: True if we should pull, False if we should push
+            float: -0.1 for left, 0.1 for right
         """
-        left_margin = (block_2_x - block_width / 2) - (target_x - target_width / 2)
-        right_margin = (target_x + target_width / 2) - (block_2_x + block_width / 2)
-
-        # Calculate the space needed between block 1 and target area
-        space_needed = block_width + 1e-3
-
         # Check if there's enough space on either side
         space_on_left = (
             abs((target_x - target_width / 2) - (block_1_x + block_width / 2))
@@ -130,16 +111,10 @@ class Blocks2DImprovisationalPolicy(
             else abs(float(1.0) - (target_x + target_width / 2))
         )
 
-        # Determine optimal direction and whether to push or pull
-        if left_margin < right_margin:
-            # Moving left is shorter
-            if space_on_left > space_needed:
-                return -0.1, False  # Push left
-            return 0.1, True  # Pull right
-        # Moving right is shorter
-        if space_on_right > space_needed:
-            return 0.1, False  # Push right
-        return -0.1, True  # Pull left
+        # Move in direction with more space
+        if space_on_left > space_on_right:
+            return -0.1  # Push left
+        return 0.1  # Push right
 
 
 class Blocks2DImprovisationalTAMPApproach(
