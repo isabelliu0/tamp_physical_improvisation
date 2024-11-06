@@ -50,8 +50,8 @@ def create_blocks2d_planning_models(
     # Only include this operator if include_pushing_models is True.
     ClearTargetAreaOperator = LiftedOperator(
         "ClearTargetArea",
-        [robot],
-        preconditions={GripperEmpty([robot]), LiftedAtom(TargetAreaBlocked, [])},
+        [robot, block],
+        preconditions={LiftedAtom(TargetAreaBlocked, []), Holding([robot, block])},
         add_effects={LiftedAtom(TargetAreaClear, [])},
         delete_effects={LiftedAtom(TargetAreaBlocked, [])},
     )
@@ -60,8 +60,8 @@ def create_blocks2d_planning_models(
         GripperEmpty([robot]),
         LiftedAtom(BlockNotInTargetArea, [block]),
     }
-    if include_pushing_models:
-        pick_up_operator_preconditions.add(LiftedAtom(TargetAreaClear, []))
+    # if include_pushing_models:
+    #     pick_up_operator_preconditions.add(LiftedAtom(TargetAreaClear, []))
 
     PickUpOperator = LiftedOperator(
         "PickUp",
@@ -118,8 +118,8 @@ def create_blocks2d_planning_models(
 
         def _get_atoms(self, obs: np.ndarray) -> set[GroundAtom]:
             (
-                _,
-                _,
+                robot_x,
+                robot_y,
                 _,
                 _,
                 block_1_x,
@@ -151,7 +151,11 @@ def create_blocks2d_planning_models(
             else:
                 atoms.add(BlockNotInTargetArea([self._block_1]))
 
-            if gripper_status > 0:
+            if (
+                gripper_status > 0.0
+                and np.isclose(block_1_x, robot_x, atol=1e-3)
+                and np.isclose(block_1_y, robot_y, atol=1e-3)
+            ):
                 atoms.add(Holding([self._robot, self._block_1]))
             else:
                 atoms.add(GripperEmpty([self._robot]))
@@ -245,6 +249,7 @@ def create_blocks2d_planning_models(
                 target_width,
                 _,
             ) = obs
+            print("CLEAR TARGET AREA SKILL")
 
             # First, determine in which direction to move block 2
             move_direction = self._get_movement_direction(
@@ -254,29 +259,22 @@ def create_blocks2d_planning_models(
                 target_width,
             )
 
+            # Calculate target position to push from
+            target_x_offset = (robot_width + block_width) / 2
+            target_x_offset *= -np.sign(move_direction)
+            target_robot_x = block_2_x + target_x_offset
+
             # Calculate distances
-            distance = abs(robot_x - block_2_x)
-            vertical_distance = abs(robot_y - block_2_y)
+            dist_to_target = np.hypot(target_robot_x - robot_x, block_2_y - robot_y)
 
-            # If the robot is too far horizontally from block 2, move towards it
-            if abs(distance - (robot_width + block_width) / 2) > 0.01:
-                # Position robot on the correct side for pushing
-                target_x_offset = (robot_width + block_width) / 2
-                # Always position on the opposite side we want to move the block (push)
-                target_x_offset *= -np.sign(move_direction)
-
-                dx = np.clip(block_2_x + target_x_offset - robot_x, -0.1, 0.1)
+            if dist_to_target > 0.1:  # If we're far from pushing position
+                # Move towards the target position using a combined motion
+                dx = np.clip(target_robot_x - robot_x, -0.1, 0.1)
                 dy = np.clip(block_2_y - robot_y, -0.1, 0.1)
-                return np.array([dx, dy, 0.0])
+                return np.array([dx, dy, 1.0])
 
-            # If the robot and block 2 are not vertically aligned, align first
-            if vertical_distance > 0.01:
-                dy = np.clip(block_2_y - robot_y, -0.1, 0.1)
-                return np.array([0.0, dy, 0.0])
-
-            # Robot is in position to push
-            dx = np.clip(move_direction, -0.1, 0.1)
-            return np.array([dx, 0.0, 0.0])
+            # We're in position to push
+            return np.array([np.clip(move_direction, -0.1, 0.1), 0.0, 1.0])
 
         def _get_movement_direction(
             self,
@@ -327,24 +325,41 @@ def create_blocks2d_planning_models(
                 _,
                 _,
                 block_height,
-                _,
+                gripper_status,
                 _,
                 _,
                 _,
                 _,
             ) = obs
+            print("PICK UP SKILL")
 
-            # First, move the robot above the block
-            if robot_y < block_y + block_height / 2 + robot_height / 2:
-                dy = np.clip(
-                    (block_y + block_height / 2 + robot_height / 2) - robot_y, -0.1, 0.1
-                )
+            # Calculate target position above block
+            target_y = block_y + block_height / 2 + robot_height / 2
+
+            # Calculate distances
+            dist_to_block = np.hypot(block_x - robot_x, target_y - robot_y)
+
+            # If we're far from the block, move towards it using combined motion
+            if dist_to_block > 0.15:
+                dx = np.clip(block_x - robot_x, -0.1, 0.1)
+                dy = np.clip(target_y - robot_y, -0.1, 0.1)
+                return np.array([dx, dy, 0.0])
+
+            # Fine positioning: align vertically first
+            if not np.isclose(robot_y, target_y, atol=1e-3):
+                dy = np.clip(target_y - robot_y, -0.1, 0.1)
                 return np.array([0.0, dy, 0.0])
-            # Then, align the robot with the block horizontally
-            if abs(robot_x - block_x) > 0.0:
+
+            # Then align horizontally
+            if not np.isclose(robot_x, block_x, atol=1e-3):
                 dx = np.clip(block_x - robot_x, -0.1, 0.1)
                 return np.array([dx, 0.0, 0.0])
-            return np.array([0.0, 0.0, 1.0])
+
+            # If aligned and gripper is open, close it
+            if gripper_status <= 0.0:
+                return np.array([0.0, 0.0, 1.0])
+
+            return np.array([0.0, 0.0, 0.0])
 
     class PutDownSkill(LiftedOperatorSkill[np.ndarray, np.ndarray]):
         """Skill for putting down a block."""
@@ -355,14 +370,51 @@ def create_blocks2d_planning_models(
         def _get_action_given_objects(
             self, objects: Sequence[Object], obs: np.ndarray
         ) -> np.ndarray:
-            _, _, _, _, block_x, _, _, _, _, _, gripper_status, target_x, _, _, _ = obs
-            distance = target_x - block_x
+            (
+                robot_x,
+                robot_y,
+                _,
+                robot_height,
+                _,
+                _,
+                _,
+                _,
+                _,
+                block_height,
+                gripper_status,
+                target_x,
+                target_y,
+                _,
+                _,
+            ) = obs
+            print("PUT DOWN SKILL")
 
-            if distance > 0.0:
-                dx = np.clip(target_x - block_x, -0.1, 0.1)
-                return np.array([dx, 0.0, 1.0])
-            if gripper_status > 0:
+            # Calculate target position
+            target_y = target_y + block_height / 2 + robot_height / 2
+
+            # Calculate distance to target
+            dist_to_target = np.hypot(target_x - robot_x, target_y - robot_y)
+
+            # If we're far from the target, use combined motion
+            if dist_to_target > 0.15:
+                dx = np.clip(target_x - robot_x, -0.1, 0.1)
+                dy = np.clip(target_y - robot_y, -0.1, 0.1)
+                return np.array([dx, dy, gripper_status])
+
+            # Fine positioning: align vertically first
+            if not np.isclose(robot_y, target_y, atol=1e-3):
+                dy = np.clip(target_y - robot_y, -0.1, 0.1)
+                return np.array([0.0, dy, gripper_status])
+
+            # Then align horizontally
+            if not np.isclose(robot_x, target_x, atol=1e-3):
+                dx = np.clip(target_x - robot_x, -0.1, 0.1)
+                return np.array([dx, 0.0, gripper_status])
+
+            # If aligned and holding block, release it
+            if gripper_status > 0.0:
                 return np.array([0.0, 0.0, -1.0])
+
             return np.array([0.0, 0.0, 0.0])
 
     skills = {PickUpSkill(), PutDownSkill()}

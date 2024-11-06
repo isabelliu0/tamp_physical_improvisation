@@ -150,11 +150,13 @@ class Blocks2DEnv(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
         self._robot_position = np.array([new_robot_x, new_robot_y], dtype=np.float32)
         self._gripper_status = new_gripper_status.astype(np.float32)
 
-        # Handle block 2 interactions (push/pull)
+        # Handle block 2 interactions (push)
         if self._is_adjacent(robot_position_prev, self._block_2_position):
-            self._block_2_position[0] = np.clip(
-                self._block_2_position[0] + dx, 0.0, 1.0
-            ).astype(np.float32)
+            relative_pos = robot_position_prev[0] - self._block_2_position[0]
+            if relative_pos * dx < 0.0:  # Push
+                self._block_2_position[0] = np.clip(
+                    self._block_2_position[0] + dx, 0.0, 1.0
+                ).astype(np.float32)
 
         # Handle block 1 interactions (pick/drop)
         distance = self._calculate_distance_to_block(self._block_1_position)
@@ -248,7 +250,7 @@ class Blocks2DEnv(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
         """Check if robot is adjacent to a block (for pushing/pulling)."""
         vertical_aligned = (
             np.abs(robot_position[1] - block_position[1])
-            < (self._robot_height + self._block_height) / 2
+            < (self._robot_height + self._block_height) / 4
         )
         horizontal_adjacent = np.isclose(
             np.abs(robot_position[0] - block_position[0]),
