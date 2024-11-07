@@ -233,9 +233,9 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
         else:
             # Small step penalty to encourage efficiency
             reward = -0.1
-            # Add distance-based reward
+            # Distance-based reward
             reward += self._calculate_distance_reward(obs)
-            # Add collision penalty
+            # Collision penalty
             if self._check_collision(obs):
                 reward -= 0.1
 
