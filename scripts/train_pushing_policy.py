@@ -53,7 +53,7 @@ def train_pushing_policy(
 
 if __name__ == "__main__":
     train_pushing_policy(
-        total_timesteps=1_000_000,
+        total_timesteps=500_000,
         seed=42,
         save_path="trained_policies/pushing_policy",
         render=True,

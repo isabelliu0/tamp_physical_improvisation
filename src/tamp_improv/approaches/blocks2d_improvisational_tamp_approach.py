@@ -63,29 +63,22 @@ class Blocks2DImprovisationalPolicy(
             target_width,
         )
 
+        # Calculate target position to push from
+        target_x_offset = (robot_width + block_width) / 2
+        target_x_offset *= -np.sign(move_direction)
+        target_robot_x = block_2_x + target_x_offset
+
         # Calculate distances
-        distance = abs(robot_x - block_2_x)
-        vertical_distance = abs(robot_y - block_2_y)
+        dist_to_target = np.hypot(target_robot_x - robot_x, block_2_y - robot_y)
 
-        # If the robot is too far horizontally from block 2, move towards it
-        if abs(distance - (robot_width + block_width) / 2) > 0.01:
-            # Position robot on the correct side for pushing
-            target_x_offset = (robot_width + block_width) / 2
-            # Always position on the opposite side we want to move the block (push)
-            target_x_offset *= -np.sign(move_direction)
-
-            dx = np.clip(block_2_x + target_x_offset - robot_x, -0.1, 0.1)
+        if dist_to_target > 0.1:  # If we're far from pushing position
+            # Move towards the target position using a combined motion
+            dx = np.clip(target_robot_x - robot_x, -0.1, 0.1)
             dy = np.clip(block_2_y - robot_y, -0.1, 0.1)
-            return np.array([dx, dy, 0.0])
+            return np.array([dx, dy, 1.0])
 
-        # If the robot and block 2 are not vertically aligned, align first
-        if vertical_distance > 0.01:
-            dy = np.clip(block_2_y - robot_y, -0.1, 0.1)
-            return np.array([0.0, dy, 0.0])
-
-        # Robot is in position to push
-        dx = np.clip(move_direction, -0.1, 0.1)
-        return np.array([dx, 0.0, 0.0])
+        # We're in position to push
+        return np.array([np.clip(move_direction, -0.1, 0.1), 0.0, 1.0])
 
     def _get_movement_direction(
         self,
