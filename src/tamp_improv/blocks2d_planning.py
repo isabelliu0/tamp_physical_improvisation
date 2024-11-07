@@ -249,7 +249,6 @@ def create_blocks2d_planning_models(
                 target_width,
                 _,
             ) = obs
-            print("CLEAR TARGET AREA SKILL")
 
             # First, determine in which direction to move block 2
             move_direction = self._get_movement_direction(
@@ -331,7 +330,6 @@ def create_blocks2d_planning_models(
                 _,
                 _,
             ) = obs
-            print("PICK UP SKILL")
 
             # Calculate target position above block
             target_y = block_y + block_height / 2 + robot_height / 2
@@ -387,7 +385,6 @@ def create_blocks2d_planning_models(
                 _,
                 _,
             ) = obs
-            print("PUT DOWN SKILL")
 
             # Calculate target position
             target_y = target_y + block_height / 2 + robot_height / 2
