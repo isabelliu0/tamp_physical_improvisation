@@ -60,8 +60,6 @@ def create_blocks2d_planning_models(
         GripperEmpty([robot]),
         LiftedAtom(BlockNotInTargetArea, [block]),
     }
-    # if include_pushing_models:
-    #     pick_up_operator_preconditions.add(LiftedAtom(TargetAreaClear, []))
 
     PickUpOperator = LiftedOperator(
         "PickUp",
