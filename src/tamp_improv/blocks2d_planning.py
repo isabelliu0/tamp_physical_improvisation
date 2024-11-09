@@ -396,15 +396,15 @@ def create_blocks2d_planning_models(
                 dy = np.clip(target_y - robot_y, -0.1, 0.1)
                 return np.array([dx, dy, gripper_status])
 
-            # Fine positioning: align vertically first
-            if not np.isclose(robot_y, target_y, atol=1e-3):
-                dy = np.clip(target_y - robot_y, -0.1, 0.1)
-                return np.array([0.0, dy, gripper_status])
-
-            # Then align horizontally
+            # Fine positioning: align horizontally first
             if not np.isclose(robot_x, target_x, atol=1e-3):
                 dx = np.clip(target_x - robot_x, -0.1, 0.1)
                 return np.array([dx, 0.0, gripper_status])
+
+            # Then align vertically
+            if robot_y - target_y > 0.0:
+                dy = np.clip(target_y - robot_y, -0.1, 0.1)
+                return np.array([0.0, dy, gripper_status])
 
             # If aligned and holding block, release it
             if gripper_status > 0.0:

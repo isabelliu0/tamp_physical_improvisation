@@ -11,8 +11,8 @@ from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
 def test_blocks2d_improvisational_tamp_approach():
     """Tests for Blocks2DImprovisationalTAMPApproach()."""
 
-    env = Blocks2DEnv(render_mode="rgb_array")
-    env = TimeLimit(env, max_episode_steps=100)
+    base_env = Blocks2DEnv(render_mode="rgb_array")
+    env = TimeLimit(base_env, max_episode_steps=100)
 
     # # Uncomment to watch a video.
     # from gymnasium.wrappers import RecordVideo

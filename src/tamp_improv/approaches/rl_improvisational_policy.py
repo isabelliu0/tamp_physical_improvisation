@@ -2,6 +2,7 @@
 
 from typing import Optional
 
+import gymnasium as gym
 import numpy as np
 from numpy.typing import NDArray
 from stable_baselines3 import PPO
@@ -10,7 +11,6 @@ from stable_baselines3.common.callbacks import BaseCallback
 from tamp_improv.approaches.base_improvisational_tamp_approach import (
     ImprovisationalPolicy,
 )
-from tamp_improv.benchmarks.pushing_env import PushingEnvWrapper
 
 
 class TrainingProgressCallback(BaseCallback):
@@ -60,7 +60,7 @@ class RLImprovisationalPolicy(
 ):
     """RL-based improvisational policy using PPO."""
 
-    def __init__(self, env: PushingEnvWrapper):
+    def __init__(self, env: gym.Env):
         """Initialize policy with a PPO model.
 
         PPO hyperparameters:

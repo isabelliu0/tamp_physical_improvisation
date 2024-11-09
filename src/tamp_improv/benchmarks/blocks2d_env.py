@@ -255,7 +255,7 @@ class Blocks2DEnv(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
         horizontal_adjacent = np.isclose(
             np.abs(robot_position[0] - block_position[0]),
             (self._robot_width + self._block_width) / 2,
-            atol=1e-2,  # tolerance to make the task easier for RL agents
+            atol=2e-2,  # tolerance to make the task easier for RL agents
         )
         return vertical_aligned and horizontal_adjacent
 
