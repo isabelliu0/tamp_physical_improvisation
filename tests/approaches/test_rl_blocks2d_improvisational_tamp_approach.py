@@ -1,9 +1,11 @@
 """Test rl_blocks2d_improvisational_tamp_approach.py."""
 
+from pathlib import Path
 from typing import cast
 
 import gymnasium as gym
 import numpy as np
+import pytest
 from gymnasium.wrappers import TimeLimit
 from numpy.typing import NDArray
 
@@ -21,14 +23,12 @@ def test_rl_blocks2d_improvisational_tamp_approach(
     Args:
         policy_path: Path to saved RL policy weights
     """
-    # # Uncomment to check for policy file (.zip extension)
-    #  from pathlib import Path
-
-    # if not Path(f"{policy_path}.zip").exists():
-    #     raise FileNotFoundError(
-    #         f"Policy file not found at {policy_path}.zip. "
-    #         "Please train a policy first using train_pushing_policy.py"
-    #     )
+    # Skip if policy file doesn't exist
+    if not Path(f"{policy_path}.zip").exists():
+        pytest.skip(
+            f"Policy file not found at {policy_path}.zip. "
+            "Skipping test as this is expected in CI environment."
+        )
 
     # Set up environment
     base_env = Blocks2DEnv(render_mode="rgb_array")
