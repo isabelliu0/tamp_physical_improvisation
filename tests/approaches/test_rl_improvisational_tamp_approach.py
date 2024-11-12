@@ -1,4 +1,4 @@
-"""Test rl_blocks2d_improvisational_tamp_approach.py."""
+"""Test rl_improvisational_tamp_approach.py."""
 
 from pathlib import Path
 from typing import cast
@@ -9,7 +9,7 @@ import pytest
 from gymnasium.wrappers import TimeLimit
 from numpy.typing import NDArray
 
-from tamp_improv.approaches.rl_blocks2d_improvisational_tamp_approach import (
+from tamp_improv.approaches.rl_improvisational_tamp_approach import (
     RLBlocks2DImprovisationalTAMPApproach,
 )
 from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
