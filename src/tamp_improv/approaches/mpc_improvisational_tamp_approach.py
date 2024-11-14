@@ -2,6 +2,7 @@
 environment."""
 
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -85,6 +86,7 @@ class MPCBlocks2DImprovisationalTAMPApproach(ImprovisationalTAMPApproach):
         )
 
         self.env_name = "blocks2d"
+        self._steps_taken = 0  # Track steps for horizon reduction
 
         # Initialize planning components
         types, predicates, _, operators, skills = create_blocks2d_planning_models(
@@ -113,6 +115,54 @@ class MPCBlocks2DImprovisationalTAMPApproach(ImprovisationalTAMPApproach):
             self._operator_to_full_precondition_operator[operator] = (
                 full_precondition_operator
             )
+
+    def reset(
+        self, obs: NDArray[np.float32], info: dict[str, Any]
+    ) -> NDArray[np.float32]:
+        """Reset the approach and return initial action."""
+        self._steps_taken = 0
+        return super().reset(obs, info)
+
+    def step(
+        self,
+        obs: NDArray[np.float32],
+        reward: float,
+        terminated: bool,
+        truncated: bool,
+        info: dict[str, Any],
+    ) -> NDArray[np.float32]:
+        """Get next action with updated horizon."""
+        # Check if we should still be using improvisational policy
+        if self._policy_active:
+            # Check if policy succeeded (block moved out of way)
+            if self._target_atoms.issubset(self._perceiver.step(obs)):
+                print("Policy successfully achieved target atoms!")
+                self._policy_active = False
+                self._target_atoms = set()
+                self._steps_taken = 0  # Reset steps
+                self._replan(obs, info)  # replan from current state
+                return super().step(obs, reward, terminated, truncated, info)
+
+            # Get action from policy
+            action = self._policy.get_action(
+                obs, steps_taken=self._steps_taken  # type: ignore [call-arg]
+            )
+            self._steps_taken += 1
+
+            # If we've taken too many steps, consider it a failure and revert to TAMP
+            if self._steps_taken >= self._config.horizon:
+                print("Policy exceeded horizon - reverting to TAMP")
+                self._policy_active = False
+                self._target_atoms = set()
+                self._steps_taken = 0
+                self._replan(obs, info)
+                return super().step(obs, reward, terminated, truncated, info)
+
+            return action
+
+        # Not using improvisational policy
+        self._steps_taken = 0
+        return super().step(obs, reward, terminated, truncated, info)
 
     def _get_skill_for_operator(
         self, operator: GroundOperator

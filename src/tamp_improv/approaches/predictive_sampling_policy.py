@@ -1,7 +1,7 @@
 """Implementation of predictive sampling for improvisational policy."""
 
 from dataclasses import dataclass
-from typing import List, Optional, cast
+from typing import Optional, cast
 
 import gymnasium as gym
 import numpy as np
@@ -79,85 +79,85 @@ class PredictiveSamplingImprovisationalPolicy(
     def _solve(
         self,
         initial_obs: NDArray[np.float32],
+        steps_taken: int = 0,
     ) -> NDArray[np.float32]:
         """Run one iteration of predictive sampling optimization.
 
         Args:
             initial_obs: Current observation to plan from
+            steps_taken: Number of steps we've already taken in the episode
 
         Returns:
             Best action to take
         """
-        sample_list: List[NDArray[np.float32]] = []
+        # Calculate remaining horizon
+        remaining_horizon = max(1, self._config.horizon - steps_taken)
 
-        # Add current nominal trajectory
-        sample_list.append(self._last_solution)
+        if self._warm_start and self._last_solution is not None:
+            # Shift control points for remaining horizon
+            self._last_solution = np.vstack(
+                [
+                    self._last_solution[1:],  # Remove first control point
+                    self._last_solution[-1:],  # Repeat last control point
+                ]
+            )
 
-        # Sample additional trajectories around nominal
-        num_samples = self._config.num_rollouts - len(sample_list)
-        new_samples = self._sample_from_nominal(num_samples)
-        sample_list.extend(new_samples)
+        # Start with current nominal trajectory
+        sample_list = [self._last_solution]
 
-        # Evaluate all samples
-        best_samples = min(
-            sample_list,
-            key=lambda s: self._evaluate_trajectory(s, initial_obs),
-        )
-
-        # Update nominal and return first action
-        self._last_solution = best_samples
-        return self._get_action_from_spline(best_samples, 0.0)
-
-    def _sample_from_nominal(
-        self,
-        num_samples: int,
-    ) -> List[NDArray[np.float32]]:
-        """Generate new trajectory samples by adding noise to nominal.
-
-        Args:
-            num_samples: Number of new trajectories to sample
-
-        Returns:
-            List of sampled trajectory parameters
-        """
+        # Generate variations around nominal
         action_space = cast(gym.spaces.Box, self._env.action_space)
         noise_shape = (
-            num_samples,
+            self._config.num_rollouts - 1,
             self._config.num_control_points,
             action_space.shape[0],
         )
-
-        # Generate Gaussian noise
         noise = self._rng.normal(
             loc=0,
             scale=self._config.noise_scale,
             size=noise_shape,
         )
 
-        # Add noise to nominal and clip to bounds
-        low = action_space.low
-        high = action_space.high
-        samples = []
-        for i in range(num_samples):
-            noisy_sample = np.clip(
+        # Add samples with bounds checking
+        for i in range(self._config.num_rollouts - 1):
+            sample = np.clip(
                 self._last_solution + noise[i],
-                low,
-                high,
-            )
-            samples.append(noisy_sample)
+                action_space.low,
+                action_space.high,
+            ).astype(np.float32)
+            sample_list.append(sample)
 
-        return samples
+        # Evaluate all trajectories
+        costs = [
+            self._evaluate_trajectory(s, initial_obs, horizon=remaining_horizon)
+            for s in sample_list
+        ]
+        best_idx = np.argmin(costs)
+        best_sample = sample_list[best_idx]
+
+        if steps_taken % 5 == 0:
+            print(f"\nMPC Step {steps_taken} Summary:")
+            print(f"Remaining horizon: {remaining_horizon}")
+            print(f"Best trajectory cost: {costs[best_idx]}")
+            print(f"Mean trajectory cost: {np.mean(costs)}")
+            print(f"Cost std dev: {np.std(costs)}")
+
+        # Update nominal and return first action
+        self._last_solution = best_sample
+        return self._get_action_from_spline(best_sample, 0.0)
 
     def _evaluate_trajectory(
         self,
         params: NDArray[np.float32],
         initial_obs: NDArray[np.float32],
+        horizon: int,
     ) -> float:
         """Evaluate a trajectory by forward simulation.
 
         Args:
             params: Spline control point parameters
             initial_obs: Initial observation to start from
+            horizon: Number of steps to simulate
 
         Returns:
             Total cost/negative reward of trajectory
@@ -186,14 +186,25 @@ class PredictiveSamplingImprovisationalPolicy(
         )
 
         total_cost = 0.0
-        # Simulate trajectory
-        for t in range(self._config.horizon):
+        # achieved_goal = False
+
+        # Simulate trajectory for remaining horizon
+        for t in range(horizon):
             action = self._get_action_from_spline(params, t * self._config.dt)
-            _, reward, terminated, truncated, _ = self._sim_env.step(action)
+            obs, reward, terminated, truncated, _ = self._sim_env.step(action)
             total_cost -= reward
 
-            if terminated or truncated:
+            if terminated:
+                if not self._sim_env.is_target_area_blocked(obs):
+                    # achieved_goal = True
+                    total_cost -= (horizon - t) * 1.0  # Bonus for early success
                 break
+
+            if truncated:
+                break
+
+        # if not achieved_goal:
+        #     total_cost += 10.0  # Penalty if didn't achieve goal
 
         return total_cost
 
@@ -213,20 +224,23 @@ class PredictiveSamplingImprovisationalPolicy(
         """
         action_space = cast(gym.spaces.Box, self._env.action_space)
 
-        # Scale t to be in terms of control points
-        t_scaled = t / (self._config.horizon * self._config.dt) * (len(params) - 1)
-        idx = int(t_scaled)
+        # Scale t to find which control points to interpolate between
+        idx = int(t / self._config.dt)
 
         # If past end of trajectory, return last action
         if idx >= len(params) - 1:
             return params[-1]
 
         # Linear interpolation between control points
-        alpha = t_scaled - idx
-        action = (1 - alpha) * params[idx] + alpha * params[idx + 1].astype(np.float32)
+        alpha = (t - idx * self._config.dt) / self._config.dt
+        action = ((1 - alpha) * params[idx] + alpha * params[idx + 1]).astype(
+            np.float32
+        )
         return np.clip(action, action_space.low, action_space.high)
 
-    def get_action(self, obs: NDArray[np.float32]) -> NDArray[np.float32]:
+    def get_action(
+        self, obs: NDArray[np.float32], steps_taken: int = 0
+    ) -> NDArray[np.float32]:
         """Get action from policy for current observation.
 
         Args:
@@ -235,7 +249,7 @@ class PredictiveSamplingImprovisationalPolicy(
         Returns:
             Action to take
         """
-        return self._solve(obs)
+        return self._solve(obs, steps_taken)
 
     def save(self, path: str) -> None:
         """Save policy parameters."""

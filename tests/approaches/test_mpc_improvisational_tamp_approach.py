@@ -23,8 +23,10 @@ def test_mpc_blocks2d_improvisational_tamp_approach():
     )
 
     # # Uncomment to watch a video
-    # from gymnasium.wrappers import RecordVideo
     # from pathlib import Path
+
+    # from gymnasium.wrappers import RecordVideo
+
     # video_folder = "videos/blocks2d-mpc-improvisational-tamp-test"
     # Path(video_folder).mkdir(parents=True, exist_ok=True)
     # env = RecordVideo(env, video_folder)
@@ -52,22 +54,55 @@ def test_mpc_blocks2d_improvisational_tamp_approach():
     approach.reset(obs, info)
 
     total_reward = 0.0
-    for step in range(100):  # should terminate earlier
+    episode_data = []
+
+    for step in range(100):
+        print(f"\n{'='*50}\nStep {step + 1}")
+        print(f"Current robot position: {obs[0:2]}")
+        print(f"Current block 2 position: {obs[6:8]}")
+
+        # Get distance to block 2 before action
+        pre_distance = info.get("distance_to_block2", None)
+        print(f"Distance to block 2: {pre_distance}")
+
+        # Get and apply action
         action = approach.step(obs, 0, False, False, info)
+        print(f"\nExecuting action: {action}")
+
+        # Step environment
         obs, reward, terminated, truncated, info = env.step(action)
         total_reward += reward
 
-        print(f"\nStep {step + 1}")
-        print(f"Action: {action}")
+        # Record step data
+        post_distance = info.get("distance_to_block2", None)
+
+        step_data = {
+            "step": step,
+            "action": action,
+            "reward": reward,
+            "pre_distance": pre_distance,
+            "post_distance": post_distance,
+            "terminated": terminated,
+            "truncated": truncated,
+        }
+        episode_data.append(step_data)
+
+        print("\nStep Results:")
         print(f"Reward: {reward}")
-        if "distance_to_block2" in info:
-            print(f"Distance to block 2: {info['distance_to_block2']}")
+        print(f"New distance: {post_distance}")
         print(f"Terminated: {terminated}")
         print(f"Truncated: {truncated}")
 
         if terminated or truncated:
             print(f"\nEpisode finished after {step + 1} steps")
             print(f"Total reward: {total_reward}")
+
+            # Print episode summary
+            print("\nEpisode Summary:")
+            print(f"Total steps: {step + 1}")
+            print(f"Final reward: {total_reward}")
+            print(f"Initial distance: {episode_data[0]['pre_distance']}")
+            print(f"Final distance: {episode_data[-1]['post_distance']}")
             break
     else:
         print("\nEpisode didn't finish within 100 steps")
