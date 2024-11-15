@@ -24,8 +24,9 @@ def test_mpc_blocks2d_improvisational_tamp_approach():
     )
 
     # # Uncomment to watch a video.
-    # from gymnasium.wrappers import RecordVideo
     # from pathlib import Path
+
+    # from gymnasium.wrappers import RecordVideo
 
     # video_folder = "videos/blocks2d-mpc-improvisational-tamp-test"
     # Path(video_folder).mkdir(parents=True, exist_ok=True)
