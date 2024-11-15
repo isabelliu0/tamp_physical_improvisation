@@ -48,7 +48,7 @@ def test_mpc_blocks2d_improvisational_tamp_approach():
     obs, info = env.reset()
     approach.reset(obs, info)
 
-    total_reward: float = 0.0
+    total_reward = 0.0
     for step in range(100):  # should terminate earlier
         action = approach.step(obs, 0, False, False, info)
         obs, reward, terminated, truncated, info = env.step(action)

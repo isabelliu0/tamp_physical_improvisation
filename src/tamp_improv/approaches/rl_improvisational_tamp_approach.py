@@ -14,7 +14,7 @@ from tamp_improv.approaches.base_improvisational_tamp_approach import (
 )
 from tamp_improv.approaches.rl_improvisational_policy import RLImprovisationalPolicy
 from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
-from tamp_improv.benchmarks.pushing_env import make_pushing_env
+from tamp_improv.benchmarks.blocks2d_env_wrapper import make_pushing_env
 from tamp_improv.blocks2d_planning import create_blocks2d_planning_models
 
 

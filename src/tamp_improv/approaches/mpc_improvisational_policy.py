@@ -11,7 +11,7 @@ from tamp_improv.approaches.base_improvisational_tamp_approach import (
     ImprovisationalPolicy,
 )
 from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
-from tamp_improv.benchmarks.pushing_env import make_pushing_env
+from tamp_improv.benchmarks.blocks2d_env_wrapper import make_pushing_env
 
 
 @dataclass
