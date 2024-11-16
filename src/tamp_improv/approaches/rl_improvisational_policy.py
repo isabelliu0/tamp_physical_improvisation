@@ -1,16 +1,18 @@
 """RL-based implementation of the improvisational policy."""
 
-from typing import Optional
+from typing import Optional, TypeVar, cast
 
 import gymnasium as gym
 import numpy as np
-from numpy.typing import NDArray
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
 
 from tamp_improv.approaches.base_improvisational_tamp_approach import (
     ImprovisationalPolicy,
 )
+
+ObsType = TypeVar("ObsType")
+ActType = TypeVar("ActType")
 
 
 class TrainingProgressCallback(BaseCallback):
@@ -55,9 +57,7 @@ class TrainingProgressCallback(BaseCallback):
         return True  # Continue training
 
 
-class RLImprovisationalPolicy(
-    ImprovisationalPolicy[NDArray[np.float32], NDArray[np.float32]]
-):
+class RLImprovisationalPolicy(ImprovisationalPolicy[ObsType, ActType]):
     """RL-based improvisational policy using PPO."""
 
     def __init__(self, env: gym.Env):
@@ -89,8 +89,8 @@ class RLImprovisationalPolicy(
         """Train the policy.
 
         The training process:
-        1. Reset environment (block 2 blocking target)
-        2. Get observation (robot, block positions etc.)
+        1. Reset environment
+        2. Get observation
         3. Let policy choose action
         4. Take action, get new observation and reward
         5. If episode ends (success/timeout), reset env
@@ -114,18 +114,17 @@ class RLImprovisationalPolicy(
         """Load a trained policy from disk."""
         self.model = PPO.load(path)
 
-    def get_action(self, obs: NDArray[np.float32]) -> NDArray[np.float32]:
-        """Get action from policy for current observation.
+    def get_action(self, obs: ObsType) -> ActType:
+        """Get action from policy for current observation."""
+        # Convert observation to numpy array for predict
+        if isinstance(obs, (int, float)):
+            np_obs = np.array([obs])
+        else:
+            np_obs = np.array(obs)
 
-        The policy network takes in:
-        - Robot position (x,y)
-        - Block positions (x,y for each)
-        - Block dimensions
-        - Target area position and size
+        action, _ = self.model.predict(np_obs)
 
-        And outputs:
-        - Robot movement (dx, dy)
-        - Gripper command
-        """
-        action, _ = self.model.predict(obs, deterministic=True)
-        return action
+        # Convert back to appropriate type
+        if isinstance(obs, (int, float)):
+            return cast(ActType, int(action[0]))
+        return cast(ActType, action)
