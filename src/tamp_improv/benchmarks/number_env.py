@@ -1,4 +1,4 @@
-"""A simple environment with integer state transitions."""
+"""A number environment with integer state transitions."""
 
 from typing import Any, Dict, Optional, Tuple
 
@@ -6,7 +6,7 @@ import gymnasium as gym
 
 
 class NumberEnv(gym.Env):
-    """Simple number environment with states {0,1,2,3}.
+    """Number environment with states {0,1,2,3}.
 
     States: 0,1,2,3
     Legal transitions: 0->1, 1->2, 2->3

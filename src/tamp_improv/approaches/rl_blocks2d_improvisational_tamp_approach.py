@@ -51,7 +51,9 @@ class RLBlocks2DImprovisationalTAMPApproach(ImprovisationalTAMPApproach):
         pushing_env = make_pushing_env(base_env, seed=seed)
 
         # Initialize RL policy and load weights
-        policy = RLImprovisationalPolicy(pushing_env)
+        policy: RLImprovisationalPolicy[NDArray[np.float32], NDArray[np.float32]] = (
+            RLImprovisationalPolicy(pushing_env)
+        )
         policy.load(policy_path)
 
         # Initialize base class

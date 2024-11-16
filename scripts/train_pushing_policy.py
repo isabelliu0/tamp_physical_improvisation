@@ -2,6 +2,9 @@
 
 from pathlib import Path
 
+import numpy as np
+from numpy.typing import NDArray
+
 from tamp_improv.approaches.rl_improvisational_policy import RLImprovisationalPolicy
 from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
 from tamp_improv.benchmarks.blocks2d_env_wrapper import make_pushing_env
@@ -42,7 +45,9 @@ def train_pushing_policy(
     #     )
 
     # Create and train policy
-    policy = RLImprovisationalPolicy(env)
+    policy: RLImprovisationalPolicy[NDArray[np.float32], NDArray[np.float32]] = (
+        RLImprovisationalPolicy(env)
+    )
     print(f"Training policy for {total_timesteps} timesteps...")
     policy.train(total_timesteps=total_timesteps, seed=seed)
 

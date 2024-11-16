@@ -7,7 +7,7 @@ import numpy as np
 from gymnasium.wrappers import TimeLimit
 from numpy.typing import NDArray
 
-from tamp_improv.approaches.mpc_improvisational_tamp_approach import (
+from tamp_improv.approaches.mpc_blocks2d_improvisational_tamp_approach import (
     MPCBlocks2DImprovisationalTAMPApproach,
     PredictiveSamplingConfig,
 )

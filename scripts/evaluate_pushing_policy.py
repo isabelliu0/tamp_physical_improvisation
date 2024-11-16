@@ -1,6 +1,7 @@
 """Script to evaluate trained pushing policy."""
 
 import numpy as np
+from numpy.typing import NDArray
 
 from tamp_improv.approaches.rl_improvisational_policy import RLImprovisationalPolicy
 from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
@@ -45,7 +46,9 @@ def evaluate_pushing_policy(
     #     )
 
     # Load policy
-    policy = RLImprovisationalPolicy(env)
+    policy: RLImprovisationalPolicy[NDArray[np.float32], NDArray[np.float32]] = (
+        RLImprovisationalPolicy(env)
+    )
     policy.load(policy_path)
 
     success_count = 0
