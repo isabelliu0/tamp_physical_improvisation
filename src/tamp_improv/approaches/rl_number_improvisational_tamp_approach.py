@@ -47,10 +47,10 @@ class RLNumberImprovisationalTAMPApproach(ImprovisationalTAMPApproach):
 
         # Initialize Number-specific planning components
         types, predicates, _, operators, skills = create_number_planning_models(
-            include_improvisation_models=False
+            switch_off_improvisational_models=False
         )
         _, _, perceiver, full_precondition_operators, _ = create_number_planning_models(
-            include_improvisation_models=True
+            switch_off_improvisational_models=True
         )
 
         self._types = types
