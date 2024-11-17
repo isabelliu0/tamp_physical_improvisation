@@ -1,42 +1,43 @@
-"""RL-based implementation of improvisational TAMP for Number environment."""
+"""MPC-based implementation of improvisational TAMP for Number environment."""
 
-from relational_structs import (
-    GroundOperator,
-    PDDLDomain,
-)
+from typing import Optional
+
+from relational_structs import GroundOperator, PDDLDomain
 from task_then_motion_planning.planning import TaskThenMotionPlanningFailure
 from task_then_motion_planning.structs import Skill, _Action, _Observation
 
 from tamp_improv.approaches.base_improvisational_tamp_approach import (
     ImprovisationalTAMPApproach,
 )
-from tamp_improv.approaches.rl_improvisational_policy import RLImprovisationalPolicy
+from tamp_improv.approaches.mpc_improvisational_policy import (
+    MPCImprovisationalPolicy,
+    PredictiveSamplingConfig,
+)
 from tamp_improv.benchmarks.number_env import NumberEnv
 from tamp_improv.benchmarks.number_env_wrapper import make_number_env_wrapper
 from tamp_improv.number_planning import create_number_planning_models
 
 
-class RLNumberImprovisationalTAMPApproach(ImprovisationalTAMPApproach):
-    """Number improvisational TAMP approach using learned RL policy."""
+class MPCNumberImprovisationalTAMPApproach(ImprovisationalTAMPApproach):
+    """Number improvisational TAMP approach using MPC policy."""
 
     def __init__(
         self,
         observation_space,
         action_space,
         seed: int,
-        policy_path: str,
+        config: Optional[PredictiveSamplingConfig] = None,
         planner_id: str = "pyperplan",
         domain_name: str = "simple-domain",
     ) -> None:
-        # Create base env and wrapped env for the RL policy
+        # Create base env and wrapped env for the MPC policy
         base_env = NumberEnv()
         training_env = make_number_env_wrapper(base_env, seed=seed)
 
-        # Initialize RL policy and load weights
-        policy: RLImprovisationalPolicy[int, int] = RLImprovisationalPolicy(
-            training_env
+        # Initialize MPC policy
+        policy: MPCImprovisationalPolicy[int, int] = MPCImprovisationalPolicy(
+            training_env, seed=seed, config=config
         )
-        policy.load(policy_path)
 
         # Initialize base class
         super().__init__(

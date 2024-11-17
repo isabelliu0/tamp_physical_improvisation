@@ -1,4 +1,4 @@
-"""Tests for SimpleTransitionEnv with TaskThenMotionPlanner."""
+"""Tests for NumberEnv with TaskThenMotionPlanner."""
 
 from gymnasium.wrappers import TimeLimit
 from task_then_motion_planning.planning import TaskThenMotionPlanner
@@ -7,13 +7,13 @@ from tamp_improv.benchmarks.number_env import NumberEnv
 from tamp_improv.number_planning import create_number_planning_models
 
 
-def test_simple_env_with_planner():
-    """Tests for simple transition env planning."""
+def test_number_env_with_planner():
+    """Tests for number env planning."""
     env = NumberEnv()
-    env = TimeLimit(env, max_episode_steps=50)
+    env = TimeLimit(env, max_episode_steps=10)
 
     types, predicates, perceiver, operators, skills = create_number_planning_models(
-        include_improvisation_models=True
+        switch_off_improvisational_models=False,
     )
 
     planner = TaskThenMotionPlanner(
@@ -39,7 +39,7 @@ def test_simple_env_with_planner():
         raise
 
     total_reward = 0
-    for step in range(50):  # should terminate earlier
+    for step in range(10):  # should terminate earlier
         action = planner.step(obs)
         obs, reward, terminated, truncated, _ = env.step(action)
         total_reward += reward
@@ -50,6 +50,6 @@ def test_simple_env_with_planner():
             print(f"Total reward: {total_reward}")
             break
     else:
-        print("Episode didn't finish within 50 steps")
+        print("Episode didn't finish within 10 steps")
 
     env.close()

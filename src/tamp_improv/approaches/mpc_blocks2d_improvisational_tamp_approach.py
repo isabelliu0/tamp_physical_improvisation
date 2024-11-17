@@ -16,6 +16,8 @@ from tamp_improv.approaches.mpc_improvisational_policy import (
     MPCImprovisationalPolicy,
     PredictiveSamplingConfig,
 )
+from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
+from tamp_improv.benchmarks.blocks2d_env_wrapper import make_pushing_env
 from tamp_improv.blocks2d_planning import create_blocks2d_planning_models
 
 
@@ -31,13 +33,21 @@ class MPCBlocks2DImprovisationalTAMPApproach(ImprovisationalTAMPApproach):
         planner_id: str = "pyperplan",
         domain_name: str = "custom-domain",
     ) -> None:
+        # Create base env and wrapped env for the MPC policy
+        base_env = Blocks2DEnv()
+        training_env = make_pushing_env(base_env, seed)
+
         # Initialize MPC policy
-        policy = MPCImprovisationalPolicy(seed - seed, config=config)
+        policy: MPCImprovisationalPolicy[NDArray[np.float32], NDArray[np.float32]] = (
+            MPCImprovisationalPolicy(training_env, seed=seed, config=config)
+        )
 
         # Initialize base class
         super().__init__(
             observation_space, action_space, seed, policy, planner_id, domain_name
         )
+
+        self.env_name = "blocks2d"
 
         # Initialize Blocks2D-specific planning components
         types, predicates, _, operators, skills = create_blocks2d_planning_models(

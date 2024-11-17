@@ -6,12 +6,12 @@ import gymnasium as gym
 
 
 class NumberEnv(gym.Env):
-    """Number environment with states {0,1,2,3}.
+    """Number environment with states {0,1,2}.
 
-    States: 0,1,2,3
-    Legal transitions: 0->1, 1->2, 2->3
+    States: 0,1,2
+    Legal transitions: 0->1, 1->2
     Initial state: 0
-    Goal state: 3
+    Goal state: 2
     Action: Single integer
     """
 
@@ -22,7 +22,7 @@ class NumberEnv(gym.Env):
         self.action_space = gym.spaces.Discrete(2)
 
         # Single integer observation (the state)
-        self.observation_space = gym.spaces.Discrete(4)
+        self.observation_space = gym.spaces.Discrete(3)
 
         self.state = 0  # Start at state 0
 
@@ -44,13 +44,13 @@ class NumberEnv(gym.Env):
         current_state = self.state
 
         if action == 1:
-            if current_state < 3:
+            if current_state < 2:
                 self.state += 1
 
         # Reward is 1 only if we reach the goal state, 0 otherwise
-        reward = float(self.state == 3)
+        reward = float(self.state == 2)
 
-        terminated = self.state == 3
+        terminated = self.state == 2
         truncated = False
 
         return self.state, reward, terminated, truncated, {}
