@@ -1,6 +1,6 @@
 """RL-based implementation of improvisational TAMP for Blocks2D environment."""
 
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -130,13 +130,11 @@ class RLBlocks2DImprovisationalTAMPApproach(ImprovisationalTAMPApproach):
         if self._train_online and not self._policy_trained:
             print("\nStarting online policy training...")
             print(f"Training for {self._train_timesteps} timesteps")
-            self._policy.train(  # type: ignore[attr-defined]
-                total_timesteps=self._train_timesteps
-            )
+            self._policy.train(total_timesteps=self._train_timesteps)
             self._policy_trained = True
             print("Policy training completed")
 
-    def save_policy(self, path: Optional[str] = None) -> None:
+    def save_policy(self, path: str | None = None) -> None:
         """Save the trained policy.
 
         Args:
@@ -144,7 +142,7 @@ class RLBlocks2DImprovisationalTAMPApproach(ImprovisationalTAMPApproach):
         """
         save_path = path or self._policy_path
         if self._policy_trained:
-            self._policy.save(save_path)  # type: ignore[attr-defined]
+            self._policy.save(save_path)
 
     def step(
         self,
@@ -197,11 +195,8 @@ class RLBlocks2DImprovisationalTAMPApproach(ImprovisationalTAMPApproach):
                 currently_satisfied = full_ground_operator.preconditions & atoms
 
                 # Update pushing env to only maintain currently satisfied preconditions
-                if hasattr(
-                    self._policy.env,  # type: ignore[attr-defined]
-                    "update_preconditions",
-                ):
-                    self._policy.env.update_preconditions(  # type: ignore[attr-defined]
+                if hasattr(self._policy.env, "update_preconditions"):
+                    self._policy.env.update_preconditions(
                         full_ground_operator.parent,
                         currently_satisfied,  # Only pass already satisfied preconditions
                     )

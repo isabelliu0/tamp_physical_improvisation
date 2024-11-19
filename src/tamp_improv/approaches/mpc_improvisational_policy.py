@@ -2,7 +2,7 @@
 sampling."""
 
 from dataclasses import dataclass
-from typing import List, Optional, TypeVar, cast
+from typing import TypeVar, cast
 
 import gymnasium as gym
 import numpy as np
@@ -32,7 +32,7 @@ class MPCImprovisationalPolicy(ImprovisationalPolicy[ObsType, ActType]):
         self,
         env: gym.Env[ObsType, ActType],
         seed: int,
-        config: Optional[PredictiveSamplingConfig] = None,
+        config: PredictiveSamplingConfig | None = None,
     ) -> None:
         self._config = config or PredictiveSamplingConfig()
         self._rng = np.random.default_rng(seed)
@@ -109,7 +109,7 @@ class MPCImprovisationalPolicy(ImprovisationalPolicy[ObsType, ActType]):
             )
         return np.clip(trajectory, box_space.low, box_space.high)
 
-    def _sample_from_nominal(self, nominal: np.ndarray) -> List[np.ndarray]:
+    def _sample_from_nominal(self, nominal: np.ndarray) -> list[np.ndarray]:
         """Sample new trajectories around nominal one."""
         if self._is_discrete:
             # For discrete actions, flip with probability noise_scale

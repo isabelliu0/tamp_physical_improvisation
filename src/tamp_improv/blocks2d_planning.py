@@ -1,6 +1,6 @@
 """Planning components for the Blocks2D environment."""
 
-from typing import Any, Sequence, Set, Tuple
+from typing import Any, Sequence, Set
 
 import numpy as np
 from relational_structs import (
@@ -102,7 +102,7 @@ def create_blocks2d_planning_models(
 
         def reset(
             self, obs: np.ndarray, info: dict[str, Any]
-        ) -> Tuple[Set[Object], Set[GroundAtom], Set[GroundAtom]]:
+        ) -> tuple[Set[Object], Set[GroundAtom], Set[GroundAtom]]:
             objects = {self._robot, self._block_1, self._block_2}
             atoms = self._get_atoms(obs)
             goal: Set[GroundAtom] = {

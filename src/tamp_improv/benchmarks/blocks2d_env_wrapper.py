@@ -1,7 +1,7 @@
 """Environment wrapper for learning the pushing policy in Blocks2D
 environment."""
 
-from typing import Any, Dict, Optional, Set, Tuple, Union, cast
+from typing import Any, Set, Union, cast
 
 import gymnasium as gym
 import numpy as np
@@ -17,7 +17,7 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
     """Environment wrapper for learning the pushing policy while maintaining
     operator preconditions in Blocks2D environment."""
 
-    def __init__(self, base_env: Blocks2DEnv, seed: Optional[int] = None) -> None:
+    def __init__(self, base_env: Blocks2DEnv, seed: int | None = None) -> None:
         """Initialize wrapper without specific preconditions.
 
         Args:
@@ -39,7 +39,7 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
         )
 
         # These will be set when preconditions are updated
-        self.current_operator: Optional[LiftedOperator] = None
+        self.current_operator: LiftedOperator | None = None
         self.preconditions_to_maintain: Set[GroundAtom] = set()
 
         # Track previous distance to block 2 for reward shaping
@@ -195,9 +195,9 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
     def reset(
         self,
         *,
-        seed: Optional[int] = None,
-        options: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[NDArray[np.float32], Dict[str, Any]]:
+        seed: int | None = None,
+        options: dict[str, Any] | None = None,
+    ) -> tuple[NDArray[np.float32], dict[str, Any]]:
         """Reset the environment with random block positions."""
         self.steps = 0
         self.prev_distance_to_block2 = None
@@ -228,10 +228,6 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
         # Reset the base environment with our options
         obs, info = self.env.reset(seed=seed, options=reset_options)
 
-        # # Set gripper to closed state
-        # action = np.array([0.0, 0.0, 1.0], dtype=np.float32)
-        # obs, _, _, _, _ = self.env.step(action)
-
         # Initialize distance tracking
         robot_pos = obs[0:2]
         block2_pos = obs[6:8]
@@ -252,7 +248,7 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
     def step(
         self,
         action: NDArray[np.float32],
-    ) -> Tuple[NDArray[np.float32], float, bool, bool, Dict[str, Any]]:
+    ) -> tuple[NDArray[np.float32], float, bool, bool, dict[str, Any]]:
         """Step the environment."""
         obs, _, _, _, info = self.env.step(action)
         self.steps += 1
@@ -284,7 +280,7 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
 
 
 def make_pushing_env(
-    env: Blocks2DEnv, max_episode_steps: int = 100, seed: Optional[int] = None
+    env: Blocks2DEnv, max_episode_steps: int = 100, seed: int | None = None
 ) -> PushingEnvWrapper:
     """Create a pushing environment."""
     wrapped_env = PushingEnvWrapper(env, seed=seed)

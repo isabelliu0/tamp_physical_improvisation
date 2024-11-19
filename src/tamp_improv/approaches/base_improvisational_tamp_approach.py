@@ -1,7 +1,8 @@
 """Base framework for improvisational TAMP approach."""
 
-from typing import Any, Generic, Optional, Set
+from typing import Any, Generic, Set
 
+import gymnasium as gym
 from gymnasium.core import ActType, ObsType
 from relational_structs import (
     GroundAtom,
@@ -21,8 +22,24 @@ from tamp_improv.approaches.base_approach import BaseApproach
 class ImprovisationalPolicy(Generic[ObsType, ActType]):
     """Abstract base class for improvisational policies."""
 
+    def __init__(self, env: gym.Env) -> None:
+        """Initialize policy."""
+        self.env = env
+
     def get_action(self, obs: ObsType) -> ActType:
         """Get action from policy based on current observation."""
+        raise NotImplementedError
+
+    def train(self, total_timesteps: int, seed: int | None = None) -> None:
+        """Train the policy."""
+        raise NotImplementedError
+
+    def save(self, path: str) -> None:
+        """Save the policy."""
+        raise NotImplementedError
+
+    def load(self, path: str) -> None:
+        """Load the policy."""
         raise NotImplementedError
 
 
@@ -65,7 +82,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self._operator_to_full_precondition_operator: dict[
             LiftedOperator, LiftedOperator
         ] = {}
-        self._perceiver: Optional[Perceiver[ObsType]] = None
+        self._perceiver: Perceiver[ObsType] | None = None
 
     def _replan(self, obs: ObsType, info: dict[str, Any]) -> None:
         """Create a new plan from the current state."""

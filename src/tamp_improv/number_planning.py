@@ -1,6 +1,6 @@
 """Planning components for the number environment."""
 
-from typing import Any, Sequence, Set, Tuple, cast
+from typing import Any, Sequence, Set, cast
 
 from relational_structs import (
     GroundAtom,
@@ -69,7 +69,7 @@ def create_number_planning_models(
 
         def reset(
             self, obs: int, info: dict[str, Any]
-        ) -> Tuple[Set[Object], Set[GroundAtom], Set[GroundAtom]]:
+        ) -> tuple[Set[Object], Set[GroundAtom], Set[GroundAtom]]:
             objects: Set[Object] = {self._state}
             atoms = self._get_atoms(obs)
             goal: Set[GroundAtom] = {AtState2([self._state])}

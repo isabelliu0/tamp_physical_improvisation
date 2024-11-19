@@ -1,6 +1,6 @@
 """A number environment with integer state transitions."""
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 import gymnasium as gym
 
@@ -32,15 +32,15 @@ class NumberEnv(gym.Env):
     def reset(
         self,
         *,
-        seed: Optional[int] = None,
-        options: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[int, Dict[str, Any]]:
+        seed: int | None = None,
+        options: dict[str, Any] | None = None,
+    ) -> tuple[int, dict[str, Any]]:
         super().reset(seed=seed)
 
         self.state = 0
         return self.state, {}
 
-    def step(self, action: int) -> Tuple[int, float, bool, bool, Dict[str, Any]]:
+    def step(self, action: int) -> tuple[int, float, bool, bool, dict[str, Any]]:
         current_state = self.state
 
         if action == 1:

@@ -1,8 +1,6 @@
 """MPC-based implementation of improvisational TAMP for Blocks2D
 environment."""
 
-from typing import Optional
-
 import numpy as np
 from numpy.typing import NDArray
 from relational_structs import GroundOperator, PDDLDomain
@@ -29,7 +27,7 @@ class MPCBlocks2DImprovisationalTAMPApproach(ImprovisationalTAMPApproach):
         observation_space,
         action_space,
         seed: int,
-        config: Optional[PredictiveSamplingConfig] = None,
+        config: PredictiveSamplingConfig | None = None,
         planner_id: str = "pyperplan",
         domain_name: str = "custom-domain",
     ) -> None:
