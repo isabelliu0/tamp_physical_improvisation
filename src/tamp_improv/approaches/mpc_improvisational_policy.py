@@ -34,6 +34,7 @@ class MPCImprovisationalPolicy(ImprovisationalPolicy[ObsType, ActType]):
         seed: int,
         config: PredictiveSamplingConfig | None = None,
     ) -> None:
+        super().__init__(env)
         self._config = config or PredictiveSamplingConfig()
         self._rng = np.random.default_rng(seed)
         self._env = env
@@ -53,6 +54,36 @@ class MPCImprovisationalPolicy(ImprovisationalPolicy[ObsType, ActType]):
                 0, self._config.horizon - 1, self._config.num_control_points
             )
             self._trajectory_times = np.arange(self._config.horizon)
+
+    def train(self, total_timesteps: int, seed: int | None = None) -> None:
+        """Training is not needed for MPC policy."""
+
+    def save(self, path: str) -> None:
+        """Save policy parameters."""
+        np.savez(
+            path,
+            last_solution=self._last_solution,
+            config=np.array(
+                [
+                    self._config.num_rollouts,
+                    self._config.noise_scale,
+                    self._config.num_control_points,
+                    self._config.horizon,
+                ]
+            ),
+        )
+
+    def load(self, path: str) -> None:
+        """Load policy parameters."""
+        data = np.load(path + ".npz")
+        self._last_solution = data["last_solution"]
+        config = data["config"]
+        self._config = PredictiveSamplingConfig(
+            num_rollouts=int(config[0]),
+            noise_scale=float(config[1]),
+            num_control_points=int(config[2]),
+            horizon=int(config[3]),
+        )
 
     def _solve(self, init_obs: ObsType) -> ActType:
         """Run one iteration of predictive sampling."""
