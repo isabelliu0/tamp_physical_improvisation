@@ -2,7 +2,7 @@
 sampling."""
 
 from dataclasses import dataclass
-from typing import List, Optional, TypeVar, cast
+from typing import TypeVar, cast
 
 import gymnasium as gym
 import numpy as np
@@ -32,8 +32,9 @@ class MPCImprovisationalPolicy(ImprovisationalPolicy[ObsType, ActType]):
         self,
         env: gym.Env[ObsType, ActType],
         seed: int,
-        config: Optional[PredictiveSamplingConfig] = None,
+        config: PredictiveSamplingConfig | None = None,
     ) -> None:
+        super().__init__(env)
         self._config = config or PredictiveSamplingConfig()
         self._rng = np.random.default_rng(seed)
         self._env = env
@@ -53,6 +54,36 @@ class MPCImprovisationalPolicy(ImprovisationalPolicy[ObsType, ActType]):
                 0, self._config.horizon - 1, self._config.num_control_points
             )
             self._trajectory_times = np.arange(self._config.horizon)
+
+    def train(self, total_timesteps: int, seed: int | None = None) -> None:
+        """Training is not needed for MPC policy."""
+
+    def save(self, path: str) -> None:
+        """Save policy parameters."""
+        np.savez(
+            path,
+            last_solution=self._last_solution,
+            config=np.array(
+                [
+                    self._config.num_rollouts,
+                    self._config.noise_scale,
+                    self._config.num_control_points,
+                    self._config.horizon,
+                ]
+            ),
+        )
+
+    def load(self, path: str) -> None:
+        """Load policy parameters."""
+        data = np.load(path + ".npz")
+        self._last_solution = data["last_solution"]
+        config = data["config"]
+        self._config = PredictiveSamplingConfig(
+            num_rollouts=int(config[0]),
+            noise_scale=float(config[1]),
+            num_control_points=int(config[2]),
+            horizon=int(config[3]),
+        )
 
     def _solve(self, init_obs: ObsType) -> ActType:
         """Run one iteration of predictive sampling."""
@@ -109,7 +140,7 @@ class MPCImprovisationalPolicy(ImprovisationalPolicy[ObsType, ActType]):
             )
         return np.clip(trajectory, box_space.low, box_space.high)
 
-    def _sample_from_nominal(self, nominal: np.ndarray) -> List[np.ndarray]:
+    def _sample_from_nominal(self, nominal: np.ndarray) -> list[np.ndarray]:
         """Sample new trajectories around nominal one."""
         if self._is_discrete:
             # For discrete actions, flip with probability noise_scale

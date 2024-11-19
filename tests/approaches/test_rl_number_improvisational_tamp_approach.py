@@ -34,7 +34,6 @@ def test_rl_number_improvisational_tamp_approach(
         gym.Env[int, int],
         TimeLimit(base_env, max_episode_steps=10),
     )
-    # env = gym.wrappers.TimeLimit(NumberEnv(), max_episode_steps=10)
 
     # Create approach with trained policy
     approach = RLNumberImprovisationalTAMPApproach(

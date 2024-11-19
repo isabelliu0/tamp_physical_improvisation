@@ -1,6 +1,6 @@
 """A block environment in 2D."""
 
-from typing import Any, SupportsFloat, Tuple
+from typing import Any
 
 import gymnasium as gym
 import numpy as np
@@ -135,7 +135,7 @@ class Blocks2DEnv(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
     def step(
         self,
         action: NDArray[np.float32],
-    ) -> Tuple[NDArray[np.float32], SupportsFloat, bool, bool, dict[str, Any]]:
+    ) -> tuple[NDArray[np.float32], float, bool, bool, dict[str, Any]]:
 
         # Update the position of the robot.
         dx, dy, newgripper_status = action
@@ -260,11 +260,8 @@ class Blocks2DEnv(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
         return vertical_aligned and horizontal_adjacent
 
     def reset(
-        self,
-        *,
-        seed: int | None = None,
-        options: dict[str, Any] | None = None,
-    ) -> Tuple[NDArray[np.float32], dict[str, Any]]:
+        self, *, seed: int | None = None, options: dict[str, Any] | None = None
+    ) -> tuple[NDArray[np.float32], dict[str, Any]]:
         super().reset(seed=seed)
 
         if options is None:

@@ -1,6 +1,6 @@
 """Number environment wrapper for learning the 1->2 transition."""
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 import gymnasium as gym
 
@@ -23,13 +23,13 @@ class NumberEnvWrapper(gym.Env):
     def reset(
         self,
         *,
-        seed: Optional[int] = None,
-        options: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[int, Dict[str, Any]]:
+        seed: int | None = None,
+        options: dict[str, Any] | None = None,
+    ) -> tuple[int, dict[str, Any]]:
         self.steps = 0
         return self.env.reset(seed=seed)
 
-    def step(self, action: int) -> Tuple[int, float, bool, bool, Dict[str, Any]]:
+    def step(self, action: int) -> tuple[int, float, bool, bool, dict[str, Any]]:
         obs, _, _, truncated, info = self.env.step(action)
         self.steps += 1
 
@@ -47,7 +47,7 @@ class NumberEnvWrapper(gym.Env):
 
 
 def make_number_env_wrapper(
-    env: NumberEnv, max_episode_steps: int = 10, seed: Optional[int] = None
+    env: NumberEnv, max_episode_steps: int = 10, seed: int | None = None
 ) -> NumberEnvWrapper:
     """Create a transition learning environment."""
     wrapped_env = NumberEnvWrapper(env)

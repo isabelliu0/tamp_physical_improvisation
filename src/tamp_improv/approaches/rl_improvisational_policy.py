@@ -1,6 +1,6 @@
 """RL-based implementation of the improvisational policy."""
 
-from typing import Optional, TypeVar, cast
+from typing import TypeVar, cast
 
 import gymnasium as gym
 import numpy as np
@@ -60,7 +60,7 @@ class TrainingProgressCallback(BaseCallback):
 class RLImprovisationalPolicy(ImprovisationalPolicy[ObsType, ActType]):
     """RL-based improvisational policy using PPO."""
 
-    def __init__(self, env: gym.Env):
+    def __init__(self, env: gym.Env) -> None:
         """Initialize policy with a PPO model.
 
         PPO hyperparameters:
@@ -70,7 +70,7 @@ class RLImprovisationalPolicy(ImprovisationalPolicy[ObsType, ActType]):
         - n_epochs: How many times to reuse each sample
         - gamma: Discount factor for future rewards
         """
-        self.env = env
+        super().__init__(env)
         # Create PPO model with the environment
         self.model = PPO(
             "MlpPolicy",
@@ -83,9 +83,7 @@ class RLImprovisationalPolicy(ImprovisationalPolicy[ObsType, ActType]):
             verbose=1,
         )
 
-    def train(
-        self, total_timesteps: int = 1_000_000, seed: Optional[int] = None
-    ) -> None:
+    def train(self, total_timesteps: int = 1_000_000, seed: int | None = None) -> None:
         """Train the policy.
 
         The training process:

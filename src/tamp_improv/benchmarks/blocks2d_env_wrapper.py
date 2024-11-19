@@ -1,26 +1,28 @@
 """Environment wrapper for learning the pushing policy in Blocks2D
 environment."""
 
-from typing import Any, Dict, Optional, Tuple, Union, cast
+from typing import Any, Set, Union, cast
 
 import gymnasium as gym
 import numpy as np
 from gymnasium.core import RenderFrame
 from numpy.typing import NDArray
+from relational_structs import GroundAtom, LiftedOperator
 
 from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
+from tamp_improv.blocks2d_planning import create_blocks2d_planning_models
 
 
 class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
-    """Environment wrapper for learning the pushing policy in Blocks2D
-    environment."""
+    """Environment wrapper for learning the pushing policy while maintaining
+    operator preconditions in Blocks2D environment."""
 
-    def __init__(self, base_env: Blocks2DEnv) -> None:
-        """Initialize pushing environment wrapper.
+    def __init__(self, base_env: Blocks2DEnv, seed: int | None = None) -> None:
+        """Initialize wrapper without specific preconditions.
 
         Args:
-            base_env: The base Blocks2D environment.
-            max_episode_steps: Maximum number of steps per episode.
+            base_env: The base Blocks2D environment
+            seed: Random seed
         """
         super().__init__()
 
@@ -31,6 +33,15 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
         self.max_episode_steps = 100
         self.steps = 0
 
+        # Initialize planning components for checking atoms
+        _, self.predicates, self.perceiver, _, _ = create_blocks2d_planning_models(
+            include_pushing_models=True
+        )
+
+        # These will be set when preconditions are updated
+        self.current_operator: LiftedOperator | None = None
+        self.preconditions_to_maintain: Set[GroundAtom] = set()
+
         # Track previous distance to block 2 for reward shaping
         self.prev_distance_to_block2 = None
 
@@ -38,13 +49,16 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
         self.observation_space = base_env.observation_space
         self.action_space = base_env.action_space
 
-        # Override env's reset options with our custom options
+        # Reset options
         self._custom_reset_options = {
             "robot_pos": np.array([0.5, 1.0], dtype=np.float32),
             "ensure_blocking": True,  # Block 2 should block target area
         }
 
         self.render_mode = self.env.render_mode
+
+        if seed is not None:
+            self.reset(seed=seed)
 
     def render(self) -> Union[RenderFrame, list[RenderFrame], None]:
         """Render the environment.
@@ -54,6 +68,33 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
         """
         rendered = self.env.render()
         return cast(Union[RenderFrame, list[RenderFrame], None], rendered)
+
+    def update_preconditions(
+        self, operator: LiftedOperator, preconditions: Set[GroundAtom]
+    ) -> None:
+        """Update the preconditions that should be maintained.
+
+        Args:
+            operator: The operator being executed
+            preconditions: The currently satisfied preconditions to maintain
+        """
+        self.current_operator = operator
+        self.preconditions_to_maintain = preconditions
+
+    def _check_preconditions(self, obs: NDArray[np.float32]) -> bool:
+        """Check if all maintained preconditions are still satisfied."""
+        if not self.preconditions_to_maintain:
+            return True
+        current_atoms = self.perceiver.step(obs)
+        return self.preconditions_to_maintain.issubset(current_atoms)
+
+    def _calculate_precondition_violation_penalty(
+        self, obs: NDArray[np.float32]
+    ) -> float:
+        """Calculate penalty for violating operator preconditions."""
+        if not self._check_preconditions(obs):
+            return -1.0
+        return 0.0
 
     def is_target_area_blocked(self, obs: NDArray[np.float32]) -> bool:
         """Check if block 2 blocks the target area.
@@ -154,9 +195,9 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
     def reset(
         self,
         *,
-        seed: Optional[int] = None,
-        options: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[NDArray[np.float32], Dict[str, Any]]:
+        seed: int | None = None,
+        options: dict[str, Any] | None = None,
+    ) -> tuple[NDArray[np.float32], dict[str, Any]]:
         """Reset the environment with random block positions."""
         self.steps = 0
         self.prev_distance_to_block2 = None
@@ -187,10 +228,6 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
         # Reset the base environment with our options
         obs, info = self.env.reset(seed=seed, options=reset_options)
 
-        # Set gripper to closed state
-        action = np.array([0.0, 0.0, 1.0], dtype=np.float32)
-        obs, _, _, _, _ = self.env.step(action)
-
         # Initialize distance tracking
         robot_pos = obs[0:2]
         block2_pos = obs[6:8]
@@ -211,24 +248,22 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
     def step(
         self,
         action: NDArray[np.float32],
-    ) -> Tuple[NDArray[np.float32], float, bool, bool, Dict[str, Any]]:
+    ) -> tuple[NDArray[np.float32], float, bool, bool, dict[str, Any]]:
         """Step the environment."""
-        # Force gripper to stay closed
-        action[2] = 1.0
-
         obs, _, _, _, info = self.env.step(action)
         self.steps += 1
 
-        # Check if target area is clear
+        # Check target area and preconditions
         is_blocked = self.is_target_area_blocked(obs)
+        precondition_penalty = self._calculate_precondition_violation_penalty(obs)
 
         # Episode terminates if target area is clear or max steps exceeded
         terminated = not is_blocked
         truncated = self.steps >= self.max_episode_steps
 
         # Calculate rewards
-        if not is_blocked:
-            # Large reward for success (clearing area)
+        if not is_blocked and precondition_penalty == 0.0:
+            # Large reward for success (clearing area) while maintaining preconditions
             reward = 10.0
         else:
             # Small step penalty to encourage efficiency
@@ -238,16 +273,16 @@ class PushingEnvWrapper(gym.Env[NDArray[np.float32], NDArray[np.float32]]):
             # Collision penalty
             if self._check_collision(obs):
                 reward -= 0.1
+            # Penalty for violating preconditions
+            reward += precondition_penalty
 
         return obs, reward, terminated, truncated, info
 
 
 def make_pushing_env(
-    env: Blocks2DEnv, max_episode_steps: int = 100, seed: Optional[int] = None
+    env: Blocks2DEnv, max_episode_steps: int = 100, seed: int | None = None
 ) -> PushingEnvWrapper:
     """Create a pushing environment."""
-    wrapped_env = PushingEnvWrapper(env)
+    wrapped_env = PushingEnvWrapper(env, seed=seed)
     wrapped_env.max_episode_steps = max_episode_steps
-    if seed is not None:
-        wrapped_env.reset(seed=seed)
     return wrapped_env
