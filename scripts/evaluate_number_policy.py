@@ -3,8 +3,8 @@
 import numpy as np
 
 from tamp_improv.approaches.rl_improvisational_policy import RLImprovisationalPolicy
-from tamp_improv.benchmarks.number_env import NumberEnv
-from tamp_improv.benchmarks.number_env_wrapper import make_number_env_wrapper
+from tamp_improv.benchmarks.number_env_old import NumberEnv
+from tamp_improv.benchmarks.number_env_wrapper_old import make_number_env_wrapper
 
 
 def evaluate_number_policy(

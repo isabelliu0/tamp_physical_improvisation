@@ -1,25 +1,20 @@
-"""Tests for Blocks2D environment."""
+"""Tests for Blocks2DEnv()."""
 
 import numpy as np
-from gymnasium.wrappers import TimeLimit
+from gymnasium.wrappers import RecordVideo, TimeLimit
 
-from tamp_improv.benchmarks.blocks2d import Blocks2DEnvironment
+from tamp_improv.benchmarks.blocks2d_env_old import Blocks2DEnv
 
 
-def test_blocks2d_env():
-    """Test basic functionality of Blocks2D environment."""
-    env = Blocks2DEnvironment(include_pushing_models=False)
-    base_env = env.env
-    base_env = TimeLimit(base_env, max_episode_steps=100)
+def test_blocks_2d_env():
+    """Tests for Blocks2DEnv()."""
 
-    # # Uncomment to generate videos.
-    # from gymnasium.wrappers import RecordVideo
+    env = Blocks2DEnv(render_mode="rgb_array")
+    env = TimeLimit(env, max_episode_steps=100)
+    env = RecordVideo(env, "videos/blocks2d-test")
+    obs, info = env.reset()
 
-    # base_env = RecordVideo(base_env, "videos/blocks2d-test")
-
-    obs, info = base_env.reset()
-
-    base_env.action_space.seed(123)
+    env.action_space.seed(123)
 
     # Hard-coded sequence of actions to reach the goal
     actions = [
@@ -46,11 +41,11 @@ def test_blocks2d_env():
     ]
 
     for action in actions:
-        obs, reward, terminated, truncated, info = base_env.step(action)
+        obs, reward, terminated, truncated, info = env.step(action)
         print(f"Action: {action}, Obs: {obs}, Reward: {reward}, Info: {info}")
 
         if terminated or truncated:
             print("Episode finished")
             break
 
-    base_env.close()
+    env.close()

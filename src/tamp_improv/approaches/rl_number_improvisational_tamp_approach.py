@@ -11,8 +11,8 @@ from tamp_improv.approaches.base_improvisational_tamp_approach import (
     ImprovisationalTAMPApproach,
 )
 from tamp_improv.approaches.rl_improvisational_policy import RLImprovisationalPolicy
-from tamp_improv.benchmarks.number_env import NumberEnv
-from tamp_improv.benchmarks.number_env_wrapper import make_number_env_wrapper
+from tamp_improv.benchmarks.number_env_old import NumberEnv
+from tamp_improv.benchmarks.number_env_wrapper_old import make_number_env_wrapper
 from tamp_improv.number_planning import create_number_planning_models
 
 

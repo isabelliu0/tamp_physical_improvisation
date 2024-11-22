@@ -1,31 +1,29 @@
-"""Tests for Number environment with TAMP."""
+"""Tests for NumberEnv with TaskThenMotionPlanner."""
 
 from gymnasium.wrappers import TimeLimit
 from task_then_motion_planning.planning import TaskThenMotionPlanner
 
-from tamp_improv.benchmarks.number import NumberEnvironment
+from tamp_improv.benchmarks.number_env_old import NumberEnv
+from tamp_improv.number_planning import create_number_planning_models
 
 
 def test_number_env_with_planner():
-    """Test Number environment with TAMP planner."""
-    env = NumberEnvironment(switch_off_improvisational_models=False)
-    base_env = env.env
-    base_env = TimeLimit(base_env, max_episode_steps=10)
+    """Tests for number env planning."""
+    env = NumberEnv()
+    env = TimeLimit(env, max_episode_steps=10)
 
-    # Create planner using environment's components
-    planner = TaskThenMotionPlanner(
-        types=env.types,
-        predicates=env.predicates,
-        perceiver=env.components.perceiver,
-        operators=env.operators,
-        skills=env.skills,
-        planner_id="pyperplan",
+    types, predicates, perceiver, operators, skills = create_number_planning_models(
+        switch_off_improvisational_models=False,
     )
 
-    obs, info = base_env.reset()
+    planner = TaskThenMotionPlanner(
+        types, predicates, perceiver, operators, skills, planner_id="pyperplan"
+    )
+
+    obs, info = env.reset()
     print("Initial observation:", obs)
 
-    objects, atoms, goal = env.components.perceiver.reset(obs, info)
+    objects, atoms, goal = perceiver.reset(obs, info)
     print("Objects:", objects)
     print("Initial atoms:", atoms)
     print("Goal:", goal)
@@ -41,9 +39,9 @@ def test_number_env_with_planner():
         raise
 
     total_reward = 0
-    for step in range(10):
+    for step in range(10):  # should terminate earlier
         action = planner.step(obs)
-        obs, reward, terminated, truncated, _ = base_env.step(action)
+        obs, reward, terminated, truncated, _ = env.step(action)
         total_reward += reward
         print(f"Step {step + 1}: Action: {action}, State: {obs}, Reward: {reward}")
 
@@ -54,4 +52,4 @@ def test_number_env_with_planner():
     else:
         print("Episode didn't finish within 10 steps")
 
-    base_env.close()
+    env.close()

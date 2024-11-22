@@ -1,7 +1,7 @@
 """Test random_approach.py."""
 
 from tamp_improv.approaches.random_approach import RandomApproach
-from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
+from tamp_improv.benchmarks.blocks2d_env_old import Blocks2DEnv
 
 
 def test_random_approach():

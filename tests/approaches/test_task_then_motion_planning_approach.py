@@ -5,7 +5,7 @@ from gymnasium.wrappers import TimeLimit
 from tamp_improv.approaches.task_then_motion_planning_approach import (
     TaskThenMotionPlanningApproach,
 )
-from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
+from tamp_improv.benchmarks.blocks2d_env_old import Blocks2DEnv
 
 
 def test_task_then_motion_planning_approach():

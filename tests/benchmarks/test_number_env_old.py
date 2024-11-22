@@ -1,15 +1,17 @@
-"""Tests for core number environment."""
+"""Tests for SimpleTransitionEnv()."""
 
 from gymnasium.wrappers import TimeLimit
 
-from tamp_improv.benchmarks.number_env import NumberEnv
+from tamp_improv.benchmarks.number_env_old import NumberEnv
 
 
-def test_number_env():
-    """Test basic number environment functionality."""
+def test_simple_transition_env():
+    """Tests for SimpleTransitionEnv."""
     env = NumberEnv()
     env = TimeLimit(env, max_episode_steps=10)
     obs, info = env.reset()
+
+    env.action_space.seed(123)
 
     # Hard-coded sequence of actions to reach the goal
     actions = [

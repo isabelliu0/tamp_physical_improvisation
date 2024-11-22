@@ -33,22 +33,32 @@ class PlanningComponents(Generic[ObsType]):
     perceiver: Perceiver[ObsType]
 
 
-class BaseEnvironment(Generic[ObsType, ActType], ABC):
-    """Base class for environments."""
+class BaseTAMPSystem(Generic[ObsType, ActType], ABC):
+    """Base class for Task-and-Motion Planning (TAMP) systems.
 
-    def __init__(self, seed: int | None = None, **kwargs: Any) -> None:
-        """Initialize environment.
+    This class combines:
+    1. The actual environment (gym.Env) that represents the physical world
+    2. The agent's planning components (types, predicates, operators, etc.)
+       that represent the agent's abstract model of the world for planning
+    """
+
+    def __init__(
+        self,
+        planning_components: PlanningComponents[ObsType],
+        seed: int | None = None,
+    ) -> None:
+        """Initialize TAMP system.
 
         Args:
-            seed: Random seed
-            **kwargs: Additional arguments for subclasses
+            planning_components: The agent's planning model/components
+            seed: Random seed for environment
         """
         # Create environments
         self.env = self._create_env()
-        self.wrapped_env = self._create_wrapped_env()
-
-        # Create planning components
-        self.components = self._create_planning_components(**kwargs)
+        # Store planning components
+        self.components = planning_components
+        # Create wrapped env with components
+        self.wrapped_env = self._create_wrapped_env(planning_components)
 
         # Initialize environments
         if seed is not None:
@@ -85,12 +95,12 @@ class BaseEnvironment(Generic[ObsType, ActType], ABC):
         """Create the base environment."""
 
     @abstractmethod
-    def _create_wrapped_env(self) -> gym.Env:
-        """Create the wrapped environment for training."""
+    def _create_wrapped_env(self, components: PlanningComponents[ObsType]) -> gym.Env:
+        """Create the wrapped environment for training.
 
-    @abstractmethod
-    def _create_planning_components(self, **kwargs: Any) -> PlanningComponents[ObsType]:
-        """Create all planning-related components."""
+        Args:
+            components: Planning components needed for wrapping
+        """
 
     @abstractmethod
     def _get_domain_name(self) -> str:

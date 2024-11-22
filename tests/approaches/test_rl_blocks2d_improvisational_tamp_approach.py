@@ -10,7 +10,7 @@ from numpy.typing import NDArray
 from tamp_improv.approaches.rl_blocks2d_improvisational_tamp_approach import (
     RLBlocks2DImprovisationalTAMPApproach,
 )
-from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
+from tamp_improv.benchmarks.blocks2d_env_old import Blocks2DEnv
 
 
 def test_rl_blocks2d_improvisational_tamp_approach(
