@@ -1,14 +1,18 @@
-"""Tests for Blocks2DEnv with TaskThenMotionPlanner."""
+"""Tests for Blocks2D environment with TAMP."""
 
 from gymnasium.wrappers import TimeLimit
 from task_then_motion_planning.planning import TaskThenMotionPlanner
 
+from tamp_improv.benchmarks.blocks2d import Blocks2DTAMPSystem
 from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
-from tamp_improv.blocks2d_planning import create_blocks2d_planning_models
 
 
-def test_blocks_2d_env_with_planner():
-    """Tests for block2d planning."""
+def test_blocks2d_tamp_system():
+    """Test Blocks2D environment with TAMP planner."""
+    # Create TAMP system
+    tamp_system = Blocks2DTAMPSystem.create_default(include_pushing_models=True)
+
+    # Create environment with time limit
     env = Blocks2DEnv(render_mode="rgb_array")
     env = TimeLimit(env, max_episode_steps=100)
 
@@ -17,18 +21,18 @@ def test_blocks_2d_env_with_planner():
 
     # env = RecordVideo(env, "videos/blocks2d-planning-test")
 
-    types, predicates, perceiver, operators, skills = create_blocks2d_planning_models(
-        include_pushing_models=True
-    )
-
+    # Create planner using environment's components
     planner = TaskThenMotionPlanner(
-        types, predicates, perceiver, operators, skills, planner_id="pyperplan"
+        types=tamp_system.types,
+        predicates=tamp_system.predicates,
+        perceiver=tamp_system.perceiver,
+        operators=tamp_system.operators,
+        skills=tamp_system.skills,
+        planner_id="pyperplan",
     )
 
     obs, info = env.reset()
-    print("Initial observation:", obs)
-
-    objects, atoms, goal = perceiver.reset(obs, info)
+    objects, atoms, goal = tamp_system.perceiver.reset(obs, info)
     print("Objects:", objects)
     print("Initial atoms:", atoms)
     print("Goal:", goal)
@@ -37,14 +41,15 @@ def test_blocks_2d_env_with_planner():
         planner.reset(obs, info)
     except Exception as e:
         print("Error during planner reset:", str(e))
-        print("Current problem:")
-        print(planner._current_problem)  # pylint: disable=protected-access
-        print("Current domain:")
-        print(planner._domain)  # pylint: disable=protected-access
+        print(
+            "Current problem:",
+            planner._current_problem,  # pylint: disable=protected-access
+        )
+        print("Current domain:", planner._domain)  # pylint: disable=protected-access
         raise
 
     total_reward = 0
-    for step in range(100):  # should terminate earlier
+    for step in range(100):
         action = planner.step(obs)
         obs, reward, terminated, truncated, _ = env.step(action)
         total_reward += reward

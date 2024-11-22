@@ -6,7 +6,7 @@ from tamp_improv.approaches.mpc_improvisational_policy import PredictiveSampling
 from tamp_improv.approaches.mpc_number_improvisational_tamp_approach import (
     MPCNumberImprovisationalTAMPApproach,
 )
-from tamp_improv.benchmarks.number_env import NumberEnv
+from tamp_improv.benchmarks.number_env_old import NumberEnv
 
 
 def test_mpc_number_improvisational_tamp_approach():

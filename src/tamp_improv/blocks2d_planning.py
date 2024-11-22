@@ -14,7 +14,7 @@ from relational_structs import (
 )
 from task_then_motion_planning.structs import LiftedOperatorSkill, Perceiver, Skill
 
-from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv, is_block_in_target_area
+from tamp_improv.benchmarks.blocks2d_env_old import Blocks2DEnv, is_block_in_target_area
 
 
 def create_blocks2d_planning_models(

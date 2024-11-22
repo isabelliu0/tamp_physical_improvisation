@@ -14,8 +14,8 @@ from tamp_improv.approaches.mpc_improvisational_policy import (
     MPCImprovisationalPolicy,
     PredictiveSamplingConfig,
 )
-from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
-from tamp_improv.benchmarks.blocks2d_env_wrapper import make_pushing_env
+from tamp_improv.benchmarks.blocks2d_env_old import Blocks2DEnv
+from tamp_improv.benchmarks.blocks2d_env_wrapper_old import make_pushing_env
 from tamp_improv.blocks2d_planning import create_blocks2d_planning_models
 
 

@@ -3,7 +3,7 @@
 from gymnasium.wrappers import TimeLimit
 from task_then_motion_planning.planning import TaskThenMotionPlanner
 
-from tamp_improv.benchmarks.number_env import NumberEnv
+from tamp_improv.benchmarks.number_env_old import NumberEnv
 from tamp_improv.number_planning import create_number_planning_models
 
 

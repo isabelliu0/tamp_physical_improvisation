@@ -6,8 +6,8 @@ import numpy as np
 from numpy.typing import NDArray
 
 from tamp_improv.approaches.rl_improvisational_policy import RLImprovisationalPolicy
-from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
-from tamp_improv.benchmarks.blocks2d_env_wrapper import make_pushing_env
+from tamp_improv.benchmarks.blocks2d_env_old import Blocks2DEnv
+from tamp_improv.benchmarks.blocks2d_env_wrapper_old import make_pushing_env
 
 
 def train_pushing_policy(

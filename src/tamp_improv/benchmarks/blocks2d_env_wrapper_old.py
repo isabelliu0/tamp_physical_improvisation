@@ -9,7 +9,9 @@ from gymnasium.core import RenderFrame
 from numpy.typing import NDArray
 from relational_structs import GroundAtom, LiftedOperator
 
-from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
+from tamp_improv.benchmarks.blocks2d_env_old import (
+    Blocks2DEnv,
+)
 from tamp_improv.blocks2d_planning import create_blocks2d_planning_models
 
 

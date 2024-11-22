@@ -1,21 +1,17 @@
-"""Tests for core blocks2d environment."""
+"""Tests for Blocks2DEnv()."""
 
 import numpy as np
-from gymnasium.wrappers import TimeLimit
+from gymnasium.wrappers import RecordVideo, TimeLimit
 
-from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
+from tamp_improv.benchmarks.blocks2d_env_old import Blocks2DEnv
 
 
-def test_blocks2d_env():
-    """Test basic functionality of Blocks2D environment."""
+def test_blocks_2d_env():
+    """Tests for Blocks2DEnv()."""
+
     env = Blocks2DEnv(render_mode="rgb_array")
     env = TimeLimit(env, max_episode_steps=100)
-
-    # # Uncomment to generate videos.
-    # from gymnasium.wrappers import RecordVideo
-
-    # env = RecordVideo(env, "videos/blocks2d-test")
-
+    env = RecordVideo(env, "videos/blocks2d-test")
     obs, info = env.reset()
 
     env.action_space.seed(123)

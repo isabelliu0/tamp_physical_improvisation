@@ -11,7 +11,7 @@ from tamp_improv.approaches.mpc_blocks2d_improvisational_tamp_approach import (
     MPCBlocks2DImprovisationalTAMPApproach,
     PredictiveSamplingConfig,
 )
-from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
+from tamp_improv.benchmarks.blocks2d_env_old import Blocks2DEnv
 
 
 def test_mpc_blocks2d_improvisational_tamp_approach():
