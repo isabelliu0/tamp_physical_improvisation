@@ -16,7 +16,7 @@ from relational_structs import (
 )
 from task_then_motion_planning.structs import LiftedOperatorSkill, Perceiver
 
-from tamp_improv.benchmarks.base import BaseTAMPSystem, PlanningComponents
+from tamp_improv.benchmarks.base import BaseSkillLearningSys, PlanningComponents
 from tamp_improv.benchmarks.number_env import NumberEnv
 from tamp_improv.benchmarks.number_wrappers import NumberEnvWrapper
 
@@ -112,7 +112,7 @@ class NumberPerceiver(Perceiver[int]):
         return atoms
 
 
-class NumberTAMPSystem(BaseTAMPSystem[int, int]):
+class NumberTAMPSystem(BaseSkillLearningSys[int, int]):
     """TAMP system for the number environment."""
 
     def _create_env(self) -> gym.Env:

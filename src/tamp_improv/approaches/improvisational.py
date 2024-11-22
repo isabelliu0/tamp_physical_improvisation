@@ -1,6 +1,6 @@
 """Core improvisational TAMP approach."""
 
-from typing import Any, Generic
+from typing import Any
 
 from relational_structs import GroundAtom, GroundOperator, Object, PDDLProblem
 from relational_structs.utils import parse_pddl_plan
@@ -16,9 +16,7 @@ from tamp_improv.approaches.base import (
 )
 
 
-class ImprovisationalTAMPApproach(
-    BaseApproach[ObsType, ActType], Generic[ObsType, ActType]
-):
+class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
     """Base class for improvisational TAMP approaches.
 
     This approach combines task-and-motion planning with learned

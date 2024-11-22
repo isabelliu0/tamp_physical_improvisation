@@ -53,17 +53,10 @@ class BaseTAMPSystem(Generic[ObsType, ActType], ABC):
             planning_components: The agent's planning model/components
             seed: Random seed for environment
         """
-        # Create environments
         self.env = self._create_env()
-        # Store planning components
         self.components = planning_components
-        # Create wrapped env with components
-        self.wrapped_env = self._create_wrapped_env(planning_components)
-
-        # Initialize environments
         if seed is not None:
             self.env.reset(seed=seed)
-            self.wrapped_env.reset(seed=seed)
 
     @property
     def types(self) -> set[Type]:
@@ -95,14 +88,6 @@ class BaseTAMPSystem(Generic[ObsType, ActType], ABC):
         """Create the base environment."""
 
     @abstractmethod
-    def _create_wrapped_env(self, components: PlanningComponents[ObsType]) -> gym.Env:
-        """Create the wrapped environment for training.
-
-        Args:
-            components: Planning components needed for wrapping
-        """
-
-    @abstractmethod
     def _get_domain_name(self) -> str:
         """Get domain name."""
 
@@ -115,3 +100,21 @@ class BaseTAMPSystem(Generic[ObsType, ActType], ABC):
     def reset(self, seed: int | None = None) -> tuple[ObsType, dict[str, Any]]:
         """Reset environment."""
         return self.env.reset(seed=seed)
+
+
+class BaseSkillLearningSys(BaseTAMPSystem[ObsType, ActType], ABC):
+    """Base class for skill learning systems."""
+
+    def __init__(
+        self,
+        planning_components: PlanningComponents[ObsType],
+        seed: int | None = None,
+    ) -> None:
+        super().__init__(planning_components, seed=seed)
+        self.wrapper_env = self._create_wrapped_env(planning_components)
+        if seed is not None:
+            self.wrapper_env.reset(seed=seed)
+
+    @abstractmethod
+    def _create_wrapped_env(self, components: PlanningComponents[ObsType]) -> gym.Env:
+        """Create the wrapped environment for training."""

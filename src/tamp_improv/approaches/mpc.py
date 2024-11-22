@@ -1,7 +1,7 @@
 """MPC-based improvisational policy implementation."""
 
 from dataclasses import dataclass
-from typing import Generic, cast
+from typing import cast
 
 import gymnasium as gym
 import numpy as np
@@ -24,10 +24,7 @@ class MPCPolicyConfig(PolicyConfig):
     horizon: int = 35
 
 
-class MPCImprovisationalPolicy(
-    Generic[ObsType_contra, ActType_co],
-    ImprovisationalPolicy[ObsType_contra, ActType_co],
-):
+class MPCImprovisationalPolicy(ImprovisationalPolicy[ObsType_contra, ActType_co]):
     """MPC policy using predictive sampling."""
 
     def __init__(self, config: MPCPolicyConfig) -> None:
@@ -98,7 +95,7 @@ class MPCImprovisationalPolicy(
 
         if self._is_discrete:
             # For discrete actions, sample random binary sequence
-            return self._rng.choice([0, 1], size=self.config.horizon, p=[0.5, 0.5])
+            return self._rng.choice([0, 1], size=self.config.horizon)
 
         if not self._box_space:
             raise ValueError("Unsupported action space type")
@@ -191,31 +188,3 @@ class MPCImprovisationalPolicy(
                 break
 
         return total_reward
-
-    def save(self, path: str) -> None:
-        """Save policy parameters."""
-        np.savez(
-            path,
-            last_solution=self._last_solution,
-            config=np.array(
-                [
-                    self.config.num_rollouts,
-                    self.config.noise_scale,
-                    self.config.num_control_points,
-                    self.config.horizon,
-                ]
-            ),
-        )
-
-    def load(self, path: str) -> None:
-        """Load policy parameters."""
-        data = np.load(path + ".npz")
-        self._last_solution = data["last_solution"]
-        config = data["config"]
-        self.config = MPCPolicyConfig(
-            seed=self.config.seed,
-            num_rollouts=int(config[0]),
-            noise_scale=float(config[1]),
-            num_control_points=int(config[2]),
-            horizon=int(config[3]),
-        )

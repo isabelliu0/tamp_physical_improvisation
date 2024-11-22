@@ -1,11 +1,11 @@
 """Random action approach."""
 
-from typing import Any, Generic
+from typing import Any
 
 from tamp_improv.approaches.base import ActType, BaseApproach, ObsType
 
 
-class RandomApproach(BaseApproach[ObsType, ActType], Generic[ObsType, ActType]):
+class RandomApproach(BaseApproach[ObsType, ActType]):
     """An approach that takes random actions."""
 
     def reset(self, obs: ObsType, info: dict[str, Any]) -> ActType:

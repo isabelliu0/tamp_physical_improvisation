@@ -1,7 +1,7 @@
 """RL-based improvisational policy implementation."""
 
 from dataclasses import dataclass
-from typing import Generic, cast
+from typing import cast
 
 import gymnasium as gym
 import numpy as np
@@ -61,9 +61,7 @@ class TrainingProgressCallback(BaseCallback):
         return True
 
 
-class RLImprovisationalPolicy(
-    Generic[ObsType, ActType], ImprovisationalPolicy[ObsType, ActType]
-):
+class RLImprovisationalPolicy(ImprovisationalPolicy[ObsType, ActType]):
     """RL policy using PPO."""
 
     def __init__(self, config: RLPolicyConfig) -> None:

@@ -21,7 +21,7 @@ class BaseApproach(Generic[ObsType, ActType], ABC):
     """Base class for all approaches."""
 
     def __init__(self, system: BaseTAMPSystem[ObsType, ActType], seed: int) -> None:
-        """Iniitialize approach.
+        """Initialize approach.
 
         Args:
             system: The TAMP system to use

@@ -19,7 +19,7 @@ from relational_structs import (
 )
 from task_then_motion_planning.structs import LiftedOperatorSkill, Perceiver
 
-from tamp_improv.benchmarks.base import BaseTAMPSystem, PlanningComponents
+from tamp_improv.benchmarks.base import BaseSkillLearningSys, PlanningComponents
 from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv, is_block_1_in_target_area
 from tamp_improv.benchmarks.blocks2d_wrappers import (
     Blocks2DEnvWrapper,
@@ -300,7 +300,9 @@ class Blocks2DPerceiver(Perceiver[NDArray[np.float32]]):
         return atoms
 
 
-class Blocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.float32]]):
+class Blocks2DTAMPSystem(
+    BaseSkillLearningSys[NDArray[np.float32], NDArray[np.float32]]
+):
     """TAMP system for 2D blocks environment."""
 
     def _create_env(self) -> gym.Env:
