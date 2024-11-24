@@ -42,8 +42,8 @@ def is_target_area_blocked(
 
 
 class Blocks2DEnvWrapper(gym.Env):
-    """Environment wrapper for learning the pushing policy while maintaining
-    operator preconditions in Blocks2D environment."""
+    """Environment wrapper for learning the improvisational pushing policy
+    while maintaining operator preconditions in Blocks2D environment."""
 
     def __init__(
         self,
@@ -59,11 +59,12 @@ class Blocks2DEnvWrapper(gym.Env):
         self.prev_distance_to_block2 = None
         self.perceiver = perceiver
 
-        # Precondition tracking
+        # Tracking for preconditions and training state
         self.current_operator: LiftedOperator | None = None
         self.preconditions_to_maintain: set[GroundAtom] = set()
+        self.initial_state: NDArray[np.float32] | None = None
 
-        # Reset options
+        # Default reset options
         self._custom_reset_options = {
             "robot_pos": np.array([0.5, 1.0], dtype=np.float32),
             "ensure_blocking": True,
@@ -71,27 +72,16 @@ class Blocks2DEnvWrapper(gym.Env):
 
         self.render_mode = self.env.render_mode
 
-    def update_preconditions(
-        self, operator: LiftedOperator, preconditions: set[GroundAtom]
+    def configure_training(
+        self,
+        operator: LiftedOperator,
+        preconditions: set[GroundAtom],
+        initial_state: NDArray[np.float32],
     ) -> None:
-        """Update the preconditions that should be maintained."""
+        """Configure environment for training phase."""
         self.current_operator = operator
         self.preconditions_to_maintain = preconditions
-
-    def _check_preconditions(self, obs: NDArray[np.float32]) -> bool:
-        """Check if all maintained preconditions are still satisfied."""
-        if not self.preconditions_to_maintain:
-            return True
-        current_atoms = self.perceiver.step(obs)
-        return self.preconditions_to_maintain.issubset(current_atoms)
-
-    def _calculate_precondition_violation_penalty(
-        self, obs: NDArray[np.float32]
-    ) -> float:
-        """Calculate penalty for violating operator preconditions."""
-        if not self._check_preconditions(obs):
-            return -1.0
-        return 0.0
+        self.initial_state = initial_state
 
     def reset(
         self,
@@ -99,8 +89,32 @@ class Blocks2DEnvWrapper(gym.Env):
         seed: int | None = None,
         options: dict[str, Any] | None = None,
     ) -> tuple[NDArray[np.float32], dict[str, Any]]:
+        """Reset environment."""
         self.steps = 0
-        self.prev_distance_to_block2 = None
+
+        # If we have a training initial state, use it
+        if self.initial_state is not None:
+            obs = self.initial_state.copy()
+            # Optionally add some noise for exploration
+            if seed is not None:
+                rng = np.random.default_rng(seed)
+                obs += rng.normal(0, 0.1, size=obs.shape)
+            return obs, {}
+
+        # Otherwise use default reset logic for baseline training
+        return self._default_reset(seed=seed, options=options)
+
+    def _default_reset(
+        self,
+        seed: int | None = None,
+        options: dict[str, Any] | None = None,
+    ) -> tuple[NDArray[np.float32], dict[str, Any]]:
+        """Default reset logic for initial training.
+
+        This creates a scenario where block 2 is blocking the target
+        area, requiring the agent to learn pushing behavior.
+        """
+        self.steps = 0
 
         # Initialize RNG
         if seed is not None:
@@ -146,6 +160,7 @@ class Blocks2DEnvWrapper(gym.Env):
             obs[11],  # target_x
             obs[13],  # target_width
         ):
+            # If not blocking, try again
             return self.reset(seed=seed, options=options)
 
         return obs, info
@@ -185,6 +200,28 @@ class Blocks2DEnvWrapper(gym.Env):
         truncated = self.steps >= self.max_episode_steps
 
         return obs, reward, terminated, truncated, info
+
+    def update_preconditions(
+        self, operator: LiftedOperator, preconditions: set[GroundAtom]
+    ) -> None:
+        """Update the preconditions that should be maintained."""
+        self.current_operator = operator
+        self.preconditions_to_maintain = preconditions
+
+    def _check_preconditions(self, obs: NDArray[np.float32]) -> bool:
+        """Check if all maintained preconditions are still satisfied."""
+        if not self.preconditions_to_maintain:
+            return True
+        current_atoms = self.perceiver.step(obs)
+        return self.preconditions_to_maintain.issubset(current_atoms)
+
+    def _calculate_precondition_violation_penalty(
+        self, obs: NDArray[np.float32]
+    ) -> float:
+        """Calculate penalty for violating operator preconditions."""
+        if not self._check_preconditions(obs):
+            return -1.0
+        return 0.0
 
     def _calculate_distance_reward(self, obs: NDArray[np.float32]) -> float:
         """Calculate reward based on distance to block 2."""

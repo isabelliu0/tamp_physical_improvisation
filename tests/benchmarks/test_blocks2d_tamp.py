@@ -3,14 +3,14 @@
 from gymnasium.wrappers import TimeLimit
 from task_then_motion_planning.planning import TaskThenMotionPlanner
 
-from tamp_improv.benchmarks.blocks2d import Blocks2DTAMPSystem
+from tamp_improv.benchmarks.blocks2d import BaseBlocks2DTAMPSystem
 from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
 
 
 def test_blocks2d_tamp_system():
     """Test Blocks2D environment with TAMP planner."""
     # Create TAMP system
-    tamp_system = Blocks2DTAMPSystem.create_default(include_pushing_models=True)
+    tamp_system = BaseBlocks2DTAMPSystem.create_default(include_pushing_models=True)
 
     # Create environment with time limit
     env = Blocks2DEnv(render_mode="rgb_array")
@@ -26,7 +26,7 @@ def test_blocks2d_tamp_system():
         types=tamp_system.types,
         predicates=tamp_system.predicates,
         perceiver=tamp_system.perceiver,
-        operators=tamp_system.operators,
+        operators=tamp_system.full_operators,
         skills=tamp_system.skills,
         planner_id="pyperplan",
     )

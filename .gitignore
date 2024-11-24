@@ -3,6 +3,7 @@
 .vscode
 videos/
 trained_policies/
+test_policies/
 logs/
 
 # Byte-compiled / optimized / DLL files

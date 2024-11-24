@@ -1,4 +1,4 @@
-"""RL-based improvisational policy implementation."""
+"""RL-based policy implementation."""
 
 from dataclasses import dataclass
 from typing import cast
@@ -8,16 +8,16 @@ import numpy as np
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
 
-from tamp_improv.approaches.base import (
+from tamp_improv.approaches.improvisational.policies.base import (
     ActType,
-    ImprovisationalPolicy,
     ObsType,
-    PolicyConfig,
+    Policy,
+    TrainingData,
 )
 
 
 @dataclass
-class RLPolicyConfig(PolicyConfig):
+class RLConfig:
     """Configuration for RL policy."""
 
     learning_rate: float = 3e-4
@@ -38,7 +38,6 @@ class TrainingProgressCallback(BaseCallback):
         self.current_length = 0
 
     def _on_step(self) -> bool:
-        """Called after each training step."""
         self.current_length += 1
         dones = self.locals["dones"]
         infos = self.locals["infos"]
@@ -50,31 +49,28 @@ class TrainingProgressCallback(BaseCallback):
             self.current_length = 0
 
             if len(self.success_history) % self.check_freq == 0:
-                recent_successes = self.success_history[-self.check_freq :]
-                recent_lengths = self.episode_lengths[-self.check_freq :]
-                success_rate = sum(recent_successes) / len(recent_successes)
-                avg_length = sum(recent_lengths) / len(recent_lengths)
-                print(f"Episodes: {len(self.success_history)}")
-                print(f"Success rate: {success_rate:.2%}")
-                print(f"Average episode length: {avg_length:.1f}")
+                recent = self.success_history[-self.check_freq :]
+                print(f"Success rate: {sum(recent)/len(recent):.2%}")
 
         return True
 
 
-class RLImprovisationalPolicy(ImprovisationalPolicy[ObsType, ActType]):
+class RLPolicy(Policy[ObsType, ActType]):
     """RL policy using PPO."""
 
-    def __init__(self, config: RLPolicyConfig) -> None:
-        self.config = config
+    def __init__(self, seed: int, config: RLConfig | None = None) -> None:
+        """Initialize policy."""
+        super().__init__(seed)
+        self.config = config or RLConfig()
         self.model: PPO | None = None
 
-    def train(
-        self, env: gym.Env, total_timesteps: int, seed: int | None = None
-    ) -> None:
-        """Train policy."""
-        if seed is None:
-            seed = self.config.seed
+    @property
+    def requires_training(self) -> bool:
+        """Whether this policy requires training data and training."""
+        return True
 
+    def initialize(self, env: gym.Env) -> None:
+        """Initialize policy with environment."""
         self.model = PPO(
             "MlpPolicy",
             env,
@@ -83,11 +79,17 @@ class RLImprovisationalPolicy(ImprovisationalPolicy[ObsType, ActType]):
             batch_size=self.config.batch_size,
             n_epochs=self.config.n_epochs,
             gamma=self.config.gamma,
-            seed=seed,
+            seed=self._seed,
             verbose=1,
         )
 
+    def train(self, env: gym.Env, train_data: TrainingData) -> None:
+        """Train policy."""
+        # Base initialization and precondition setup
+        super().train(env, train_data)
+
         callback = TrainingProgressCallback()
+        total_timesteps = train_data.config.get("total_timesteps", 100_000)
         self.model.learn(total_timesteps=total_timesteps, callback=callback)
 
     def get_action(self, obs: ObsType) -> ActType:

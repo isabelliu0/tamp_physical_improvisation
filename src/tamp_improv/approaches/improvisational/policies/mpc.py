@@ -1,21 +1,21 @@
-"""MPC-based improvisational policy implementation."""
+"""MPC-based policy implementation."""
 
 from dataclasses import dataclass
-from typing import cast
+from typing import Generic, cast
 
 import gymnasium as gym
 import numpy as np
+from numpy.typing import NDArray
 
-from tamp_improv.approaches.base import (
-    ActType_co,
-    ImprovisationalPolicy,
-    ObsType_contra,
-    PolicyConfig,
+from tamp_improv.approaches.improvisational.policies.base import (
+    ActType,
+    ObsType,
+    Policy,
 )
 
 
 @dataclass
-class MPCPolicyConfig(PolicyConfig):
+class MPCConfig:
     """Configuration for MPC policy."""
 
     num_rollouts: int = 100
@@ -24,34 +24,41 @@ class MPCPolicyConfig(PolicyConfig):
     horizon: int = 35
 
 
-class MPCImprovisationalPolicy(ImprovisationalPolicy[ObsType_contra, ActType_co]):
+class MPCPolicy(Policy[ObsType, ActType], Generic[ObsType, ActType]):
     """MPC policy using predictive sampling."""
 
-    def __init__(self, config: MPCPolicyConfig) -> None:
-        self.config = config
-        self._rng = np.random.default_rng(config.seed)
+    def __init__(self, seed: int, config: MPCConfig | None = None) -> None:
+        """Initialize policy."""
+        super().__init__(seed)
+        self.config = config or MPCConfig()
+        self._rng = np.random.default_rng(seed)
         self._env: gym.Env | None = None
-        self._is_discrete: bool = False
-        self._box_space: bool = False
-        self._control_times = np.zeros(0)
-        self._trajectory_times = np.zeros(0)
-        self._last_solution = np.zeros(0)
+        self._is_discrete = False
+        self._box_space = False
 
-    def train(
-        self, env: gym.Env, total_timesteps: int, seed: int | None = None
-    ) -> None:
-        """Initialize policy for environment."""
+        # Initialize arrays with proper dtypes
+        self._control_times = np.zeros(0, dtype=np.float64)
+        self._trajectory_times = np.zeros(0, dtype=np.float64)
+        self._last_solution = np.zeros(0, dtype=np.float64)
+
+    @property
+    def requires_training(self) -> bool:
+        """Whether this policy requires training data and training."""
+        return False
+
+    def initialize(self, env: gym.Env) -> None:
+        """Initialize MPC with environment."""
         self._env = env
         self._is_discrete = isinstance(env.action_space, gym.spaces.Discrete)
         self._box_space = isinstance(env.action_space, gym.spaces.Box)
 
         # Initialize trajectory arrays
-        self._trajectory_times = np.arange(self.config.horizon, dtype=np.float32)
+        self._trajectory_times = np.arange(self.config.horizon, dtype=np.float64)
         self._control_times = np.linspace(
-            0, self.config.horizon - 1, self.config.num_control_points
+            0, self.config.horizon - 1, self.config.num_control_points, dtype=np.float64
         )
 
-        # Initialize last solution based on action space
+        # Initialize last solution
         if self._is_discrete:
             self._last_solution = np.zeros(self.config.horizon, dtype=np.int32)
         else:
@@ -62,21 +69,31 @@ class MPCImprovisationalPolicy(ImprovisationalPolicy[ObsType_contra, ActType_co]
             shape = (self.config.horizon,) + action_shape
             self._last_solution = np.zeros(shape, dtype=np.float32)
 
-    def get_action(self, obs: ObsType_contra) -> ActType_co:
-        """Get action using predictive sampling."""
+    def get_action(self, obs: ObsType) -> ActType:
+        """Get action using MPC."""
         if self._env is None:
-            raise ValueError("Policy not initialized - call train() first")
-        return cast(ActType_co, self._solve(obs))
+            raise ValueError("Policy not initialized")
+        return cast(ActType, self._solve(obs))
 
-    def _solve(self, obs: ObsType_contra) -> ActType_co:
+    def _solve(self, obs: ObsType) -> NDArray:
         """Run one iteration of predictive sampling."""
-        assert self._env is not None
-
-        # Get candidate trajectories
+        # Get candidates
         if np.all(self._last_solution == 0):
             nominal = self._get_initialization()
         else:
-            nominal = np.vstack((self._last_solution[1:], self._last_solution[-1:]))
+            # Shift the solution forward and repeat last action
+            if self._is_discrete:
+                nominal = np.roll(self._last_solution, -1)
+                nominal[-1] = self._last_solution[-1]
+            else:
+                # For continuous actions, handle potentially multi-dimensional arrays
+                nominal = np.zeros_like(self._last_solution)
+                if nominal.ndim == 2:
+                    nominal[:-1] = self._last_solution[1:]
+                    nominal[-1] = self._last_solution[-1]
+                else:
+                    nominal = np.roll(self._last_solution, -1)
+                    nominal[-1] = self._last_solution[-1]
 
         candidates = [nominal] + self._sample_from_nominal(nominal)
         scores = [self._score_trajectory(traj, obs) for traj in candidates]
@@ -84,29 +101,25 @@ class MPCImprovisationalPolicy(ImprovisationalPolicy[ObsType_contra, ActType_co]
         # Pick best trajectory
         best_idx = np.argmax(scores)
         self._last_solution = candidates[best_idx]
+        return self._last_solution[0]
 
-        if self._is_discrete:
-            return cast(ActType_co, int(self._last_solution[0]))
-        return cast(ActType_co, self._last_solution[0])
-
-    def _get_initialization(self) -> np.ndarray:
+    def _get_initialization(self) -> NDArray:
         """Initialize trajectory."""
         assert self._env is not None
 
         if self._is_discrete:
-            # For discrete actions, sample random binary sequence
-            return self._rng.choice([0, 1], size=self.config.horizon)
+            return self._rng.choice([0, 1], size=self.config.horizon, p=[0.5, 0.5])
 
         if not self._box_space:
             raise ValueError("Unsupported action space type")
 
-        # For continuous actions, use spline interpolation
         box_space = cast(gym.spaces.Box, self._env.action_space)
         action_shape = box_space.shape if box_space.shape else ()
         shape = (self.config.num_control_points,) + action_shape
         control_points = self._rng.standard_normal(shape)
         trajectory = np.zeros((self.config.horizon,) + action_shape)
 
+        # Interpolate control points
         for dim in range(
             control_points.shape[-1] if len(control_points.shape) > 1 else 1
         ):
@@ -122,56 +135,47 @@ class MPCImprovisationalPolicy(ImprovisationalPolicy[ObsType_contra, ActType_co]
 
         return np.clip(trajectory, box_space.low, box_space.high)
 
-    def _sample_from_nominal(self, nominal: np.ndarray) -> list[np.ndarray]:
-        """Sample new trajectories around nominal."""
-        assert self._env is not None
-
+    def _sample_from_nominal(self, nominal: NDArray) -> list[NDArray]:
+        """Sample trajectories around nominal."""
         if self._is_discrete:
-            # For discrete actions, flip with probability noise_scale
             trajectories = []
             for _ in range(self.config.num_rollouts - 1):
                 flip_mask = (
                     self._rng.random(size=self.config.horizon) < self.config.noise_scale
                 )
                 new_traj = nominal.copy()
-                new_traj[flip_mask] = 1 - new_traj[flip_mask]  # Flip 0->1 or 1->0
+                new_traj[flip_mask] = 1 - new_traj[flip_mask]
                 trajectories.append(new_traj)
             return trajectories
 
         if not self._box_space:
             raise ValueError("Unsupported action space type")
 
-        # For continuous actions, use spline interpolation with noise
         box_space = cast(gym.spaces.Box, self._env.action_space)
-        nominal_control_points = np.array(
-            [nominal[int(t)] for t in self._control_times]
-        )
+        points = np.array([nominal[int(t)] for t in self._control_times])
 
-        action_shape = box_space.shape if box_space.shape else ()
         noise = self._rng.normal(
             loc=0,
             scale=self.config.noise_scale,
             size=(self.config.num_rollouts - 1, self.config.num_control_points)
-            + action_shape,
+            + (points.shape[1:] if points.ndim > 1 else ()),
         )
-        new_control_points = nominal_control_points + noise
+        new_points = points + noise
 
         trajectories = []
-        for points in new_control_points:
-            trajectory = np.zeros((self.config.horizon,) + action_shape)
-            for dim in range(points.shape[-1] if len(points.shape) > 1 else 1):
-                idx = (..., dim) if len(points.shape) > 1 else ...
+        for pts in new_points:
+            trajectory = np.zeros((self.config.horizon,) + box_space.shape)
+            for dim in range(pts.shape[-1] if pts.ndim > 1 else 1):
+                idx = (..., dim) if pts.ndim > 1 else ...
                 trajectory[idx] = np.interp(
-                    self._trajectory_times, self._control_times, points[idx]
+                    self._trajectory_times, self._control_times, pts[idx]
                 )
             trajectory = np.clip(trajectory, box_space.low, box_space.high)
             trajectories.append(trajectory)
         return trajectories
 
-    def _score_trajectory(
-        self, trajectory: np.ndarray, init_obs: ObsType_contra
-    ) -> float:
-        """Score a trajectory by simulating it."""
+    def _score_trajectory(self, trajectory: NDArray, init_obs: ObsType) -> float:
+        """Score trajectory by simulation."""
         assert self._env is not None
 
         obs = init_obs
@@ -188,3 +192,9 @@ class MPCImprovisationalPolicy(ImprovisationalPolicy[ObsType_contra, ActType_co]
                 break
 
         return total_reward
+
+    def save(self, path: str) -> None:
+        """Save policy parameters."""
+
+    def load(self, path: str) -> None:
+        """Load MPC parameters."""

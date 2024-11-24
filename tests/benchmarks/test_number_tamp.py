@@ -3,14 +3,14 @@
 from gymnasium.wrappers import TimeLimit
 from task_then_motion_planning.planning import TaskThenMotionPlanner
 
-from tamp_improv.benchmarks.number import NumberTAMPSystem
+from tamp_improv.benchmarks.number import BaseNumberTAMPSystem
 from tamp_improv.benchmarks.number_env import NumberEnv
 
 
 def test_number_tamp_system():
     """Test Number environment with TAMP planner."""
     # Create TAMP system
-    tamp_system = NumberTAMPSystem.create_default(
+    tamp_system = BaseNumberTAMPSystem.create_default(
         switch_off_improvisational_models=False
     )
 
@@ -23,7 +23,7 @@ def test_number_tamp_system():
         types=tamp_system.types,
         predicates=tamp_system.predicates,
         perceiver=tamp_system.components.perceiver,
-        operators=tamp_system.operators,
+        operators=tamp_system.base_operators,
         skills=tamp_system.skills,
         planner_id="pyperplan",
     )

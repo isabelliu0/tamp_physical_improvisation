@@ -10,13 +10,18 @@ from relational_structs import (
     GroundAtom,
     LiftedOperator,
     Object,
+    PDDLDomain,
     Predicate,
     Type,
     Variable,
 )
 from task_then_motion_planning.structs import LiftedOperatorSkill, Perceiver
 
-from tamp_improv.benchmarks.base import BaseSkillLearningSys, PlanningComponents
+from tamp_improv.benchmarks.base import (
+    BaseTAMPSystem,
+    ImprovisationalTAMPSystem,
+    PlanningComponents,
+)
 from tamp_improv.benchmarks.number_env import NumberEnv
 from tamp_improv.benchmarks.number_wrappers import NumberEnvWrapper
 
@@ -112,20 +117,43 @@ class NumberPerceiver(Perceiver[int]):
         return atoms
 
 
-class NumberTAMPSystem(BaseSkillLearningSys[int, int]):
-    """TAMP system for the number environment."""
+class BaseNumberTAMPSystem(BaseTAMPSystem[int, int]):
+    """Base TAMP system for number environment."""
+
+    def __init__(
+        self, planning_components: PlanningComponents[int], seed: int | None = None
+    ) -> None:
+        """Initialize number TAMP system."""
+        super().__init__(planning_components, name="NumberTAMPSystem", seed=seed)
 
     def _create_env(self) -> gym.Env:
         """Create base number environment."""
         return NumberEnv()
 
-    def _create_wrapped_env(self, components: PlanningComponents[int]) -> gym.Env:
-        """Create wrapped environment for training."""
-        return NumberEnvWrapper(self.env)
-
     def _get_domain_name(self) -> str:
         """Get domain name."""
         return "number-domain"
+
+    def get_domain(self, include_extra_preconditions: bool = False) -> PDDLDomain:
+        """Get domain with or without transition preconditions.
+
+        Args:
+            include_extra_preconditions: If True, include the CanProgress precondition to switch off improvisational models.
+                                        If False, improvisational models for TAMP are enabled.
+        """
+        if include_extra_preconditions:
+            return PDDLDomain(
+                self._get_domain_name(),
+                self.components.full_operators,
+                self.components.predicate_container.as_set(),
+                self.components.types,
+            )
+        return PDDLDomain(
+            self._get_domain_name(),
+            self.components.base_operators,
+            self.components.predicate_container.as_set(),
+            self.components.types,
+        )
 
     @staticmethod
     def create_default(
@@ -135,26 +163,25 @@ class NumberTAMPSystem(BaseSkillLearningSys[int, int]):
         """Factory method for creating system with default components."""
         # Create state type
         state_type = Type("state")
+        types = {state_type}
 
         # Create predicates
         predicates = NumberPredicates(
             at_state0=Predicate("AtState0", [state_type]),
             at_state1=Predicate("AtState1", [state_type]),
             at_state2=Predicate("AtState2", [state_type]),
-            can_progress=(
-                Predicate("CanProgress", [state_type])
-                if switch_off_improvisational_models
-                else None
-            ),
+            can_progress=Predicate("CanProgress", [state_type]),
         )
 
         # Create perceiver with state type
         perceiver = NumberPerceiver(state_type)
         perceiver.initialize(predicates)
 
-        # Create operators
+        # Create variables for operators
         state = Variable("?state", state_type)
-        operators = {
+
+        # Create base operators (without transition preconditions)
+        base_operators = {
             LiftedOperator(
                 "ZeroToOne",
                 [state],
@@ -162,28 +189,48 @@ class NumberTAMPSystem(BaseSkillLearningSys[int, int]):
                 add_effects={predicates["AtState1"]([state])},
                 delete_effects={predicates["AtState0"]([state])},
             ),
-        }
-
-        # One to Two operator (preconditions depend on improvisation setting)
-        one_to_two_preconditions = {predicates["AtState1"]([state])}
-        if switch_off_improvisational_models:
-            one_to_two_preconditions.add(predicates["CanProgress"]([state]))
-
-        operators.add(
             LiftedOperator(
                 "OneToTwo",
                 [state],
-                preconditions=one_to_two_preconditions,
+                preconditions={predicates["AtState1"]([state])},
                 add_effects={predicates["AtState2"]([state])},
                 delete_effects={predicates["AtState1"]([state])},
             ),
+        }
+
+        # Create full operators (with transition preconditions)
+        full_operators = {
+            LiftedOperator(
+                "ZeroToOne",
+                [state],
+                preconditions={predicates["AtState0"]([state])},
+                add_effects={predicates["AtState1"]([state])},
+                delete_effects={predicates["AtState0"]([state])},
+            ),
+            LiftedOperator(
+                "OneToTwo",
+                [state],
+                preconditions={
+                    predicates["AtState1"]([state]),
+                    predicates["CanProgress"]([state]),
+                },
+                add_effects={predicates["AtState2"]([state])},
+                delete_effects={predicates["AtState1"]([state])},
+            ),
+        }
+
+        # Select current operators based on flag
+        operators = (
+            full_operators if switch_off_improvisational_models else base_operators
         )
 
         # Create system
         system = NumberTAMPSystem(
             PlanningComponents(
-                types={state_type},
+                types=types,
                 predicate_container=predicates,
+                base_operators=base_operators,
+                full_operators=full_operators,
                 operators=operators,
                 skills=set(),
                 perceiver=perceiver,
@@ -201,3 +248,12 @@ class NumberTAMPSystem(BaseSkillLearningSys[int, int]):
         system.components.skills.update(skills)
 
         return system
+
+
+class NumberTAMPSystem(ImprovisationalTAMPSystem[int, int], BaseNumberTAMPSystem):
+    """TAMP system for the number environment with improvisational policy
+    learning enabled."""
+
+    def _create_wrapped_env(self, components: PlanningComponents[int]) -> gym.Env:
+        """Create wrapped environment for training."""
+        return NumberEnvWrapper(self.env)
