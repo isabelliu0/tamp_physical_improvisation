@@ -31,8 +31,10 @@ class MPCPolicy(Policy[ObsType, ActType], Generic[ObsType, ActType]):
         """Initialize policy."""
         super().__init__(seed)
         self.config = config or MPCConfig()
-        self._rng = np.random.default_rng(seed)
         self._env: gym.Env | None = None
+        self._rng = np.random.default_rng(seed)
+        self._wrapped_env: gym.Env | None = None
+        self._rollout_env: gym.Env | None = None
         self._is_discrete = False
         self._box_space = False
 
@@ -77,6 +79,9 @@ class MPCPolicy(Policy[ObsType, ActType], Generic[ObsType, ActType]):
 
     def _solve(self, obs: ObsType) -> NDArray:
         """Run one iteration of predictive sampling."""
+        if self._env is None:
+            raise ValueError("Policy not initialized")
+
         # Get candidates
         if np.all(self._last_solution == 0):
             nominal = self._get_initialization()
@@ -137,6 +142,9 @@ class MPCPolicy(Policy[ObsType, ActType], Generic[ObsType, ActType]):
 
     def _sample_from_nominal(self, nominal: NDArray) -> list[NDArray]:
         """Sample trajectories around nominal."""
+        if self._env is None:
+            raise ValueError("Policy not initialized")
+
         if self._is_discrete:
             trajectories = []
             for _ in range(self.config.num_rollouts - 1):

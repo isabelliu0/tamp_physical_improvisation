@@ -4,17 +4,17 @@ from gymnasium.wrappers import TimeLimit
 from task_then_motion_planning.planning import TaskThenMotionPlanner
 
 from tamp_improv.benchmarks.blocks2d import BaseBlocks2DTAMPSystem
-from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv
 
 
 def test_blocks2d_tamp_system():
     """Test Blocks2D environment with TAMP planner."""
     # Create TAMP system
-    tamp_system = BaseBlocks2DTAMPSystem.create_default(include_pushing_models=True)
+    tamp_system = BaseBlocks2DTAMPSystem.create_default(
+        include_pushing_models=True, render_mode="rgb_array", seed=42
+    )
 
     # Create environment with time limit
-    env = Blocks2DEnv(render_mode="rgb_array")
-    env = TimeLimit(env, max_episode_steps=100)
+    env = TimeLimit(tamp_system.env, max_episode_steps=100)
 
     # # Uncomment to generate videos.
     # from gymnasium.wrappers import RecordVideo

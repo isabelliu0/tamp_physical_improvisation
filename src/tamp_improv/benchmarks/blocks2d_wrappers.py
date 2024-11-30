@@ -8,9 +8,10 @@ from gymnasium.core import RenderFrame
 from numpy.typing import NDArray
 from relational_structs import (
     GroundAtom,
-    LiftedOperator,
 )
 from task_then_motion_planning.structs import Perceiver
+
+from tamp_improv.approaches.improvisational.policies.base import TrainingData
 
 
 def is_target_area_blocked(
@@ -59,10 +60,12 @@ class Blocks2DEnvWrapper(gym.Env):
         self.prev_distance_to_block2 = None
         self.perceiver = perceiver
 
-        # Tracking for preconditions and training state
-        self.current_operator: LiftedOperator | None = None
+        # Tracking for training data (preconditions and initial states)
+        self.training_states: list[NDArray[np.float32]] = []
+        self.training_preconditions: list[set[GroundAtom]] = []
+        self.current_training_idx: int = 0
+        self.total_training_episodes: int = 0
         self.preconditions_to_maintain: set[GroundAtom] = set()
-        self.initial_state: NDArray[np.float32] | None = None
 
         # Default reset options
         self._custom_reset_options = {
@@ -74,14 +77,14 @@ class Blocks2DEnvWrapper(gym.Env):
 
     def configure_training(
         self,
-        operator: LiftedOperator,
-        preconditions: set[GroundAtom],
-        initial_state: NDArray[np.float32],
+        training_data: TrainingData,
     ) -> None:
         """Configure environment for training phase."""
-        self.current_operator = operator
-        self.preconditions_to_maintain = preconditions
-        self.initial_state = initial_state
+        print(f"Configuring environment with {len(training_data)} training scenarios")
+        self.training_states = training_data.states
+        self.training_preconditions = training_data.preconditions
+        self.current_training_idx = 0
+        self.total_training_episodes = len(training_data)
 
     def reset(
         self,
@@ -92,14 +95,48 @@ class Blocks2DEnvWrapper(gym.Env):
         """Reset environment."""
         self.steps = 0
 
-        # If we have a training initial state, use it
-        if self.initial_state is not None:
-            obs = self.initial_state.copy()
-            # Optionally add some noise for exploration
-            if seed is not None:
-                rng = np.random.default_rng(seed)
-                obs += rng.normal(0, 0.1, size=obs.shape)
-            return obs, {}
+        # If we have training data, use it cyclically
+        if self.training_states:
+            self.current_training_idx = self.current_training_idx % len(
+                self.training_states
+            )
+
+            # Get current training scenario
+            current_state = self.training_states[self.current_training_idx]
+            current_preconditions = self.training_preconditions[
+                self.current_training_idx
+            ]
+
+            print(f"Training episode {self.current_training_idx + 1}")
+            print(f"Using state with robot at: {current_state[0:2]}")
+            print(f"Maintaining preconditions: {current_preconditions}")
+
+            # Get positions from current state
+            reset_options = {
+                "robot_pos": current_state[0:2].copy(),
+                "block_1_pos": current_state[4:6].copy(),
+                "block_2_pos": current_state[6:8].copy(),
+            }
+
+            # Reset base environment with current training state
+            obs, info = self.env.reset(seed=seed, options=reset_options)
+
+            # Store current preconditions
+            self.preconditions_to_maintain = current_preconditions
+
+            # Initialize distance tracking since we start in training state
+            robot_pos = obs[0:2]
+            block2_pos = obs[6:8]
+            robot_width = obs[2]
+            block_width = obs[8]
+            self.prev_distance_to_block2 = (
+                np.linalg.norm(robot_pos - block2_pos) - (robot_width + block_width) / 2
+            )
+
+            # Update index cyclically
+            self.current_training_idx += 1
+
+            return obs, info
 
         # Otherwise use default reset logic for baseline training
         return self._default_reset(seed=seed, options=options)
@@ -200,13 +237,6 @@ class Blocks2DEnvWrapper(gym.Env):
         truncated = self.steps >= self.max_episode_steps
 
         return obs, reward, terminated, truncated, info
-
-    def update_preconditions(
-        self, operator: LiftedOperator, preconditions: set[GroundAtom]
-    ) -> None:
-        """Update the preconditions that should be maintained."""
-        self.current_operator = operator
-        self.preconditions_to_maintain = preconditions
 
     def _check_preconditions(self, obs: NDArray[np.float32]) -> bool:
         """Check if all maintained preconditions are still satisfied."""

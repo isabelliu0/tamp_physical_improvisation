@@ -129,10 +129,10 @@ class ClearTargetAreaSkill(BaseBlocks2DSkill):
             # Move to pushing position
             dx = np.clip(target_robot_x - robot_x, -0.1, 0.1)
             dy = np.clip(block_2_y - robot_y, -0.1, 0.1)
-            return np.array([dx, dy, 1.0])
+            return np.array([dx, dy, 0.0])
 
         # Push
-        return np.array([push_direction, 0.0, 1.0])
+        return np.array([push_direction, 0.0, 0.0])
 
 
 class PickUpSkill(BaseBlocks2DSkill):
@@ -150,7 +150,6 @@ class PickUpSkill(BaseBlocks2DSkill):
         robot_height = obs[3]
         block_x, block_y = obs[4:6]
         block_height = obs[9]
-        gripper_status = obs[10]
 
         # Target position above block
         target_y = block_y + block_height / 2 + robot_height / 2
@@ -174,11 +173,8 @@ class PickUpSkill(BaseBlocks2DSkill):
             dx = np.clip(block_x - robot_x, -0.1, 0.1)
             return np.array([dx, 0.0, 0.0])
 
-        # If aligned and gripper is open, close it
-        if gripper_status <= 0.0:
-            return np.array([0.0, 0.0, 1.0])
-
-        return np.array([0.0, 0.0, 0.0])
+        # If aligned and not holding block, pick it up
+        return np.array([0.0, 0.0, 1.0])
 
 
 class PutDownSkill(BaseBlocks2DSkill):
@@ -230,14 +226,11 @@ class PutDownSkill(BaseBlocks2DSkill):
 class Blocks2DPerceiver(Perceiver[NDArray[np.float32]]):
     """Perceiver for blocks2d environment."""
 
-    def __init__(
-        self, robot_type: Type, block_type: Type, include_pushing_models: bool
-    ) -> None:
+    def __init__(self, robot_type: Type, block_type: Type) -> None:
         """Initialize with required types."""
         self._robot = Object("robot", robot_type)
         self._block_1 = Object("block1", block_type)
         self._block_2 = Object("block2", block_type)
-        self._include_pushing_models = include_pushing_models
         self._predicates: Blocks2DPredicates | None = None
 
     def initialize(self, predicates: Blocks2DPredicates) -> None:
@@ -304,20 +297,11 @@ class Blocks2DPerceiver(Perceiver[NDArray[np.float32]]):
         else:
             atoms.add(self.predicates["GripperEmpty"]([self._robot]))
 
-        # Add pushing-related predicates only if pushing models included
-        if self._include_pushing_models:
-            if is_target_area_blocked(block_2_x, block_width, target_x, target_width):
-                atoms.add(GroundAtom(self.predicates["TargetAreaBlocked"], []))
-                print(
-                    f"Target area IS blocked: block_2_x={block_2_x:.2f}, target_x={target_x:.2f}"
-                )
-            else:
-                atoms.add(GroundAtom(self.predicates["TargetAreaClear"], []))
-                print(
-                    f"Target area is NOT blocked: block_2_x={block_2_x:.2f}, target_x={target_x:.2f}"
-                )
-
-        print("CURRENT ATOMS:", atoms)
+        # Check target area blocking
+        if is_target_area_blocked(block_2_x, block_width, target_x, target_width):
+            atoms.add(GroundAtom(self.predicates["TargetAreaBlocked"], []))
+        else:
+            atoms.add(GroundAtom(self.predicates["TargetAreaClear"], []))
 
         return atoms
 
@@ -329,13 +313,15 @@ class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.floa
         self,
         planning_components: PlanningComponents[NDArray[np.float32]],
         seed: int | None = None,
+        render_mode: str | None = None,
     ) -> None:
         """Initialize blocks2d TAMP system."""
         super().__init__(planning_components, name="Blocks2DTAMPSystem", seed=seed)
+        self._render_mode = render_mode
 
     def _create_env(self) -> gym.Env:
         """Create base environment."""
-        return Blocks2DEnv()
+        return Blocks2DEnv(render_mode=self._render_mode)
 
     def _get_domain_name(self) -> str:
         """Get domain name."""
@@ -366,7 +352,8 @@ class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.floa
     @staticmethod
     def create_default(
         seed: int | None = None,
-        include_pushing_models: bool = True,
+        include_pushing_models: bool = False,
+        render_mode: str | None = None,
     ) -> Blocks2DTAMPSystem:
         """Factory method for creating system with default components."""
         # Create types
@@ -380,18 +367,12 @@ class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.floa
             block_not_in_target_area=Predicate("BlockNotInTargetArea", [block_type]),
             holding=Predicate("Holding", [robot_type, block_type]),
             gripper_empty=Predicate("GripperEmpty", [robot_type]),
-            target_area_clear=(
-                Predicate("TargetAreaClear", []) if include_pushing_models else None
-            ),
-            target_area_blocked=(
-                Predicate("TargetAreaBlocked", []) if include_pushing_models else None
-            ),
+            target_area_clear=Predicate("TargetAreaClear", []),
+            target_area_blocked=Predicate("TargetAreaBlocked", []),
         )
 
         # Create perceiver
-        perceiver = Blocks2DPerceiver(
-            robot_type, block_type, include_pushing_models=True
-        )
+        perceiver = Blocks2DPerceiver(robot_type, block_type)
         perceiver.initialize(predicates)
 
         # Create variables for operators
@@ -474,6 +455,7 @@ class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.floa
                 perceiver=perceiver,
             ),
             seed=seed,
+            render_mode=render_mode,
         )
 
         # Create skills with reference to components

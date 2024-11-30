@@ -2,6 +2,7 @@
 
 from typing import Any
 
+import numpy as np
 from relational_structs import GroundAtom, GroundOperator, Object, PDDLProblem
 from relational_structs.utils import parse_pddl_plan
 from task_then_motion_planning.planning import TaskThenMotionPlanningFailure
@@ -55,9 +56,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self._current_task_plan: list[GroundOperator] = []
         self._current_operator: GroundOperator | None = None
         self._current_skill: Skill | None = None
-        self._policy_active = False
+        self.policy_active = False
         self._target_atoms: set[GroundAtom] = set()
-        self._currently_satisfied: set[GroundAtom] = set()
+        self.currently_satisfied: set[GroundAtom] = set()
         self._goal: set[GroundAtom] = set()
 
     def reset(self, obs: ObsType, info: dict[str, Any]) -> ActType:
@@ -69,9 +70,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self._current_task_plan = self._create_task_plan(objects, atoms, goal)
         self._current_operator = None
         self._current_skill = None
-        self._policy_active = False
+        self.policy_active = False
         self._target_atoms = set()
-        self._currently_satisfied = set()
+        self.currently_satisfied = set()
 
         return self.step(obs, 0.0, False, False, info)
 
@@ -87,20 +88,15 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         atoms = self.system.perceiver.step(obs)
 
         # Check if policy achieved its goal
-        if self._policy_active:
-            if self._target_atoms.issubset(
+        if self.policy_active:
+            if self._target_atoms.issubset(atoms) and self.currently_satisfied.issubset(
                 atoms
-            ) and self._currently_satisfied.issubset(atoms):
+            ):
                 print("Policy successfully achieved target atoms!")
-                print(f"Current atoms before replan: {atoms}")
-                self._policy_active = False
+                self.policy_active = False
                 self._target_atoms = set()
-                self._currently_satisfied = set()
+                self.currently_satisfied = set()
                 self._replan(obs, info)
-                print(f"After replan - task plan: {self._current_task_plan}")
-                print(
-                    f"After replan - first operator: {self._current_task_plan[0] if self._current_task_plan else None}"
-                )
                 return self.step(obs, reward, terminated, truncated, info)
             return self.policy.get_action(obs)
 
@@ -113,30 +109,26 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
             # Get next operator from base domain plan
             self._current_operator = self._current_task_plan.pop(0)
-            print(f"\nAttempting to execute operator: {self._current_operator}")
-            print(f"Operator type: {self._current_operator.parent}")
 
             # Check full preconditions
             full_op = self._operator_to_full[self._current_operator.parent]
             full_ground_op = full_op.ground(tuple(self._current_operator.parameters))
-            print(f"Full operator: {full_ground_op}")
-            print(f"Full preconditions: {full_ground_op.preconditions}")
 
             # Check preconditions
             if not full_ground_op.preconditions.issubset(atoms):
                 print("Preconditions not met, activating policy")
-                self._policy_active = True
+                self.policy_active = True
 
                 # Track satisfied vs target preconditions
-                self._currently_satisfied = full_ground_op.preconditions & atoms
+                self.currently_satisfied = full_ground_op.preconditions & atoms
                 self._target_atoms = full_ground_op.preconditions - atoms
 
-                # Configure env with preconditions to maintain
-                if hasattr(self.system.wrapped_env, "update_preconditions"):
-                    self.system.wrapped_env.update_preconditions(
-                        full_op, self._currently_satisfied
-                    )
-                return self.policy.get_action(obs)
+                # Return no-op action that maintains gripper state
+                action = np.zeros_like(self.system.env.action_space.sample())
+                # # If action includes gripper control (last dimension in blocks2d)
+                # if len(action) > 2:  # Assumes at least x,y movement dims
+                #     action[-1] = obs[10]  # Maintain current gripper state
+                return action
 
             # Get skill for the operator from the base domain
             self._current_skill = self._get_skill(self._current_operator)
@@ -173,8 +165,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
     def _get_skill(self, operator: GroundOperator) -> Skill:
         """Get skill that can execute operator."""
         skills = [s for s in self.system.skills if s.can_execute(operator)]
-        print(f"Available skills: {self.system.skills}")
-        print(f"Operator to find skill for: {operator}")
         if not skills:
             raise TaskThenMotionPlanningFailure(
                 f"No skill found for operator {operator.name}"

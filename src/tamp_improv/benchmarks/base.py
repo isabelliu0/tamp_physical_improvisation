@@ -47,7 +47,7 @@ class BaseTAMPSystem(Generic[ObsType, ActType], ABC):
     def __init__(
         self,
         planning_components: PlanningComponents[ObsType],
-        name: str,
+        name: str = "TAMPSystem",
         seed: int | None = None,
     ) -> None:
         """Initialize TAMP system.
@@ -105,6 +105,7 @@ class BaseTAMPSystem(Generic[ObsType, ActType], ABC):
     def _get_domain_name(self) -> str:
         """Get domain name."""
 
+    @abstractmethod
     def get_domain(self, include_extra_preconditions: bool = False) -> PDDLDomain:
         """Get PDDL domain with or without extra preconditions for skill
         learning."""
@@ -121,7 +122,10 @@ class ImprovisationalTAMPSystem(BaseTAMPSystem[ObsType, ActType], ABC):
         self,
         planning_components: PlanningComponents[ObsType],
         seed: int | None = None,
+        render_mode: str | None = None,
     ) -> None:
+        """Initialize improvisational TAMP system."""
+        self._render_mode = render_mode
         super().__init__(planning_components, seed=seed)
         self.wrapped_env = self._create_wrapped_env(planning_components)
         if seed is not None:

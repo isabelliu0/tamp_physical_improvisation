@@ -1,6 +1,5 @@
 """Test base random approach."""
 
-import numpy as np
 import pytest
 
 from tamp_improv.approaches.random import RandomApproach

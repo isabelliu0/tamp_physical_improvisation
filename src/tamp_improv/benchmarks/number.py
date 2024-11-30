@@ -121,10 +121,14 @@ class BaseNumberTAMPSystem(BaseTAMPSystem[int, int]):
     """Base TAMP system for number environment."""
 
     def __init__(
-        self, planning_components: PlanningComponents[int], seed: int | None = None
+        self,
+        planning_components: PlanningComponents[int],
+        seed: int | None = None,
+        render_mode: str | None = None,
     ) -> None:
         """Initialize number TAMP system."""
         super().__init__(planning_components, name="NumberTAMPSystem", seed=seed)
+        self._render_mode = render_mode
 
     def _create_env(self) -> gym.Env:
         """Create base number environment."""
@@ -138,8 +142,9 @@ class BaseNumberTAMPSystem(BaseTAMPSystem[int, int]):
         """Get domain with or without transition preconditions.
 
         Args:
-            include_extra_preconditions: If True, include the CanProgress precondition to switch off improvisational models.
-                                        If False, improvisational models for TAMP are enabled.
+            include_extra_preconditions: If True, include the CanProgress precondition
+            to switch off improvisational models. If False, improvisational models for
+            TAMP are enabled.
         """
         if include_extra_preconditions:
             return PDDLDomain(
@@ -159,6 +164,7 @@ class BaseNumberTAMPSystem(BaseTAMPSystem[int, int]):
     def create_default(
         seed: int | None = None,
         switch_off_improvisational_models: bool = False,
+        render_mode: str | None = None,
     ) -> NumberTAMPSystem:
         """Factory method for creating system with default components."""
         # Create state type
@@ -236,6 +242,7 @@ class BaseNumberTAMPSystem(BaseTAMPSystem[int, int]):
                 perceiver=perceiver,
             ),
             seed=seed,
+            render_mode=render_mode,
         )
 
         # Create skills with reference to components
