@@ -1,6 +1,5 @@
 """Training utilities for improvisational approaches."""
 
-from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TypeVar, Union
@@ -112,11 +111,8 @@ def collect_training_data(
 
         for _ in range(config.max_steps):
             # If we encounter a state where preconditions aren't met
-            if approach.policy_active:
-                if isinstance(obs, int):
-                    training_states.append(obs)
-                else:
-                    training_states.append(deepcopy(obs))
+            if approach.policy_active and approach.prev_obs is not None:
+                training_states.append(approach.prev_obs)
                 training_preconditions.append(approach.currently_satisfied)
                 break
 
@@ -139,22 +135,30 @@ def run_evaluation_episode(
     approach: ImprovisationalTAMPApproach[ObsType, ActType],
     policy_cls: type[Policy],
     config: TrainingConfig,
+    is_loaded_policy: bool = False,
 ) -> tuple[float, int, bool]:
     """Run single evaluation episode."""
-    video_folder = Path(f"videos/{system.name}_{policy_cls.__name__}_eval")
+    if is_loaded_policy:
+        video_folder = Path(f"videos/{system.name}_(Loaded){policy_cls.__name__}_eval")
+    else:
+        video_folder = Path(f"videos/{system.name}_{policy_cls.__name__}_eval")
     video_folder.mkdir(parents=True, exist_ok=True)
     # # Uncomment to render evaluation episodes
-    # render_mode = getattr(system.env, 'render_mode', None)
+    # render_mode = getattr(system.env, "render_mode", None)
     # can_render = render_mode is not None
     # if config.render and can_render:
     #     from gymnasium.wrappers import RecordVideo
+    #     from copy import deepcopy
 
     #     # Record only the base environment, not the planning environment
     #     recording_env = deepcopy(system.env)
+
     #     system.env = RecordVideo(
     #         recording_env,
     #         str(video_folder),
-    #         episode_trigger=lambda x: True
+    #         episode_trigger=lambda _: True,
+    #         disable_logger=True,
+    #         step_trigger=None,
     #     )
 
     obs, info = system.reset()
@@ -179,9 +183,22 @@ def train_and_evaluate(
     is_loaded_policy: bool = False,
 ) -> Metrics:
     """Train and evaluate a policy on a system."""
-    # Create policy and approach
     print(f"\nInitializing training for {system.name}...")
+
+    # Create policy and approach
     policy = policy_cls(seed=config.seed)
+
+    if is_loaded_policy:
+        print("Loading saved policy...")
+        policy_path = Path(config.save_dir) / f"{system.name}_{policy_cls.__name__}"
+        try:
+            policy.load(str(policy_path))
+            print("Policy loaded successfully")
+        except Exception as e:
+            print(f"Error loading policy: {e}")
+            return Metrics(success_rate=0.0, avg_episode_length=0.0, avg_reward=0.0)
+
+    # Create approach with loaded/new policy
     approach = ImprovisationalTAMPApproach(system, policy, seed=config.seed)
 
     # Load or collect training data
@@ -192,17 +209,18 @@ def train_and_evaluate(
             print("\nTraining policy...")
 
             # # Uncomment to render training episodes
-            # render_mode = getattr(system.wrapped_env, 'render_mode', None)
+            # render_mode = getattr(system.wrapped_env, "render_mode", None)
             # can_render = render_mode is not None
             # if config.record_training and can_render:
-            #    from gymnasium.wrappers import RecordVideo
-            #    video_folder = Path(f"videos/{system.name}_{policy_cls.__name__}_train")
-            #    video_folder.mkdir(parents=True, exist_ok=True)
-            #    system.wrapped_env = RecordVideo(
-            #        system.wrapped_env,
-            #        str(video_folder),
-            #        episode_trigger=lambda x: x % config.training_record_interval == 0
-            #    )
+            #     from gymnasium.wrappers import RecordVideo
+
+            #     video_folder =Path(f"videos/{system.name}_{policy_cls.__name__}_train")
+            #     video_folder.mkdir(parents=True, exist_ok=True)
+            #     system.wrapped_env = RecordVideo(
+            #         system.wrapped_env,
+            #         str(video_folder),
+            #         episode_trigger=lambda x: x % config.training_record_interval == 0,
+            #     )
 
             policy.train(system.wrapped_env, train_data)
 
@@ -225,7 +243,11 @@ def train_and_evaluate(
     for episode in range(config.num_episodes):
         print(f"\nEvaluation Episode {episode + 1}/{config.num_episodes}")
         reward, length, success = run_evaluation_episode(
-            system, approach, type(policy), config
+            system,
+            approach,
+            type(policy),
+            config,
+            is_loaded_policy=is_loaded_policy,
         )
         rewards.append(reward)
         lengths.append(length)

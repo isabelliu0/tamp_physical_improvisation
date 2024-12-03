@@ -2,7 +2,6 @@
 
 from typing import Any
 
-import numpy as np
 from relational_structs import GroundAtom, GroundOperator, Object, PDDLProblem
 from relational_structs.utils import parse_pddl_plan
 from task_then_motion_planning.planning import TaskThenMotionPlanningFailure
@@ -41,9 +40,16 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         # Initialize policy with wrapped environment
         policy.initialize(system.wrapped_env)
 
-        # Get base and full domains
-        self.base_domain = system.get_domain(include_extra_preconditions=False)
-        self.full_domain = system.get_domain(include_extra_preconditions=True)
+        # Get domains by temporarily changing the active operators flag
+        orig_flag = system.components.full_operators_active
+
+        system.components.full_operators_active = False
+        self.base_domain = system.get_domain()
+
+        system.components.full_operators_active = True
+        self.full_domain = system.get_domain()
+
+        system.components.full_operators_active = orig_flag
 
         # Map operators
         self._operator_to_full = {}
@@ -60,6 +66,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self._target_atoms: set[GroundAtom] = set()
         self.currently_satisfied: set[GroundAtom] = set()
         self._goal: set[GroundAtom] = set()
+        self.prev_obs: ObsType | None = None
 
     def reset(self, obs: ObsType, info: dict[str, Any]) -> ActType:
         """Reset approach with initial observation."""
@@ -73,6 +80,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self.policy_active = False
         self._target_atoms = set()
         self.currently_satisfied = set()
+        self.prev_obs = None
 
         return self.step(obs, 0.0, False, False, info)
 
@@ -85,6 +93,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         info: dict[str, Any],
     ) -> ActType:
         """Step approach with new observation."""
+        # Update state info for next iteration
+        self.prev_obs = obs
         atoms = self.system.perceiver.step(obs)
 
         # Check if policy achieved its goal
@@ -123,12 +133,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 self.currently_satisfied = full_ground_op.preconditions & atoms
                 self._target_atoms = full_ground_op.preconditions - atoms
 
-                # Return no-op action that maintains gripper state
-                action = np.zeros_like(self.system.env.action_space.sample())
-                # # If action includes gripper control (last dimension in blocks2d)
-                # if len(action) > 2:  # Assumes at least x,y movement dims
-                #     action[-1] = obs[10]  # Maintain current gripper state
-                return action
+                return self.policy.get_action(obs)
 
             # Get skill for the operator from the base domain
             self._current_skill = self._get_skill(self._current_operator)

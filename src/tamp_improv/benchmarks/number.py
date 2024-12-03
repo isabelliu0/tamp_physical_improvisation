@@ -138,7 +138,7 @@ class BaseNumberTAMPSystem(BaseTAMPSystem[int, int]):
         """Get domain name."""
         return "number-domain"
 
-    def get_domain(self, include_extra_preconditions: bool = False) -> PDDLDomain:
+    def get_domain(self) -> PDDLDomain:
         """Get domain with or without transition preconditions.
 
         Args:
@@ -146,16 +146,9 @@ class BaseNumberTAMPSystem(BaseTAMPSystem[int, int]):
             to switch off improvisational models. If False, improvisational models for
             TAMP are enabled.
         """
-        if include_extra_preconditions:
-            return PDDLDomain(
-                self._get_domain_name(),
-                self.components.full_operators,
-                self.components.predicate_container.as_set(),
-                self.components.types,
-            )
         return PDDLDomain(
             self._get_domain_name(),
-            self.components.base_operators,
+            self.components.operators,
             self.components.predicate_container.as_set(),
             self.components.types,
         )
@@ -225,11 +218,6 @@ class BaseNumberTAMPSystem(BaseTAMPSystem[int, int]):
             ),
         }
 
-        # Select current operators based on flag
-        operators = (
-            full_operators if switch_off_improvisational_models else base_operators
-        )
-
         # Create system
         system = NumberTAMPSystem(
             PlanningComponents(
@@ -237,7 +225,7 @@ class BaseNumberTAMPSystem(BaseTAMPSystem[int, int]):
                 predicate_container=predicates,
                 base_operators=base_operators,
                 full_operators=full_operators,
-                operators=operators,
+                full_operators_active=switch_off_improvisational_models,
                 skills=set(),
                 perceiver=perceiver,
             ),

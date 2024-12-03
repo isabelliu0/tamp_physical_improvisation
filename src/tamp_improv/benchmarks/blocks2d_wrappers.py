@@ -109,6 +109,7 @@ class Blocks2DEnvWrapper(gym.Env):
 
             print(f"Training episode {self.current_training_idx + 1}")
             print(f"Using state with robot at: {current_state[0:2]}")
+            print(f"Using state with gripper status: {current_state[10]}")
             print(f"Maintaining preconditions: {current_preconditions}")
 
             # Get positions from current state
@@ -223,8 +224,8 @@ class Blocks2DEnvWrapper(gym.Env):
         collision_penalty = -0.1 if self._check_collision(obs) else 0.0
 
         # Success case: cleared area while maintaining preconditions
-        if not is_blocked and precondition_penalty == 0.0:
-            reward = 10.0
+        if not is_blocked and np.isclose(precondition_penalty, 0.0, atol=1e-3):
+            reward = 30.0
         else:
             reward = (
                 -0.1  # Base step penalty
@@ -250,7 +251,7 @@ class Blocks2DEnvWrapper(gym.Env):
     ) -> float:
         """Calculate penalty for violating operator preconditions."""
         if not self._check_preconditions(obs):
-            return -1.0
+            return -5.0
         return 0.0
 
     def _calculate_distance_reward(self, obs: NDArray[np.float32]) -> float:

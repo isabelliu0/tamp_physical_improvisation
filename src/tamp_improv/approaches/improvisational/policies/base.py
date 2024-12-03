@@ -1,5 +1,7 @@
 """Base policy interface for improvisational approaches."""
 
+from __future__ import annotations
+
 import json
 import pickle
 from abc import ABC, abstractmethod
@@ -51,7 +53,7 @@ class TrainingData:
             json.dump(self.config, f)
 
     @classmethod
-    def load(cls, path: Path) -> "TrainingData":
+    def load(cls, path: Path) -> TrainingData:
         """Load training data from disk."""
         # Load states
         states_path = path / "states.npy"

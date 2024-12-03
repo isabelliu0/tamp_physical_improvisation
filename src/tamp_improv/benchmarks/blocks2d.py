@@ -327,24 +327,16 @@ class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.floa
         """Get domain name."""
         return "blocks2d-domain"
 
-    def get_domain(self, include_extra_preconditions: bool = True) -> PDDLDomain:
+    def get_domain(self) -> PDDLDomain:
         """Get domain with or without pushing preconditions.
 
         Args:
             include_extra_preconditions: If True, include pushing models/preconditions.
                                         If False, use base operators.
         """
-        # Create planning models with appropriate flags
-        if include_extra_preconditions:
-            return PDDLDomain(
-                self._get_domain_name(),
-                self.components.full_operators,
-                self.components.predicate_container.as_set(),
-                self.components.types,
-            )
         return PDDLDomain(
             self._get_domain_name(),
-            self.components.base_operators,
+            self.components.operators,
             self.components.predicate_container.as_set(),
             self.components.types,
         )
@@ -440,9 +432,6 @@ class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.floa
             ),
         }
 
-        # Select current operators based on flag
-        operators = full_operators if include_pushing_models else base_operators
-
         # Create system
         system = Blocks2DTAMPSystem(
             PlanningComponents(
@@ -450,7 +439,7 @@ class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.floa
                 predicate_container=predicates,
                 base_operators=base_operators,
                 full_operators=full_operators,
-                operators=operators,
+                full_operators_active=include_pushing_models,
                 skills=set(),
                 perceiver=perceiver,
             ),

@@ -20,7 +20,7 @@ def base_config():
     """Test configuration."""
     return TrainingConfig(
         seed=42,
-        num_episodes=2,
+        num_episodes=5,
         max_steps=50,
         render=False,
     )
@@ -49,6 +49,7 @@ def base_config():
 # pylint: disable=redefined-outer-name
 def test_mpc_approach(system_cls, mpc_config, base_config):
     """Test MPC improvisational approach."""
+    print("\n=== Testing MPC ===")
     system = system_cls.create_default(
         seed=42, render_mode="rgb_array" if base_config.render else None
     )
@@ -77,7 +78,7 @@ def test_rl_approach(system_cls, base_config):
         render=base_config.render,
         # RL-specific settings
         collect_episodes=50,
-        episodes_per_scenario=5,
+        episodes_per_scenario=2,
         force_collect=False,
         record_training=False,
         training_record_interval=50,
@@ -85,7 +86,7 @@ def test_rl_approach(system_cls, base_config):
         save_dir="trained_policies",
     )
 
-    print("\n=== Testing Initial Training ===")
+    print("\n=== Testing RL Initial Training ===")
     # Test training from scratch
     system = system_cls.create_default(
         seed=42, render_mode="rgb_array" if rl_config.render else None
@@ -95,7 +96,7 @@ def test_rl_approach(system_cls, base_config):
 
     metrics = train_and_evaluate(system, type(policy), rl_config)
 
-    print("\nInitial Training Results:")
+    print("\nRL Initial Training Results:")
     print(f"Success Rate: {metrics.success_rate:.2%}")
     print(f"Average Episode Length: {metrics.avg_episode_length:.2f}")
     print(f"Average Reward: {metrics.avg_reward:.2f}")
@@ -105,7 +106,7 @@ def test_rl_approach(system_cls, base_config):
     if not policy_file.exists():
         pytest.skip(f"Policy file not found at {policy_file}")
 
-    print("\n=== Testing Loaded Policy ===")
+    print("\n=== Testing RL Loaded Policy ===")
     loaded_policy = RLPolicy(seed=42)
     loaded_policy.load(str(policy_file))
     _ = ImprovisationalTAMPApproach(system, loaded_policy, seed=42)
@@ -114,7 +115,7 @@ def test_rl_approach(system_cls, base_config):
         system, type(loaded_policy), rl_config, is_loaded_policy=True
     )
 
-    print("\nLoaded Policy Results:")
+    print("\nRL Loaded Policy Results:")
     print(f"Success Rate: {loaded_metrics.success_rate:.2%}")
     print(f"Average Episode Length: {loaded_metrics.avg_episode_length:.2f}")
     print(f"Average Reward: {loaded_metrics.avg_reward:.2f}")

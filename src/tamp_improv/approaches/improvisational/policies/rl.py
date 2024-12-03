@@ -176,7 +176,7 @@ class RLPolicy(Policy[ObsType, ActType]):
         else:
             np_obs = np.array(obs)
 
-        action, _ = self.model.predict(np_obs)
+        action, _ = self.model.predict(np_obs, deterministic=True)
 
         # Convert action back
         if isinstance(obs, (int, float)):

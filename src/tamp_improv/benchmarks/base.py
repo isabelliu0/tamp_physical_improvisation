@@ -28,11 +28,18 @@ class PlanningComponents(Generic[ObsType]):
 
     types: set[Type]
     predicate_container: PredicateContainer
-    base_operators: set[LiftedOperator]  # Without extra preconditions
-    full_operators: set[LiftedOperator]  # With extra preconditions
-    operators: set[LiftedOperator]  # Currently actively set
+    base_operators: set[LiftedOperator]
+    full_operators: set[LiftedOperator]
+    full_operators_active: bool
     skills: set[Skill]
     perceiver: Perceiver[ObsType]
+
+    @property
+    def operators(self) -> set[LiftedOperator]:
+        """Get the currently active operator set."""
+        return (
+            self.full_operators if self.full_operators_active else self.base_operators
+        )
 
 
 class BaseTAMPSystem(Generic[ObsType, ActType], ABC):
@@ -106,7 +113,7 @@ class BaseTAMPSystem(Generic[ObsType, ActType], ABC):
         """Get domain name."""
 
     @abstractmethod
-    def get_domain(self, include_extra_preconditions: bool = False) -> PDDLDomain:
+    def get_domain(self) -> PDDLDomain:
         """Get PDDL domain with or without extra preconditions for skill
         learning."""
 

@@ -106,6 +106,9 @@ class MPCPolicy(Policy[ObsType, ActType], Generic[ObsType, ActType]):
         # Pick best trajectory
         best_idx = np.argmax(scores)
         self._last_solution = candidates[best_idx]
+        assert isinstance(
+            self._last_solution, np.ndarray
+        ), "Expected numpy array trajectory"
         return self._last_solution[0]
 
     def _get_initialization(self) -> NDArray:
