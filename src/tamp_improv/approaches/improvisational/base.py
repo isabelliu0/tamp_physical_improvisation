@@ -1,4 +1,4 @@
-"""Core improvisational TAMP approach."""
+"""Base improvisational TAMP approach."""
 
 from typing import Any
 
@@ -11,13 +11,14 @@ from tomsutils.pddl_planning import run_pddl_planner
 from tamp_improv.approaches.base import (
     ActType,
     BaseApproach,
-    ImprovisationalPolicy,
+    ImprovisationalTAMPSystem,
     ObsType,
 )
+from tamp_improv.approaches.improvisational.policies.base import Policy
 
 
 class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
-    """Base class for improvisational TAMP approaches.
+    """General improvisational TAMP approach.
 
     This approach combines task-and-motion planning with learned
     policies for handling situations where operator preconditions aren't
@@ -26,43 +27,60 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
     def __init__(
         self,
-        system,
-        policy: ImprovisationalPolicy[ObsType, ActType],
+        system: ImprovisationalTAMPSystem[ObsType, ActType],
+        policy: Policy[ObsType, ActType],
         seed: int,
         planner_id: str = "pyperplan",
     ) -> None:
-        """Initialize approach.
-
-        Args:
-            system: The TAMP system to use
-            policy: The improvisational policy to use
-            seed: Random seed
-            planner_id: ID of PDDL planner to use
-        """
+        """Initialize approach."""
         super().__init__(system, seed)
         self.policy = policy
         self.planner_id = planner_id
+
+        # Initialize policy with wrapped environment
+        policy.initialize(system.wrapped_env)
+
+        # Get domains by temporarily changing the active operators flag
+        orig_flag = system.components.full_operators_active
+
+        system.components.full_operators_active = False
+        self.base_domain = system.get_domain()
+
+        system.components.full_operators_active = True
+        self.full_domain = system.get_domain()
+
+        system.components.full_operators_active = orig_flag
+
+        # Map operators
+        self._operator_to_full = {}
+        for base_op in self.base_domain.operators:
+            for full_op in self.full_domain.operators:
+                if base_op.name == full_op.name:
+                    self._operator_to_full[base_op] = full_op
 
         # Initialize planning state
         self._current_task_plan: list[GroundOperator] = []
         self._current_operator: GroundOperator | None = None
         self._current_skill: Skill | None = None
-        self._policy_active = False
+        self.policy_active = False
         self._target_atoms: set[GroundAtom] = set()
+        self.currently_satisfied: set[GroundAtom] = set()
         self._goal: set[GroundAtom] = set()
+        self.prev_obs: ObsType | None = None
 
     def reset(self, obs: ObsType, info: dict[str, Any]) -> ActType:
         """Reset approach with initial observation."""
-        # Get initial state
         objects, atoms, goal = self.system.perceiver.reset(obs, info)
         self._goal = goal
 
         # Create initial plan
-        self._current_task_plan = self._create_task_plan(objects, atoms, self._goal)
+        self._current_task_plan = self._create_task_plan(objects, atoms, goal)
         self._current_operator = None
         self._current_skill = None
-        self._policy_active = False
+        self.policy_active = False
         self._target_atoms = set()
+        self.currently_satisfied = set()
+        self.prev_obs = None
 
         return self.step(obs, 0.0, False, False, info)
 
@@ -75,18 +93,22 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         info: dict[str, Any],
     ) -> ActType:
         """Step approach with new observation."""
-        # Get current state
+        # Update state info for next iteration
+        self.prev_obs = obs
         atoms = self.system.perceiver.step(obs)
 
         # Check if policy achieved its goal
-        if self._policy_active:
-            if self._target_atoms.issubset(atoms):
+        if self.policy_active:
+            if self._target_atoms.issubset(atoms) and self.currently_satisfied.issubset(
+                atoms
+            ):
                 print("Policy successfully achieved target atoms!")
-                self._policy_active = False
+                self.policy_active = False
                 self._target_atoms = set()
-                self._replan(obs, info)  # replan from current state
-            else:
-                return self.policy.get_action(obs)
+                self.currently_satisfied = set()
+                self._replan(obs, info)
+                return self.step(obs, reward, terminated, truncated, info)
+            return self.policy.get_action(obs)
 
         # Get new operator if needed
         if self._current_operator is None or self._operator_completed(
@@ -95,17 +117,25 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             if not self._current_task_plan:
                 raise TaskThenMotionPlanningFailure("Empty task plan")
 
+            # Get next operator from base domain plan
             self._current_operator = self._current_task_plan.pop(0)
 
+            # Check full preconditions
+            full_op = self._operator_to_full[self._current_operator.parent]
+            full_ground_op = full_op.ground(tuple(self._current_operator.parameters))
+
             # Check preconditions
-            if not self._check_preconditions(self._current_operator, atoms):
-                self._policy_active = True
-                self._target_atoms = self._get_full_preconditions(
-                    self._current_operator
-                )
+            if not full_ground_op.preconditions.issubset(atoms):
+                print("Preconditions not met, activating policy")
+                self.policy_active = True
+
+                # Track satisfied vs target preconditions
+                self.currently_satisfied = full_ground_op.preconditions & atoms
+                self._target_atoms = full_ground_op.preconditions - atoms
+
                 return self.policy.get_action(obs)
 
-            # Get skill for operator
+            # Get skill for the operator from the base domain
             self._current_skill = self._get_skill(self._current_operator)
             self._current_skill.reset(self._current_operator)
 
@@ -119,25 +149,15 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         goal: set[GroundAtom],
     ) -> list[GroundOperator]:
         """Create task plan to achieve goal."""
-        domain = self.system.get_domain()
-        problem = PDDLProblem(domain.name, domain.name, objects, init_atoms, goal)
-        plan_str = run_pddl_planner(str(domain), str(problem), planner=self.planner_id)
+        problem = PDDLProblem(
+            self.base_domain.name, self.base_domain.name, objects, init_atoms, goal
+        )
+        plan_str = run_pddl_planner(
+            str(self.base_domain), str(problem), planner=self.planner_id
+        )
         if plan_str is None:
             raise TaskThenMotionPlanningFailure("No plan found")
-        return parse_pddl_plan(plan_str, domain, problem)
-
-    def _check_preconditions(
-        self, operator: GroundOperator, atoms: set[GroundAtom]
-    ) -> bool:
-        """Check if operator preconditions are satisfied."""
-        full_preconditions = self._get_full_preconditions(operator)
-        return full_preconditions.issubset(atoms)
-
-    def _get_full_preconditions(self, operator: GroundOperator) -> set[GroundAtom]:
-        """Get full preconditions for operator including improvisation
-        cases."""
-        # Override in subclasses if needed
-        return operator.preconditions
+        return parse_pddl_plan(plan_str, self.base_domain, problem)
 
     def _operator_completed(
         self, operator: GroundOperator, atoms: set[GroundAtom]

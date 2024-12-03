@@ -98,13 +98,13 @@ class Blocks2DEnv(gym.Env):
 
         self.robot_position = options.get(
             "robot_pos", np.array([0.5, 1.0], dtype=np.float32)
-        )
+        ).copy()
         self.block_1_position = options.get(
             "block_1_pos", np.array([0.0, 0.0], dtype=np.float32)
-        )
+        ).copy()
         self.block_2_position = options.get(
             "block_2_pos", np.array([0.5, 0.0], dtype=np.float32)
-        )
+        ).copy()
         self.gripper_status = np.float32(0.0)
 
         return self._get_obs(), self._get_info()

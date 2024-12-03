@@ -28,9 +28,18 @@ class PlanningComponents(Generic[ObsType]):
 
     types: set[Type]
     predicate_container: PredicateContainer
-    operators: set[LiftedOperator]
+    base_operators: set[LiftedOperator]
+    full_operators: set[LiftedOperator]
+    full_operators_active: bool
     skills: set[Skill]
     perceiver: Perceiver[ObsType]
+
+    @property
+    def operators(self) -> set[LiftedOperator]:
+        """Get the currently active operator set."""
+        return (
+            self.full_operators if self.full_operators_active else self.base_operators
+        )
 
 
 class BaseTAMPSystem(Generic[ObsType, ActType], ABC):
@@ -45,6 +54,7 @@ class BaseTAMPSystem(Generic[ObsType, ActType], ABC):
     def __init__(
         self,
         planning_components: PlanningComponents[ObsType],
+        name: str = "TAMPSystem",
         seed: int | None = None,
     ) -> None:
         """Initialize TAMP system.
@@ -53,8 +63,9 @@ class BaseTAMPSystem(Generic[ObsType, ActType], ABC):
             planning_components: The agent's planning model/components
             seed: Random seed for environment
         """
-        self.env = self._create_env()
+        self.name = name
         self.components = planning_components
+        self.env = self._create_env()
         if seed is not None:
             self.env.reset(seed=seed)
 
@@ -67,6 +78,16 @@ class BaseTAMPSystem(Generic[ObsType, ActType], ABC):
     def predicates(self) -> set[Predicate]:
         """Get PDDL predicates."""
         return self.components.predicate_container.as_set()
+
+    @property
+    def base_operators(self) -> set[LiftedOperator]:
+        """Get PDDL operators without extra preconditions."""
+        return self.components.base_operators
+
+    @property
+    def full_operators(self) -> set[LiftedOperator]:
+        """Get PDDL operators with extra preconditions."""
+        return self.components.full_operators
 
     @property
     def operators(self) -> set[LiftedOperator]:
@@ -91,29 +112,31 @@ class BaseTAMPSystem(Generic[ObsType, ActType], ABC):
     def _get_domain_name(self) -> str:
         """Get domain name."""
 
+    @abstractmethod
     def get_domain(self) -> PDDLDomain:
-        """Get PDDL domain."""
-        return PDDLDomain(
-            self._get_domain_name(), self.operators, self.predicates, self.types
-        )
+        """Get PDDL domain with or without extra preconditions for skill
+        learning."""
 
     def reset(self, seed: int | None = None) -> tuple[ObsType, dict[str, Any]]:
         """Reset environment."""
         return self.env.reset(seed=seed)
 
 
-class BaseSkillLearningSys(BaseTAMPSystem[ObsType, ActType], ABC):
-    """Base class for skill learning systems."""
+class ImprovisationalTAMPSystem(BaseTAMPSystem[ObsType, ActType], ABC):
+    """Base class for systems that support improvisational policies."""
 
     def __init__(
         self,
         planning_components: PlanningComponents[ObsType],
         seed: int | None = None,
+        render_mode: str | None = None,
     ) -> None:
+        """Initialize improvisational TAMP system."""
+        self._render_mode = render_mode
         super().__init__(planning_components, seed=seed)
-        self.wrapper_env = self._create_wrapped_env(planning_components)
+        self.wrapped_env = self._create_wrapped_env(planning_components)
         if seed is not None:
-            self.wrapper_env.reset(seed=seed)
+            self.wrapped_env.reset(seed=seed)
 
     @abstractmethod
     def _create_wrapped_env(self, components: PlanningComponents[ObsType]) -> gym.Env:
