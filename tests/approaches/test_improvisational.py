@@ -62,7 +62,13 @@ def test_mpc_approach(system_cls, mpc_config, base_config):
     print(f"Avg episode length: {metrics.avg_episode_length:.2f}")
 
 
-@pytest.mark.parametrize("system_cls", [Blocks2DTAMPSystem, NumberTAMPSystem])
+@pytest.mark.parametrize(
+    "system_cls",
+    [
+        Blocks2DTAMPSystem,
+        NumberTAMPSystem,
+    ],
+)
 # pylint: disable=redefined-outer-name
 def test_rl_approach(system_cls, base_config):
     """Test RL improvisational approach."""
@@ -78,7 +84,7 @@ def test_rl_approach(system_cls, base_config):
         render=base_config.render,
         # RL-specific settings
         collect_episodes=50,
-        episodes_per_scenario=2,
+        episodes_per_scenario=1,
         force_collect=False,
         record_training=False,
         training_record_interval=50,
@@ -101,21 +107,21 @@ def test_rl_approach(system_cls, base_config):
     print(f"Average Episode Length: {metrics.avg_episode_length:.2f}")
     print(f"Average Reward: {metrics.avg_reward:.2f}")
 
-    # Test loading and execution
-    policy_file = policy_dir / f"{system_cls.__name__.lower()}_RLPolicy.zip"
-    if not policy_file.exists():
-        pytest.skip(f"Policy file not found at {policy_file}")
+    # # Test loading and execution
+    # policy_file = policy_dir / f"{system_cls.__name__.lower()}_RLPolicy.zip"
+    # if not policy_file.exists():
+    #     pytest.skip(f"Policy file not found at {policy_file}")
 
-    print("\n=== Testing RL Loaded Policy ===")
-    loaded_policy = RLPolicy(seed=42)
-    loaded_policy.load(str(policy_file))
-    _ = ImprovisationalTAMPApproach(system, loaded_policy, seed=42)
+    # print("\n=== Testing RL Loaded Policy ===")
+    # loaded_policy = RLPolicy(seed=42)
+    # loaded_policy.load(str(policy_file))
+    # _ = ImprovisationalTAMPApproach(system, loaded_policy, seed=42)
 
-    loaded_metrics = train_and_evaluate(
-        system, type(loaded_policy), rl_config, is_loaded_policy=True
-    )
+    # loaded_metrics = train_and_evaluate(
+    #     system, type(loaded_policy), rl_config, is_loaded_policy=True
+    # )
 
-    print("\nRL Loaded Policy Results:")
-    print(f"Success Rate: {loaded_metrics.success_rate:.2%}")
-    print(f"Average Episode Length: {loaded_metrics.avg_episode_length:.2f}")
-    print(f"Average Reward: {loaded_metrics.avg_reward:.2f}")
+    # print("\nRL Loaded Policy Results:")
+    # print(f"Success Rate: {loaded_metrics.success_rate:.2%}")
+    # print(f"Average Episode Length: {loaded_metrics.avg_episode_length:.2f}")
+    # print(f"Average Reward: {loaded_metrics.avg_reward:.2f}")

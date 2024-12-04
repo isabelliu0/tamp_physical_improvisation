@@ -26,10 +26,7 @@ from tamp_improv.benchmarks.base import (
     PlanningComponents,
 )
 from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv, is_block_1_in_target_area
-from tamp_improv.benchmarks.blocks2d_wrappers import (
-    Blocks2DEnvWrapper,
-    is_target_area_blocked,
-)
+from tamp_improv.benchmarks.wrappers import ImprovWrapper
 
 
 @dataclass
@@ -129,10 +126,10 @@ class ClearTargetAreaSkill(BaseBlocks2DSkill):
             # Move to pushing position
             dx = np.clip(target_robot_x - robot_x, -0.1, 0.1)
             dy = np.clip(block_2_y - robot_y, -0.1, 0.1)
-            return np.array([dx, dy, 0.0])
+            return np.array([dx, dy, obs[10]])
 
         # Push
-        return np.array([push_direction, 0.0, 0.0])
+        return np.array([push_direction, 0.0, obs[10]])
 
 
 class PickUpSkill(BaseBlocks2DSkill):
@@ -298,12 +295,41 @@ class Blocks2DPerceiver(Perceiver[NDArray[np.float32]]):
             atoms.add(self.predicates["GripperEmpty"]([self._robot]))
 
         # Check target area blocking
-        if is_target_area_blocked(block_2_x, block_width, target_x, target_width):
+        if self._is_target_area_blocked(block_2_x, block_width, target_x, target_width):
             atoms.add(GroundAtom(self.predicates["TargetAreaBlocked"], []))
         else:
             atoms.add(GroundAtom(self.predicates["TargetAreaClear"], []))
 
         return atoms
+
+    def _is_target_area_blocked(
+        self,
+        block_x: float,
+        block_width: float,
+        target_x: float,
+        target_width: float,
+    ) -> bool:
+        """Check if block 2 blocks the target area.
+
+        Block 2 is considered blocking if it overlaps with the target
+        area enough that another block cannot fit in the remaining
+        space.
+        """
+        target_left = target_x - target_width / 2
+        target_right = target_x + target_width / 2
+        block_left = block_x - block_width / 2
+        block_right = block_x + block_width / 2
+
+        # If no horizontal overlap, not blocking
+        if block_right <= target_left or block_left >= target_right:
+            return False
+
+        # Calculate remaining free width
+        overlap_width = min(block_right, target_right) - max(block_left, target_left)
+        free_width = target_width - overlap_width
+
+        # Block needs at least its width to fit
+        return free_width < block_width
 
 
 class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.float32]]):
@@ -472,4 +498,4 @@ class Blocks2DTAMPSystem(
         self, components: PlanningComponents[NDArray[np.float32]]
     ) -> gym.Env:
         """Create wrapped environment for training."""
-        return Blocks2DEnvWrapper(self.env, perceiver=components.perceiver)
+        return ImprovWrapper(self.env, perceiver=components.perceiver)

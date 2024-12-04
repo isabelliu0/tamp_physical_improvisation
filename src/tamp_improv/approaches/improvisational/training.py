@@ -1,10 +1,12 @@
 """Training utilities for improvisational approaches."""
 
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, TypeVar, Union
+from typing import Any, TypeVar, Union, cast
 
 import numpy as np
+from gymnasium.wrappers import RecordVideo
 
 from tamp_improv.approaches.improvisational.base import ImprovisationalTAMPApproach
 from tamp_improv.approaches.improvisational.policies.base import Policy, TrainingData
@@ -75,6 +77,7 @@ def get_or_collect_training_data(
                 and train_data.config.get("max_steps") == config.max_steps
             ):
                 print(f"Loaded {len(train_data)} training scenarios")
+                train_data.config = config.__dict__
                 return train_data
             print("Existing data has different config, collecting new data...")
         except Exception as e:
@@ -98,7 +101,8 @@ def collect_training_data(
 ) -> TrainingData:
     """Collect training data from TAMP execution."""
     training_states: list[Union[int, ObsType]] = []
-    training_preconditions = []
+    preconditions_to_maintain = []
+    preconditions_to_achieve = []
 
     print("\nCollecting training data...")
 
@@ -113,7 +117,8 @@ def collect_training_data(
             # If we encounter a state where preconditions aren't met
             if approach.policy_active and approach.prev_obs is not None:
                 training_states.append(approach.prev_obs)
-                training_preconditions.append(approach.currently_satisfied)
+                preconditions_to_maintain.append(approach.currently_satisfied)
+                preconditions_to_achieve.append(approach.target_atoms)
                 break
 
             action = approach.step(obs, 0, False, False, info)
@@ -125,7 +130,8 @@ def collect_training_data(
 
     return TrainingData(
         states=training_states,
-        preconditions=training_preconditions,
+        preconditions_to_maintain=preconditions_to_maintain,
+        preconditions_to_achieve=preconditions_to_achieve,
         config=config.__dict__,
     )
 
@@ -138,28 +144,26 @@ def run_evaluation_episode(
     is_loaded_policy: bool = False,
 ) -> tuple[float, int, bool]:
     """Run single evaluation episode."""
-    if is_loaded_policy:
-        video_folder = Path(f"videos/{system.name}_(Loaded){policy_cls.__name__}_eval")
-    else:
-        video_folder = Path(f"videos/{system.name}_{policy_cls.__name__}_eval")
-    video_folder.mkdir(parents=True, exist_ok=True)
-    # # Uncomment to render evaluation episodes
-    # render_mode = getattr(system.env, "render_mode", None)
-    # can_render = render_mode is not None
-    # if config.render and can_render:
-    #     from gymnasium.wrappers import RecordVideo
-    #     from copy import deepcopy
+    # Set up rendering if available
+    render_mode = getattr(system.env, "render_mode", None)
+    can_render = render_mode is not None
+    if config.render and can_render:
+        if is_loaded_policy:
+            video_folder = Path(
+                f"videos/{system.name}_(Loaded){policy_cls.__name__}_eval"
+            )
+        else:
+            video_folder = Path(f"videos/{system.name}_{policy_cls.__name__}_eval")
+        video_folder.mkdir(parents=True, exist_ok=True)
 
-    #     # Record only the base environment, not the planning environment
-    #     recording_env = deepcopy(system.env)
-
-    #     system.env = RecordVideo(
-    #         recording_env,
-    #         str(video_folder),
-    #         episode_trigger=lambda _: True,
-    #         disable_logger=True,
-    #         step_trigger=None,
-    #     )
+        # Record only the base environment, not the planning environment
+        recording_env = deepcopy(system.env)
+        system.env = RecordVideo(
+            recording_env,
+            str(video_folder),
+            episode_trigger=lambda _: True,
+            disable_logger=True,
+        )
 
     obs, info = system.reset()
     approach.reset(obs, info)
@@ -172,6 +176,10 @@ def run_evaluation_episode(
 
         if terminated or truncated:
             return total_reward, step + 1, terminated
+
+    if config.render and can_render:
+        cast(Any, system.env).close()
+        system.env = recording_env
 
     return total_reward, config.max_steps, False
 
@@ -208,25 +216,27 @@ def train_and_evaluate(
         if train_data.states:
             print("\nTraining policy...")
 
-            # # Uncomment to render training episodes
-            # render_mode = getattr(system.wrapped_env, "render_mode", None)
-            # can_render = render_mode is not None
-            # if config.record_training and can_render:
-            #     from gymnasium.wrappers import RecordVideo
-
-            #     video_folder =Path(f"videos/{system.name}_{policy_cls.__name__}_train")
-            #     video_folder.mkdir(parents=True, exist_ok=True)
-            #     system.wrapped_env = RecordVideo(
-            #         system.wrapped_env,
-            #         str(video_folder),
-            #         episode_trigger=lambda x: x % config.training_record_interval == 0,
-            #     )
+            # Set up rendering if available
+            render_mode = getattr(system.wrapped_env, "render_mode", None)
+            can_render = render_mode is not None
+            if config.record_training and can_render:
+                video_folder = Path(f"videos/{system.name}_{policy_cls.__name__}_train")
+                video_folder.mkdir(parents=True, exist_ok=True)
+                system.wrapped_env = RecordVideo(
+                    system.wrapped_env,
+                    str(video_folder),
+                    episode_trigger=lambda x: x % config.training_record_interval == 0,
+                )
 
             policy.train(system.wrapped_env, train_data)
 
             save_path = Path(config.save_dir) / f"{system.name}_{policy_cls.__name__}"
             print(f"\nSaving policy to {save_path}")
             policy.save(str(save_path))
+
+            if config.record_training and can_render:
+                cast(Any, system.wrapped_env).close()
+
     else:
         if is_loaded_policy:
             print("Using loaded policy - skipping training phase")

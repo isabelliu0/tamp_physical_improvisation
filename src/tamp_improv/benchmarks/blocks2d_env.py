@@ -1,6 +1,6 @@
 """Core blocks2d environment."""
 
-from typing import Any
+from typing import Any, NamedTuple
 
 import gymnasium as gym
 import numpy as np
@@ -9,6 +9,15 @@ from matplotlib import pyplot as plt
 from numpy.typing import NDArray
 from tomsgeoms2d.structs import Rectangle
 from tomsutils.utils import fig2data
+
+
+class Blocks2DState(NamedTuple):
+    """State of the blocks2d environment."""
+
+    robot_position: NDArray[np.float32]  # [x, y]
+    block_1_position: NDArray[np.float32]  # [x, y]
+    block_2_position: NDArray[np.float32]  # [x, y]
+    gripper_status: float
 
 
 def is_block_1_in_target_area(
@@ -21,7 +30,7 @@ def is_block_1_in_target_area(
     target_width: float,
     target_height: float,
 ) -> bool:
-    """Check if block is completely in target area -- goal."""
+    """Check if block is completely in target area."""
     target_left = target_x - target_width / 2
     target_right = target_x + target_width / 2
     target_bottom = target_y - target_height / 2
@@ -73,18 +82,66 @@ class Blocks2DEnv(gym.Env):
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
 
-        # set constants
+        # Set constants
         self._robot_width = 0.2
         self._robot_height = 0.2
         self._block_width = 0.2
         self._block_height = 0.2
         self._target_area = {"x": 0.5, "y": 0.0, "width": 0.2, "height": 0.2}
 
-        # Initialize positions and status
-        self.robot_position = np.array([0.5, 1.0], dtype=np.float32)
-        self.block_1_position = np.array([0.0, 0.0], dtype=np.float32)
-        self.block_2_position = np.array([0.5, 0.0], dtype=np.float32)
-        self.gripper_status = np.float32(0.0)
+        # Initialize state
+        self.state = self._get_default_state()
+
+    @property
+    def robot_position(self) -> NDArray[np.float32]:
+        """Get robot position."""
+        return self.state.robot_position
+
+    @property
+    def block_1_position(self) -> NDArray[np.float32]:
+        """Get block 1 position."""
+        return self.state.block_1_position
+
+    @property
+    def block_2_position(self) -> NDArray[np.float32]:
+        """Get block 2 position."""
+        return self.state.block_2_position
+
+    @property
+    def gripper_status(self) -> float:
+        """Get gripper status."""
+        return self.state.gripper_status
+
+    def _get_default_state(self) -> Blocks2DState:
+        """Get default initial state."""
+        return Blocks2DState(
+            robot_position=np.array([0.5, 1.0], dtype=np.float32),
+            block_1_position=np.array([0.0, 0.0], dtype=np.float32),
+            block_2_position=np.array([0.5, 0.0], dtype=np.float32),
+            gripper_status=0.0,
+        )
+
+    def reset_from_state(
+        self,
+        state: Blocks2DState | NDArray[np.float32],
+        *,
+        seed: int | None = None,
+    ) -> tuple[NDArray[np.float32], dict[str, Any]]:
+        """Reset environment to specific state."""
+        super().reset(seed=seed)
+
+        if isinstance(state, np.ndarray):
+            # Convert array to state
+            self.state = Blocks2DState(
+                robot_position=state[0:2].copy(),
+                block_1_position=state[4:6].copy(),
+                block_2_position=state[6:8].copy(),
+                gripper_status=float(state[10]),
+            )
+        else:
+            self.state = state
+
+        return self._get_obs(), self._get_info()
 
     def reset(
         self,
@@ -92,24 +149,29 @@ class Blocks2DEnv(gym.Env):
         seed: int | None = None,
         options: dict[str, Any] | None = None,
     ) -> tuple[NDArray[np.float32], dict[str, Any]]:
+        """Reset environment to default state."""
         super().reset(seed=seed)
-        if options is None:
-            options = {}
 
-        self.robot_position = options.get(
-            "robot_pos", np.array([0.5, 1.0], dtype=np.float32)
-        ).copy()
-        self.block_1_position = options.get(
-            "block_1_pos", np.array([0.0, 0.0], dtype=np.float32)
-        ).copy()
-        self.block_2_position = options.get(
-            "block_2_pos", np.array([0.5, 0.0], dtype=np.float32)
-        ).copy()
-        self.gripper_status = np.float32(0.0)
+        if options is None:
+            self.state = self._get_default_state()
+        else:
+            self.state = Blocks2DState(
+                robot_position=options.get(
+                    "robot_pos", np.array([0.5, 1.0], dtype=np.float32)
+                ).copy(),
+                block_1_position=options.get(
+                    "block_1_pos", np.array([0.0, 0.0], dtype=np.float32)
+                ).copy(),
+                block_2_position=options.get(
+                    "block_2_pos", np.array([0.5, 0.0], dtype=np.float32)
+                ).copy(),
+                gripper_status=0.0,
+            )
 
         return self._get_obs(), self._get_info()
 
     def _get_obs(self) -> NDArray[np.float32]:
+        """Get observation from current state."""
         return np.array(
             [
                 self.robot_position[0],
@@ -132,6 +194,7 @@ class Blocks2DEnv(gym.Env):
         )
 
     def _get_info(self) -> dict[str, Any]:
+        """Get info from current state."""
         return {
             "distance_to_block1": np.linalg.norm(
                 self.robot_position - self.block_1_position
@@ -145,71 +208,75 @@ class Blocks2DEnv(gym.Env):
         self,
         action: NDArray[np.float32],
     ) -> tuple[NDArray[np.float32], float, bool, bool, dict[str, Any]]:
+        """Take environment step."""
         dx, dy, gripper_action = action
 
-        # Save previous positions
-        robot_position_prev = self.robot_position.copy()
-        prevgripper_status = self.gripper_status
+        # Save previous state
+        prev_state = self.state
 
-        # Update robot position and gripper
-        self.robot_position[0] = np.clip(self.robot_position[0] + dx, 0.0, 1.0).astype(
-            np.float32
+        # Update robot position
+        new_robot_position = np.array(
+            [
+                np.clip(self.robot_position[0] + dx, 0.0, 1.0),
+                np.clip(self.robot_position[1] + dy, 0.0, 1.0),
+            ],
+            dtype=np.float32,
         )
-        self.robot_position[1] = np.clip(self.robot_position[1] + dy, 0.0, 1.0).astype(
-            np.float32
-        )
-        self.gripper_status = gripper_action.astype(np.float32)
+
+        # Update block positions and handle interactions
+        new_block_1_position = self.block_1_position.copy()
+        new_block_2_position = self.block_2_position.copy()
 
         # Handle block 2 pushing
-        if self._is_adjacent(robot_position_prev, self.block_2_position):
-            relative_pos = robot_position_prev[0] - self.block_2_position[0]
+        if self._is_adjacent(prev_state.robot_position, self.block_2_position):
+            relative_pos = prev_state.robot_position[0] - self.block_2_position[0]
             if relative_pos * dx < 0.0:  # Push
-                self.block_2_position[0] = np.clip(
+                new_block_2_position[0] = np.clip(
                     self.block_2_position[0] + dx, 0.0, 1.0
                 ).astype(np.float32)
 
         # Handle block 1 interactions (pick/drop)
-        distance = np.linalg.norm(self.robot_position - self.block_1_position)
+        distance = np.linalg.norm(new_robot_position - self.block_1_position)
+        new_gripper_status = float(gripper_action)
 
         # Case 1: Robot is picking up the block
         if (
-            self.gripper_status > 0.0
+            new_gripper_status > 0.0
             and distance <= ((self._robot_width + self._block_width) / 2) + 1e-3
         ):
-            self.block_1_position = self.robot_position.copy()
+            new_block_1_position = new_robot_position.copy()
 
         # Case 2: Robot was holding the block and gripper is deactivated
         elif (
-            0.0 < prevgripper_status
-            and self.gripper_status <= 0.0
-            and np.allclose(self.block_1_position, robot_position_prev, atol=1e-3)
+            self.gripper_status > 0.0
+            and new_gripper_status <= 0.0
+            and np.allclose(self.block_1_position, prev_state.robot_position, atol=1e-3)
         ):
-            self.block_1_position = np.array(
-                [self.robot_position[0], 0.0], dtype=np.float32
+            new_block_1_position = np.array(
+                [new_robot_position[0], 0.0], dtype=np.float32
             )
 
         # Case 3: Robot is holding the block (continue moving it)
-        elif self.gripper_status > 0.0 and np.allclose(
-            self.block_1_position, robot_position_prev, atol=1e-3
+        elif new_gripper_status > 0.0 and np.allclose(
+            self.block_1_position, prev_state.robot_position, atol=1e-3
         ):
-            self.block_1_position = self.robot_position.copy()
+            new_block_1_position = new_robot_position.copy()
 
-        # Check for collision between all pairs
+        # Update state
+        self.state = Blocks2DState(
+            robot_position=new_robot_position,
+            block_1_position=new_block_1_position,
+            block_2_position=new_block_2_position,
+            gripper_status=new_gripper_status,
+        )
+
+        # Get observation
         obs = self._get_obs()
         info = self._get_info()
 
-        # Robot-Block1 collision
-        if self._check_collisions(self.robot_position, self.block_1_position):
-            if np.isclose(self.gripper_status, 0.0, atol=1e-3):
-                return obs, -1.0, False, True, info
-
-        # Robot-Block2 collision
-        if self._check_collisions(self.robot_position, self.block_2_position):
-            return obs, -1.0, False, True, info
-
-        # Block1-Block2 collision
-        if self._check_collisions(self.block_1_position, self.block_2_position):
-            return obs, -1.0, False, True, info
+        # Check for collisions
+        if self._check_collisions():
+            return obs, -1.0, False, False, info
 
         # Check if the robot has reached the goal
         goal_reached = is_block_1_in_target_area(
@@ -228,16 +295,33 @@ class Blocks2DEnv(gym.Env):
 
         return obs, reward, terminated, False, info
 
-    def _check_collisions(
+    def _check_collisions(self) -> bool:
+        """Check for collisions between objects."""
+        # Robot-Block1 collision with empty gripper
+        if self._check_collision_between(
+            self.robot_position, self.block_1_position
+        ) and np.isclose(self.gripper_status, 0.0, atol=1e-3):
+            return True
+
+        # Robot-Block2 collision
+        if self._check_collision_between(self.robot_position, self.block_2_position):
+            return True
+
+        # Block1-Block2 collision
+        if self._check_collision_between(self.block_1_position, self.block_2_position):
+            return True
+
+        return False
+
+    def _check_collision_between(
         self,
         pos1: NDArray[np.float32],
         pos2: NDArray[np.float32],
     ) -> bool:
+        """Check collision between two positions."""
         dx = abs(pos1[0] - pos2[0])
         dy = abs(pos1[1] - pos2[1])
 
-        # Use block dimensions for both blocks, and robot dimensions
-        # when robot is involved
         width_sum = self._block_width - 1e-3
         height_sum = self._block_height - 1e-3
 
@@ -266,6 +350,7 @@ class Blocks2DEnv(gym.Env):
         return vertical_aligned and horizontal_adjacent
 
     def render(self) -> NDArray[np.uint8]:  # type: ignore
+        """Render the environment."""
         fig, ax = plt.subplots(1, 1, figsize=(5, 5))
         ax.set_xlim(
             (
