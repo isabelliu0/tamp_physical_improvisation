@@ -14,7 +14,7 @@ from tamp_improv.approaches.base import (
     ImprovisationalTAMPSystem,
     ObsType,
 )
-from tamp_improv.approaches.improvisational.policies.base import Policy
+from tamp_improv.approaches.improvisational.policies.base import Policy, PolicyContext
 
 
 class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
@@ -133,6 +133,13 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 self.currently_satisfied = full_ground_op.preconditions & atoms
                 self.target_atoms = full_ground_op.preconditions - atoms
 
+                # Configure policy with new context
+                self.policy.configure_context(
+                    PolicyContext(
+                        preconditions_to_maintain=self.currently_satisfied,
+                        preconditions_to_achieve=self.target_atoms,
+                    )
+                )
                 return self.policy.get_action(obs)
 
             # Get skill for the operator from the base domain

@@ -498,4 +498,10 @@ class Blocks2DTAMPSystem(
         self, components: PlanningComponents[NDArray[np.float32]]
     ) -> gym.Env:
         """Create wrapped environment for training."""
-        return ImprovWrapper(self.env, perceiver=components.perceiver)
+        return ImprovWrapper(
+            base_env=self.env,
+            perceiver=components.perceiver,
+            step_penalty=-0.1,
+            precondition_violation_penalty=-0.1,
+            achievement_bonus=1.0,
+        )

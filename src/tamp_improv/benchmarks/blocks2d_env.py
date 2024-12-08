@@ -276,7 +276,7 @@ class Blocks2DEnv(gym.Env):
 
         # Check for collisions
         if self._check_collisions():
-            return obs, -1.0, False, False, info
+            return obs, -0.1, False, False, info
 
         # Check if the robot has reached the goal
         goal_reached = is_block_1_in_target_area(

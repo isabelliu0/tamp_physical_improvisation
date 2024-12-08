@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import pickle
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Generic, TypeVar
 
@@ -25,14 +25,6 @@ class TrainingData:
     preconditions_to_maintain: list[set[GroundAtom]]
     preconditions_to_achieve: list[set[GroundAtom]]
     config: dict[str, Any]
-
-    def __post_init__(self):
-        """Validate data."""
-        assert len(self.states) == len(self.preconditions_to_maintain) and len(
-            self.states
-        ) == len(
-            self.preconditions_to_achieve
-        ), "Collected training states and preconditions must be equal length."
 
     def __len__(self) -> int:
         return len(self.states)
@@ -88,6 +80,15 @@ class TrainingData:
         )
 
 
+@dataclass
+class PolicyContext(Generic[ObsType, ActType]):
+    """Context information passed from approach to policy."""
+
+    preconditions_to_maintain: set[GroundAtom]
+    preconditions_to_achieve: set[GroundAtom]
+    info: dict[str, Any] = field(default_factory=dict)
+
+
 class Policy(Generic[ObsType, ActType], ABC):
     """Base class for policies."""
 
@@ -107,6 +108,9 @@ class Policy(Generic[ObsType, ActType], ABC):
     @abstractmethod
     def get_action(self, obs: ObsType) -> ActType:
         """Get action from policy."""
+
+    def configure_context(self, context: PolicyContext[ObsType, ActType]) -> None:
+        """Configure policy with context information."""
 
     def train(self, env: gym.Env, train_data: TrainingData) -> None:
         """Train the policy if needed.

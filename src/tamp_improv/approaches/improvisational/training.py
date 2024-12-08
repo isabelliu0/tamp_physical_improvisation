@@ -119,6 +119,9 @@ def collect_training_data(
                 training_states.append(approach.prev_obs)
                 preconditions_to_maintain.append(approach.currently_satisfied)
                 preconditions_to_achieve.append(approach.target_atoms)
+                print(f"Collected training state: {approach.prev_obs}")
+                print(f"Maintaining precondition(s): {approach.currently_satisfied}")
+                print(f"Precondition(s) to achieve: {approach.target_atoms}")
                 break
 
             action = approach.step(obs, 0, False, False, info)

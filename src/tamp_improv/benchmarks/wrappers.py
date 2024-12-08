@@ -23,6 +23,10 @@ class ImprovWrapper(gym.Env):
         base_env: gym.Env,
         perceiver: Perceiver[ObsType],
         max_episode_steps: int = 100,
+        *,
+        step_penalty: float = -0.1,
+        precondition_violation_penalty: float = -1.0,
+        achievement_bonus: float = 1.0,
     ) -> None:
         """Initialize wrapper with environment and perceiver."""
         self.env = base_env
@@ -31,6 +35,11 @@ class ImprovWrapper(gym.Env):
         self.max_episode_steps = max_episode_steps
         self.steps = 0
         self.perceiver = perceiver
+
+        # Reward parameters
+        self.step_penalty = step_penalty
+        self.precondition_violation_penalty = precondition_violation_penalty
+        self.achievement_bonus = achievement_bonus
 
         # Training state tracking
         self.training_states: list[ObsType] = []
@@ -52,6 +61,14 @@ class ImprovWrapper(gym.Env):
         self.preconditions_to_maintain = training_data.preconditions_to_maintain
         self.preconditions_to_achieve = training_data.preconditions_to_achieve
         self.current_training_idx = 0
+        self.max_episode_steps = training_data.config.get(
+            "max_steps", self.max_episode_steps
+        )
+
+        if self.preconditions_to_maintain and self.preconditions_to_achieve:
+            # For non-training scenarios (like MPC), we have one set of preconditions
+            self.current_precondition_to_maintain = self.preconditions_to_maintain[0]
+            self.current_precondition_to_achieve = self.preconditions_to_achieve[0]
 
     def reset(
         self,
@@ -106,29 +123,33 @@ class ImprovWrapper(gym.Env):
     ) -> tuple[ObsType, float, bool, bool, dict[str, Any]]:
         """Step environment.
 
-        Rewards:
-            Base step penalty (-0.1)
-            Precondition violation penalty (-1.0)
-            Achievement bonus (1.0)
+        Reward:
+            Base step penalty
+            Precondition violation penalty
+            Achievement bonus
         """
         obs, _, _, truncated, info = self.env.step(action)
         self.steps += 1
 
         # Check preconditions
         current_atoms = self.perceiver.step(obs)
-        precondition_violation = len(
-            self.current_precondition_to_maintain
-        ) > 0 and not self.current_precondition_to_maintain.issubset(current_atoms)
+        print(f"Current atoms: {current_atoms}")
+        print(f"Maintaining precondition(s): {self.current_precondition_to_maintain}")
+        print(f"Precondition(s) to achieve: {self.current_precondition_to_achieve}")
+
+        precondition_violation = not self.current_precondition_to_maintain.issubset(
+            current_atoms
+        )
 
         # Check achievement
-        achieved = self.current_precondition_to_achieve in current_atoms
+        achieved = self.current_precondition_to_achieve.issubset(current_atoms)
 
         # Calculate reward
-        reward = -0.1  # Base step penalty
+        reward = self.step_penalty
         if precondition_violation:
-            reward += -1.0  # Precondition violation penalty
+            reward += self.precondition_violation_penalty
         if achieved:
-            reward += 100.0
+            reward += self.achievement_bonus
 
         # Termination conditions
         terminated = achieved
