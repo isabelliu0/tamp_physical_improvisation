@@ -14,7 +14,7 @@ from tamp_improv.approaches.base import (
     ImprovisationalTAMPSystem,
     ObsType,
 )
-from tamp_improv.approaches.improvisational.policies.base import Policy
+from tamp_improv.approaches.improvisational.policies.base import Policy, PolicyContext
 
 
 class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
@@ -63,7 +63,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self._current_operator: GroundOperator | None = None
         self._current_skill: Skill | None = None
         self.policy_active = False
-        self._target_atoms: set[GroundAtom] = set()
+        self.target_atoms: set[GroundAtom] = set()
         self.currently_satisfied: set[GroundAtom] = set()
         self._goal: set[GroundAtom] = set()
         self.prev_obs: ObsType | None = None
@@ -78,7 +78,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self._current_operator = None
         self._current_skill = None
         self.policy_active = False
-        self._target_atoms = set()
+        self.target_atoms = set()
         self.currently_satisfied = set()
         self.prev_obs = None
 
@@ -99,12 +99,12 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
         # Check if policy achieved its goal
         if self.policy_active:
-            if self._target_atoms.issubset(atoms) and self.currently_satisfied.issubset(
+            if self.target_atoms.issubset(atoms) and self.currently_satisfied.issubset(
                 atoms
             ):
                 print("Policy successfully achieved target atoms!")
                 self.policy_active = False
-                self._target_atoms = set()
+                self.target_atoms = set()
                 self.currently_satisfied = set()
                 self._replan(obs, info)
                 return self.step(obs, reward, terminated, truncated, info)
@@ -131,8 +131,15 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
                 # Track satisfied vs target preconditions
                 self.currently_satisfied = full_ground_op.preconditions & atoms
-                self._target_atoms = full_ground_op.preconditions - atoms
+                self.target_atoms = full_ground_op.preconditions - atoms
 
+                # Configure policy with new context
+                self.policy.configure_context(
+                    PolicyContext(
+                        preconditions_to_maintain=self.currently_satisfied,
+                        preconditions_to_achieve=self.target_atoms,
+                    )
+                )
                 return self.policy.get_action(obs)
 
             # Get skill for the operator from the base domain

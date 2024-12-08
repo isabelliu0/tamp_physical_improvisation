@@ -1,7 +1,7 @@
 """MPC-based policy implementation."""
 
 from dataclasses import dataclass
-from typing import Generic, cast
+from typing import cast
 
 import gymnasium as gym
 import numpy as np
@@ -11,6 +11,8 @@ from tamp_improv.approaches.improvisational.policies.base import (
     ActType,
     ObsType,
     Policy,
+    PolicyContext,
+    TrainingData,
 )
 
 
@@ -24,7 +26,7 @@ class MPCConfig:
     horizon: int = 35
 
 
-class MPCPolicy(Policy[ObsType, ActType], Generic[ObsType, ActType]):
+class MPCPolicy(Policy[ObsType, ActType]):
     """MPC policy using predictive sampling."""
 
     def __init__(self, seed: int, config: MPCConfig | None = None) -> None:
@@ -70,6 +72,22 @@ class MPCPolicy(Policy[ObsType, ActType], Generic[ObsType, ActType]):
             action_shape = box_space.shape if box_space.shape else ()
             shape = (self.config.horizon,) + action_shape
             self._last_solution = np.zeros(shape, dtype=np.float32)
+
+    def configure_context(self, context: PolicyContext[ObsType, ActType]) -> None:
+        """Configure MPC with new context/preconditions."""
+        if self._env is None:
+            raise ValueError("Policy not initialized")
+
+        # Update environment with current preconditions
+        if hasattr(self._env, "configure_training"):
+            self._env.configure_training(
+                TrainingData(
+                    states=[],  # MPC doesn't need example states
+                    preconditions_to_maintain=[context.preconditions_to_maintain],
+                    preconditions_to_achieve=[context.preconditions_to_achieve],
+                    config={"max_steps": self.config.horizon},
+                )
+            )
 
     def get_action(self, obs: ObsType) -> ActType:
         """Get action using MPC."""
