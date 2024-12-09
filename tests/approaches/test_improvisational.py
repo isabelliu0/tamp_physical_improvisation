@@ -62,7 +62,13 @@ def test_mpc_approach(system_cls, mpc_config, base_config):
     print(f"Avg episode length: {metrics.avg_episode_length:.2f}")
 
 
-@pytest.mark.parametrize("system_cls", [Blocks2DTAMPSystem, NumberTAMPSystem])
+@pytest.mark.parametrize(
+    "system_cls",
+    [
+        Blocks2DTAMPSystem,
+        NumberTAMPSystem,
+    ],
+)
 # pylint: disable=redefined-outer-name
 def test_rl_approach(system_cls, base_config):
     """Test RL improvisational approach."""
@@ -78,7 +84,7 @@ def test_rl_approach(system_cls, base_config):
         render=base_config.render,
         # RL-specific settings
         collect_episodes=50,
-        episodes_per_scenario=2,
+        episodes_per_scenario=1,
         force_collect=False,
         record_training=False,
         training_record_interval=50,
@@ -107,12 +113,22 @@ def test_rl_approach(system_cls, base_config):
         pytest.skip(f"Policy file not found at {policy_file}")
 
     print("\n=== Testing RL Loaded Policy ===")
+    # Create new system for loaded policy
+    system = system_cls.create_default(
+        seed=42, render_mode="rgb_array" if rl_config.render else None
+    )
+
+    # Create and initialize policy with the system
     loaded_policy = RLPolicy(seed=42)
+    loaded_policy.initialize(system.wrapped_env)
     loaded_policy.load(str(policy_file))
-    _ = ImprovisationalTAMPApproach(system, loaded_policy, seed=42)
 
     loaded_metrics = train_and_evaluate(
-        system, type(loaded_policy), rl_config, is_loaded_policy=True
+        system,
+        type(loaded_policy),
+        rl_config,
+        is_loaded_policy=True,
+        loaded_policy=loaded_policy,
     )
 
     print("\nRL Loaded Policy Results:")

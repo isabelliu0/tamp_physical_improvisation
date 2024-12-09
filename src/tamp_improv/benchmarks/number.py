@@ -23,7 +23,7 @@ from tamp_improv.benchmarks.base import (
     PlanningComponents,
 )
 from tamp_improv.benchmarks.number_env import NumberEnv
-from tamp_improv.benchmarks.number_wrappers import NumberEnvWrapper
+from tamp_improv.benchmarks.wrappers import ImprovWrapper
 
 
 @dataclass
@@ -251,4 +251,6 @@ class NumberTAMPSystem(ImprovisationalTAMPSystem[int, int], BaseNumberTAMPSystem
 
     def _create_wrapped_env(self, components: PlanningComponents[int]) -> gym.Env:
         """Create wrapped environment for training."""
-        return NumberEnvWrapper(self.env)
+        return ImprovWrapper(
+            self.env, perceiver=components.perceiver, max_episode_steps=10
+        )
