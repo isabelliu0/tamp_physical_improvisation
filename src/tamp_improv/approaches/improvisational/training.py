@@ -105,29 +105,50 @@ def collect_training_data(
     preconditions_to_achieve = []
 
     print("\nCollecting training data...")
+    approach.training_mode = True
 
     # Run episodes to collect states where preconditions aren't met
     for episode in range(config.collect_episodes):
         print(f"\nCollection episode {episode + 1}/{config.collect_episodes}")
 
         obs, info = system.reset()
-        approach.reset(obs, info)
+        step_result = approach.reset(obs, info)
 
-        for _ in range(config.max_steps):
-            # If we encounter a state where preconditions aren't met
-            if approach.policy_active and approach.prev_obs is not None:
-                training_states.append(approach.prev_obs)
-                preconditions_to_maintain.append(approach.currently_satisfied)
-                preconditions_to_achieve.append(approach.target_atoms)
-                print(f"Collected training state: {approach.prev_obs}")
-                print(f"Maintaining precondition(s): {approach.currently_satisfied}")
-                print(f"Precondition(s) to achieve: {approach.target_atoms}")
+        # Check first step from reset
+        if step_result.terminate and step_result.info:
+            training_states.append(step_result.info["training_state"])
+            preconditions_to_maintain.append(
+                step_result.info["preconditions_to_maintain"]
+            )
+            preconditions_to_achieve.append(
+                step_result.info["preconditions_to_achieve"]
+            )
+            continue
+
+        obs, _, term, trunc, info = system.env.step(step_result.action)
+        if term or trunc:
+            continue
+
+        # Rest of episode
+        for _ in range(1, config.max_steps):
+            step_result = approach.step(obs, 0, False, False, info)
+
+            # When preconditions aren't met, collect training data
+            if step_result.terminate and step_result.info:
+                training_states.append(step_result.info["training_state"])
+                preconditions_to_maintain.append(
+                    step_result.info["preconditions_to_maintain"]
+                )
+                preconditions_to_achieve.append(
+                    step_result.info["preconditions_to_achieve"]
+                )
                 break
 
-            action = approach.step(obs, 0, False, False, info)
-            obs, _, term, trunc, info = system.env.step(action)
+            obs, _, term, trunc, info = system.env.step(step_result.action)
             if term or trunc:
                 break
+
+    approach.training_mode = False
 
     print(f"\nCollected {len(training_states)} training scenarios")
 
@@ -145,6 +166,7 @@ def run_evaluation_episode(
     policy_cls: type[Policy],
     config: TrainingConfig,
     is_loaded_policy: bool = False,
+    episode_num: int = 0,
 ) -> tuple[float, int, bool]:
     """Run single evaluation episode."""
     # Set up rendering if available
@@ -165,19 +187,33 @@ def run_evaluation_episode(
             recording_env,
             str(video_folder),
             episode_trigger=lambda _: True,
+            name_prefix=f"episode_{episode_num}",
             disable_logger=True,
         )
 
     obs, info = system.reset()
-    approach.reset(obs, info)
+    step_result = approach.reset(obs, info)
 
     total_reward = 0.0
-    for step in range(config.max_steps):
-        action = approach.step(obs, total_reward, False, False, info)
-        obs, reward, terminated, truncated, info = system.env.step(action)
+    # First step from reset
+    obs, reward, terminated, truncated, info = system.env.step(step_result.action)
+    total_reward += float(reward)
+    if terminated or truncated:
+        if config.render and can_render:
+            cast(Any, system.env).close()
+            system.env = recording_env
+        return total_reward, 1, terminated
+
+    # Rest of steps
+    for step in range(1, config.max_steps):
+        step_result = approach.step(obs, total_reward, False, False, info)
+        obs, reward, terminated, truncated, info = system.env.step(step_result.action)
         total_reward += float(reward)
 
         if terminated or truncated:
+            if config.render and can_render:
+                cast(Any, system.env).close()
+                system.env = recording_env
             return total_reward, step + 1, terminated
 
     if config.render and can_render:
@@ -192,27 +228,42 @@ def train_and_evaluate(
     policy_cls: type[Policy],
     config: TrainingConfig,
     is_loaded_policy: bool = False,
+    loaded_policy: Policy | None = None,
 ) -> Metrics:
     """Train and evaluate a policy on a system."""
     print(f"\nInitializing training for {system.name}...")
 
-    # Create policy and approach
-    policy = policy_cls(seed=config.seed)
+    # Use provided loaded policy or create new one
+    if loaded_policy is not None:
+        policy = loaded_policy
+    else:
+        policy = policy_cls(seed=config.seed)
 
     if is_loaded_policy:
         print("Loading saved policy...")
-        policy_path = Path(config.save_dir) / f"{system.name}_{policy_cls.__name__}"
-        try:
-            policy.load(str(policy_path))
-            print("Policy loaded successfully")
-        except Exception as e:
-            print(f"Error loading policy: {e}")
-            return Metrics(success_rate=0.0, avg_episode_length=0.0, avg_reward=0.0)
+        if loaded_policy is None:
+            policy_path = Path(config.save_dir) / f"{system.name}_{policy_cls.__name__}"
+            try:
+                # Create fresh system and approach
+                system = type(system).create_default(  # type: ignore[attr-defined]
+                    seed=config.seed, render_mode=system.env.render_mode
+                )
 
-    # Create approach with loaded/new policy
+                # Initialize policy with the new wrapped environment
+                policy.initialize(system.wrapped_env)
+
+                # Load saved parameters/model
+                policy.load(str(policy_path))
+                print("Policy loaded successfully")
+
+            except Exception as e:
+                print(f"Error loading policy: {e}")
+                return Metrics(success_rate=0.0, avg_episode_length=0.0, avg_reward=0.0)
+
+    # Create approach with properly initialized policy
     approach = ImprovisationalTAMPApproach(system, policy, seed=config.seed)
 
-    # Load or collect training data
+    # Load or collect training data for new policy
     if policy.requires_training and not is_loaded_policy:
         train_data = get_or_collect_training_data(system, approach, config)
 
@@ -241,9 +292,6 @@ def train_and_evaluate(
                 cast(Any, system.wrapped_env).close()
 
     else:
-        if is_loaded_policy:
-            print("Using loaded policy - skipping training phase")
-
         # For non-training policies like MPC, just initialize
         policy.initialize(system.wrapped_env)
 
@@ -261,6 +309,7 @@ def train_and_evaluate(
             type(policy),
             config,
             is_loaded_policy=is_loaded_policy,
+            episode_num=episode,
         )
         rewards.append(reward)
         lengths.append(length)

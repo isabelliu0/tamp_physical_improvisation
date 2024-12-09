@@ -133,10 +133,6 @@ class ImprovWrapper(gym.Env):
 
         # Check preconditions
         current_atoms = self.perceiver.step(obs)
-        print(f"Current atoms: {current_atoms}")
-        print(f"Maintaining precondition(s): {self.current_precondition_to_maintain}")
-        print(f"Precondition(s) to achieve: {self.current_precondition_to_achieve}")
-
         precondition_violation = not self.current_precondition_to_maintain.issubset(
             current_atoms
         )

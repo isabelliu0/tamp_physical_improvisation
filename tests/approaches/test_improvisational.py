@@ -107,21 +107,31 @@ def test_rl_approach(system_cls, base_config):
     print(f"Average Episode Length: {metrics.avg_episode_length:.2f}")
     print(f"Average Reward: {metrics.avg_reward:.2f}")
 
-    # # Test loading and execution
-    # policy_file = policy_dir / f"{system_cls.__name__.lower()}_RLPolicy.zip"
-    # if not policy_file.exists():
-    #     pytest.skip(f"Policy file not found at {policy_file}")
+    # Test loading and execution
+    policy_file = policy_dir / f"{system_cls.__name__.lower()}_RLPolicy.zip"
+    if not policy_file.exists():
+        pytest.skip(f"Policy file not found at {policy_file}")
 
-    # print("\n=== Testing RL Loaded Policy ===")
-    # loaded_policy = RLPolicy(seed=42)
-    # loaded_policy.load(str(policy_file))
-    # _ = ImprovisationalTAMPApproach(system, loaded_policy, seed=42)
+    print("\n=== Testing RL Loaded Policy ===")
+    # Create new system for loaded policy
+    system = system_cls.create_default(
+        seed=42, render_mode="rgb_array" if rl_config.render else None
+    )
 
-    # loaded_metrics = train_and_evaluate(
-    #     system, type(loaded_policy), rl_config, is_loaded_policy=True
-    # )
+    # Create and initialize policy with the system
+    loaded_policy = RLPolicy(seed=42)
+    loaded_policy.initialize(system.wrapped_env)
+    loaded_policy.load(str(policy_file))
 
-    # print("\nRL Loaded Policy Results:")
-    # print(f"Success Rate: {loaded_metrics.success_rate:.2%}")
-    # print(f"Average Episode Length: {loaded_metrics.avg_episode_length:.2f}")
-    # print(f"Average Reward: {loaded_metrics.avg_reward:.2f}")
+    loaded_metrics = train_and_evaluate(
+        system,
+        type(loaded_policy),
+        rl_config,
+        is_loaded_policy=True,
+        loaded_policy=loaded_policy,
+    )
+
+    print("\nRL Loaded Policy Results:")
+    print(f"Success Rate: {loaded_metrics.success_rate:.2%}")
+    print(f"Average Episode Length: {loaded_metrics.avg_episode_length:.2f}")
+    print(f"Average Reward: {loaded_metrics.avg_reward:.2f}")

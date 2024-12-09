@@ -10,14 +10,20 @@ from tamp_improv.benchmarks.number import NumberTAMPSystem
 def run_episode(system, approach, max_steps: int):
     """Run single episode with approach."""
     obs, info = system.reset()
-    action = approach.reset(obs, info)
+    step_result = approach.reset(obs, info)
 
-    for step in range(max_steps):
-        obs, reward, terminated, truncated, info = system.env.step(action)
-        action = approach.step(obs, reward, terminated, truncated, info)
+    # Process first step
+    obs, reward, terminated, truncated, info = system.env.step(step_result.action)
+    if terminated or truncated:
+        return 1
+
+    # Process remaining steps
+    for step in range(1, max_steps):
+        step_result = approach.step(obs, reward, terminated, truncated, info)
+        obs, reward, terminated, truncated, info = system.env.step(step_result.action)
         if terminated or truncated:
-            break
-    return step + 1
+            return step + 1
+    return max_steps
 
 
 @pytest.mark.parametrize(
