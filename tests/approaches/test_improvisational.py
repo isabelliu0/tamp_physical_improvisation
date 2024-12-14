@@ -21,7 +21,7 @@ def base_config():
         seed=42,
         num_episodes=5,
         max_steps=50,
-        render=True,
+        render=False,
     )
 
 
@@ -56,7 +56,9 @@ def test_mpc_approach(system_cls, mpc_config, base_config):
     def policy_factory(seed: int) -> MPCPolicy:
         return MPCPolicy(seed=seed, config=mpc_config)
 
-    metrics = train_and_evaluate(system, policy_factory, base_config, policy_name="MPCPolicy")
+    metrics = train_and_evaluate(
+        system, policy_factory, base_config, policy_name="MPCPolicy"
+    )
 
     print(f"Success rate: {metrics.success_rate:.2%}")
     print(f"Avg episode length: {metrics.avg_episode_length:.2f}")
@@ -77,10 +79,7 @@ def test_rl_approach(system_cls, base_config):
 
     # Create RL-specific policy config
     rl_policy_config = RLConfig(
-        learning_rate=1e-4,
-        batch_size=64,
-        n_epochs=5,
-        gamma=0.99
+        learning_rate=1e-4, batch_size=64, n_epochs=5, gamma=0.99
     )
 
     # Create training config
@@ -109,7 +108,9 @@ def test_rl_approach(system_cls, base_config):
     def policy_factory(seed: int) -> RLPolicy:
         return RLPolicy(seed=seed, config=rl_policy_config)
 
-    metrics = train_and_evaluate(system, policy_factory, rl_config, policy_name="RLPolicy")
+    metrics = train_and_evaluate(
+        system, policy_factory, rl_config, policy_name="RLPolicy"
+    )
 
     print("\nRL Initial Training Results:")
     print(f"Success Rate: {metrics.success_rate:.2%}")
@@ -129,7 +130,7 @@ def test_rl_approach(system_cls, base_config):
 
     def loaded_policy_factory(seed: int) -> RLPolicy:
         # Create and initialize policy with the system
-        policy = RLPolicy(seed=seed)
+        policy: RLPolicy = RLPolicy(seed=seed)
         policy.load(str(policy_file))
         return policy
 

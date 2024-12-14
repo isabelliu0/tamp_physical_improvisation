@@ -193,5 +193,3 @@ class RLPolicy(Policy[ObsType, ActType]):
     def load(self, path: str) -> None:
         """Load policy."""
         self.model = PPO.load(path)
-        if hasattr(self, '_env') and self._env is not None:
-            self.model.set_env(self._env)   # Restore environment connection

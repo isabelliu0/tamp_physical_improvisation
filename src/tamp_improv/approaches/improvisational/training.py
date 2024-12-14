@@ -3,7 +3,7 @@
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, TypeVar, Union, cast, Callable
+from typing import Any, Callable, TypeVar, Union, cast
 
 import numpy as np
 from gymnasium.wrappers import RecordVideo
@@ -174,9 +174,7 @@ def run_evaluation_episode(
     can_render = render_mode is not None
     if config.render and can_render:
         if is_loaded_policy:
-            video_folder = Path(
-                f"videos/{system.name}_(Loaded){policy_name}_eval"
-            )
+            video_folder = Path(f"videos/{system.name}_(Loaded){policy_name}_eval")
         else:
             video_folder = Path(f"videos/{system.name}_{policy_name}_eval")
         video_folder.mkdir(parents=True, exist_ok=True)
