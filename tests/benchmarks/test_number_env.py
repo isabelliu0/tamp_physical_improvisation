@@ -13,8 +13,8 @@ def test_number_env():
 
     # Hard-coded sequence of actions to reach the goal
     actions = [
-        1,  # Move from state 0 to 1
-        1,  # Move from state 1 to 2
+        [1, 0],  # Move from state 0 to 1
+        [1, 0],  # Move from state 1 to 2
     ]
 
     print("Initial state:", obs)

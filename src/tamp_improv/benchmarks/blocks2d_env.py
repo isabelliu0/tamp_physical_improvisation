@@ -53,18 +53,18 @@ class Blocks2DEnv(gym.Env):
     """A block environment in 2D.
 
     Observations are 15D:
-        - 4D for the x, y position (center), the width, and the height of
-        the robot
-        - 2D for the x, y position (center) of block 1 (the target block)
-        - 2D for the x, y position (center) of block 2 (the other block)
-        - 2D for the width and the height of the blocks
-        - 1D for the gripper "activation"
-        - 4D for the x, y position (center), the width, and the height of
-        the target area
+    - 4D for the x, y position (center), the width, and the height of
+    the robot
+    - 2D for the x, y position (center) of block 1 (the target block)
+    - 2D for the x, y position (center) of block 2 (the other block)
+    - 2D for the width and the height of the blocks
+    - 1D for the gripper "activation"
+    - 4D for the x, y position (center), the width, and the height of
+    the target area
 
     Actions are 3D:
-        - 2D for dx, dy for the robot
-        - 1D for activating / deactivating the gripper
+    - 2D for dx, dy for the robot
+    - 1D for activating / deactivating the gripper
 
     The environment has boundaries x=0 to x=1 and y=0 to y=1.
     """
