@@ -14,9 +14,9 @@ from tomsutils.utils import fig2data
 class Blocks2DState(NamedTuple):
     """State of the blocks2d environment."""
 
-    robot_position: NDArray[np.float32]  # [x, y]
-    block_1_position: NDArray[np.float32]  # [x, y]
-    block_2_position: NDArray[np.float32]  # [x, y]
+    robot_position: NDArray[np.float32]
+    block_1_position: NDArray[np.float32]
+    block_2_position: NDArray[np.float32]
     gripper_status: float
 
 
