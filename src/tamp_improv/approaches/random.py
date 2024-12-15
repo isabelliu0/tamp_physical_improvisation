@@ -2,15 +2,20 @@
 
 from typing import Any
 
-from tamp_improv.approaches.base import ActType, BaseApproach, ObsType
+from tamp_improv.approaches.base import (
+    ActType,
+    ApproachStepResult,
+    BaseApproach,
+    ObsType,
+)
 
 
 class RandomApproach(BaseApproach[ObsType, ActType]):
     """An approach that takes random actions."""
 
-    def reset(self, obs: ObsType, info: dict[str, Any]) -> ActType:
+    def reset(self, obs: ObsType, info: dict[str, Any]) -> ApproachStepResult[ActType]:
         """Reset approach."""
-        return self.system.env.action_space.sample()
+        return ApproachStepResult(action=self.system.env.action_space.sample())
 
     def step(
         self,
@@ -19,6 +24,6 @@ class RandomApproach(BaseApproach[ObsType, ActType]):
         terminated: bool,
         truncated: bool,
         info: dict[str, Any],
-    ) -> ActType:
+    ) -> ApproachStepResult[ActType]:
         """Take random action."""
-        return self.system.env.action_space.sample()
+        return ApproachStepResult(action=self.system.env.action_space.sample())

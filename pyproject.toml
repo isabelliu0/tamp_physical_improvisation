@@ -22,6 +22,7 @@ dependencies = [
    "gymnasium",
    "moviepy",
    "stable_baselines3",
+   "types-tabulate",
 ]
 
 [project.optional-dependencies]

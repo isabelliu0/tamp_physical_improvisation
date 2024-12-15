@@ -4,9 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from tamp_improv.approaches.improvisational.base import ImprovisationalTAMPApproach
 from tamp_improv.approaches.improvisational.policies.mpc import MPCConfig, MPCPolicy
-from tamp_improv.approaches.improvisational.policies.rl import RLPolicy
+from tamp_improv.approaches.improvisational.policies.rl import RLConfig, RLPolicy
 from tamp_improv.approaches.improvisational.training import (
     TrainingConfig,
     train_and_evaluate,
@@ -53,23 +52,37 @@ def test_mpc_approach(system_cls, mpc_config, base_config):
     system = system_cls.create_default(
         seed=42, render_mode="rgb_array" if base_config.render else None
     )
-    policy = MPCPolicy(seed=42, config=mpc_config)
-    _ = ImprovisationalTAMPApproach(system, policy, seed=42)
 
-    metrics = train_and_evaluate(system, type(policy), base_config)
+    def policy_factory(seed: int) -> MPCPolicy:
+        return MPCPolicy(seed=seed, config=mpc_config)
+
+    metrics = train_and_evaluate(
+        system, policy_factory, base_config, policy_name="MPCPolicy"
+    )
 
     print(f"Success rate: {metrics.success_rate:.2%}")
     print(f"Avg episode length: {metrics.avg_episode_length:.2f}")
 
 
-@pytest.mark.parametrize("system_cls", [Blocks2DTAMPSystem, NumberTAMPSystem])
+@pytest.mark.parametrize(
+    "system_cls",
+    [
+        Blocks2DTAMPSystem,
+        NumberTAMPSystem,
+    ],
+)
 # pylint: disable=redefined-outer-name
 def test_rl_approach(system_cls, base_config):
     """Test RL improvisational approach."""
     policy_dir = Path("trained_policies")
     policy_dir.mkdir(exist_ok=True)
 
-    # Create a copy of the config for RL-specific settings
+    # Create RL-specific policy config
+    rl_policy_config = RLConfig(
+        learning_rate=1e-4, batch_size=64, n_epochs=5, gamma=0.99
+    )
+
+    # Create training config
     rl_config = TrainingConfig(
         # Existing settings
         seed=base_config.seed,
@@ -78,7 +91,7 @@ def test_rl_approach(system_cls, base_config):
         render=base_config.render,
         # RL-specific settings
         collect_episodes=50,
-        episodes_per_scenario=2,
+        episodes_per_scenario=5,
         force_collect=False,
         record_training=False,
         training_record_interval=50,
@@ -91,10 +104,13 @@ def test_rl_approach(system_cls, base_config):
     system = system_cls.create_default(
         seed=42, render_mode="rgb_array" if rl_config.render else None
     )
-    policy = RLPolicy(seed=42)
-    _ = ImprovisationalTAMPApproach(system, policy, seed=42)
 
-    metrics = train_and_evaluate(system, type(policy), rl_config)
+    def policy_factory(seed: int) -> RLPolicy:
+        return RLPolicy(seed=seed, config=rl_policy_config)
+
+    metrics = train_and_evaluate(
+        system, policy_factory, rl_config, policy_name="RLPolicy"
+    )
 
     print("\nRL Initial Training Results:")
     print(f"Success Rate: {metrics.success_rate:.2%}")
@@ -107,12 +123,22 @@ def test_rl_approach(system_cls, base_config):
         pytest.skip(f"Policy file not found at {policy_file}")
 
     print("\n=== Testing RL Loaded Policy ===")
-    loaded_policy = RLPolicy(seed=42)
-    loaded_policy.load(str(policy_file))
-    _ = ImprovisationalTAMPApproach(system, loaded_policy, seed=42)
+    # Create new system for loaded policy
+    system = system_cls.create_default(
+        seed=42, render_mode="rgb_array" if rl_config.render else None
+    )
+
+    def loaded_policy_factory(seed: int) -> RLPolicy:
+        # Create and initialize policy with the system
+        policy: RLPolicy = RLPolicy(seed=seed)
+        policy.load(str(policy_file))
+        return policy
 
     loaded_metrics = train_and_evaluate(
-        system, type(loaded_policy), rl_config, is_loaded_policy=True
+        system,
+        loaded_policy_factory,
+        rl_config,
+        policy_name="RLPolicy_Loaded",
     )
 
     print("\nRL Loaded Policy Results:")

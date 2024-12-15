@@ -110,17 +110,18 @@ class RLPolicy(Policy[ObsType, ActType]):
 
     def initialize(self, env: gym.Env) -> None:
         """Initialize policy with environment."""
-        self.model = PPO(
-            "MlpPolicy",
-            env,
-            learning_rate=self.config.learning_rate,
-            n_steps=100,  # Default value, will be updated in train()
-            batch_size=self.config.batch_size,
-            n_epochs=self.config.n_epochs,
-            gamma=self.config.gamma,
-            seed=self._seed,
-            verbose=1,
-        )
+        if self.model is None:
+            self.model = PPO(
+                "MlpPolicy",
+                env,
+                learning_rate=self.config.learning_rate,
+                n_steps=100,  # Default value, will be updated in train()
+                batch_size=self.config.batch_size,
+                n_epochs=self.config.n_epochs,
+                gamma=self.config.gamma,
+                seed=self._seed,
+                verbose=1,
+            )
 
     def train(self, env: gym.Env, train_data: TrainingData) -> None:
         """Train policy."""

@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from typing import Any, Sequence
 
 import gymnasium as gym
+import numpy as np
+from numpy.typing import NDArray
 from relational_structs import (
     GroundAtom,
     LiftedOperator,
@@ -23,7 +25,7 @@ from tamp_improv.benchmarks.base import (
     PlanningComponents,
 )
 from tamp_improv.benchmarks.number_env import NumberEnv
-from tamp_improv.benchmarks.number_wrappers import NumberEnvWrapper
+from tamp_improv.benchmarks.wrappers import ImprovWrapper
 
 
 @dataclass
@@ -47,17 +49,19 @@ class NumberPredicates:
         return predicates
 
 
-class BaseNumberSkill(LiftedOperatorSkill[int, int]):
+class BaseNumberSkill(LiftedOperatorSkill[NDArray[np.int32], NDArray[np.int32]]):
     """Base class for number environment skills."""
 
-    def __init__(self, components: PlanningComponents[int]) -> None:
+    def __init__(self, components: PlanningComponents[NDArray[np.int32]]) -> None:
         """Initialize skill."""
         super().__init__()
         self._components = components
 
-    def _get_action_given_objects(self, objects: Sequence[Object], obs: int) -> int:
-        """All skills in this environment just return 1."""
-        return 1
+    def _get_action_given_objects(
+        self, objects: Sequence[Object], obs: NDArray[np.int32]
+    ) -> NDArray[np.int32]:
+        """Return action for movement without touching light switch."""
+        return np.array([1, 0])
 
 
 class ZeroToOneSkill(BaseNumberSkill):
@@ -76,7 +80,7 @@ class OneToTwoSkill(BaseNumberSkill):
         return next(op for op in self._components.operators if op.name == "OneToTwo")
 
 
-class NumberPerceiver(Perceiver[int]):
+class NumberPerceiver(Perceiver[NDArray[np.int32]]):
     """Perceiver for number environment."""
 
     def __init__(self, state_type: Type) -> None:
@@ -96,33 +100,42 @@ class NumberPerceiver(Perceiver[int]):
         return self._predicates
 
     def reset(
-        self, obs: int, info: dict[str, Any]
+        self, obs: NDArray[np.int32], _info: dict[str, Any]
     ) -> tuple[set[Object], set[GroundAtom], set[GroundAtom]]:
+        """Reset perceiver with observation."""
         objects = {self._state}
         atoms = self._get_atoms(obs)
         goal = {self.predicates["AtState2"]([self._state])}
         return objects, atoms, goal
 
-    def step(self, obs: int) -> set[GroundAtom]:
+    def step(self, obs: NDArray[np.int32]) -> set[GroundAtom]:
+        """Update perceiver with new observation."""
         return self._get_atoms(obs)
 
-    def _get_atoms(self, obs: int) -> set[GroundAtom]:
+    def _get_atoms(self, obs: NDArray[np.int32]) -> set[GroundAtom]:
+        """Get atoms from observation."""
+        state, light_switch = obs
         atoms = set()
+
         state_to_predicate = {
             0: "AtState0",
             1: "AtState1",
             2: "AtState2",
         }
-        atoms.add(self.predicates[state_to_predicate[obs]]([self._state]))
+        atoms.add(self.predicates[state_to_predicate[state]]([self._state]))
+
+        if light_switch == 1:
+            atoms.add(self.predicates["CanProgress"]([self._state]))
+
         return atoms
 
 
-class BaseNumberTAMPSystem(BaseTAMPSystem[int, int]):
+class BaseNumberTAMPSystem(BaseTAMPSystem[NDArray[np.int32], NDArray[np.int32]]):
     """Base TAMP system for number environment."""
 
     def __init__(
         self,
-        planning_components: PlanningComponents[int],
+        planning_components: PlanningComponents[NDArray[np.int32]],
         seed: int | None = None,
         render_mode: str | None = None,
     ) -> None:
@@ -245,10 +258,17 @@ class BaseNumberTAMPSystem(BaseTAMPSystem[int, int]):
         return system
 
 
-class NumberTAMPSystem(ImprovisationalTAMPSystem[int, int], BaseNumberTAMPSystem):
+class NumberTAMPSystem(
+    ImprovisationalTAMPSystem[NDArray[np.int32], NDArray[np.int32]],
+    BaseNumberTAMPSystem,
+):
     """TAMP system for the number environment with improvisational policy
     learning enabled."""
 
-    def _create_wrapped_env(self, components: PlanningComponents[int]) -> gym.Env:
+    def _create_wrapped_env(
+        self, components: PlanningComponents[NDArray[np.int32]]
+    ) -> gym.Env:
         """Create wrapped environment for training."""
-        return NumberEnvWrapper(self.env)
+        return ImprovWrapper(
+            self.env, perceiver=components.perceiver, max_episode_steps=10
+        )
