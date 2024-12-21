@@ -5,6 +5,7 @@ videos/
 trained_policies/
 logs/
 training_data/
+results/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
