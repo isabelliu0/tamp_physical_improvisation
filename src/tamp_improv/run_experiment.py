@@ -3,7 +3,7 @@ approaches."""
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Tuple
+from typing import Any
 
 from tabulate import tabulate
 
@@ -27,13 +27,12 @@ class ExperimentConfig:
     # General settings
     seed: int = 42
     render: bool = False
-    record_videos: bool = False
 
     # Collection and training settings
     collect_episodes: int = 50
     max_steps: int = 50
     episodes_per_scenario: int = 5
-    force_collect: bool = True
+    force_collect: bool = False
     record_training: bool = False
     training_record_interval: int = 50
 
@@ -72,13 +71,11 @@ class ExperimentConfig:
         )
     )
 
-    def get_training_config(self, phase: str = "eval") -> TrainingConfig:
+    def get_training_config(self) -> TrainingConfig:
         """Get training configuration for specific phase."""
         return TrainingConfig(
             seed=self.seed,
-            num_episodes=(
-                self.eval_episodes if phase == "eval" else self.collect_episodes
-            ),
+            num_episodes=self.eval_episodes,
             max_steps=self.max_steps,
             render=self.render,
             collect_episodes=self.collect_episodes,
@@ -120,7 +117,6 @@ class PolicyFactory:
 
     def create_loaded_rl_policy(self, seed: int) -> Policy:
         """Create pre-trained RL policy."""
-        # Use exact same path construction as test_improvisational.py
         policy_path = Path(self.config.save_dir) / f"{self._current_system}_RL.zip"
 
         if not policy_path.exists():
@@ -129,7 +125,6 @@ class PolicyFactory:
                 "Please run training with RL policy first."
             )
 
-        # Create and load policy
         policy: RLPolicy = RLPolicy(seed=seed, config=self.config.rl_config)
         policy.load(str(policy_path))
         return policy
@@ -143,51 +138,39 @@ def get_available_systems() -> list[type[ImprovisationalTAMPSystem[Any, Any]]]:
     ]
 
 
-def run_experiments(config: ExperimentConfig) -> dict[Tuple[str, str], Metrics]:
+def run_experiments(config: ExperimentConfig) -> dict[tuple[str, str], Metrics]:
     """Run experiments for all systems and approaches."""
-    # Create output directories
     config.results_dir.mkdir(parents=True, exist_ok=True)
     config.training_data_dir.mkdir(parents=True, exist_ok=True)
     config.save_dir.mkdir(parents=True, exist_ok=True)
 
-    # Get systems
     systems = get_available_systems()
 
-    # Create policy factory
     factory = PolicyFactory(config)
 
-    # Define approaches
     approaches = {
         "MPC": factory.create_mpc_policy,
         "RL": factory.create_rl_policy,
         "RL_Loaded": factory.create_loaded_rl_policy,
     }
 
-    # Store results
-    results: dict[Tuple[str, str], Metrics] = {}
+    results: dict[tuple[str, str], Metrics] = {}
 
-    # Run experiments
     for system_cls in systems:
         print(f"\n{'='*20} Testing {system_cls.__name__} {'='*20}")
 
-        # Create system instance
-        system = system_cls.create_default(  # type: ignore
-            seed=config.seed,
-            render_mode="rgb_array" if config.render else None,
-        )
-
-        # Update current system name
         factory.current_system = system_cls.__name__
 
-        # Test each approach
         for approach_name, policy_creator in approaches.items():
             print(f"\n{'-'*10} Testing {approach_name} {'-'*10}")
 
             try:
-                # All approaches use eval config
-                train_config = config.get_training_config("eval")
+                system = system_cls.create_default(  # type: ignore
+                    seed=config.seed,
+                    render_mode="rgb_array" if config.render else None,
+                )
+                train_config = config.get_training_config()
 
-                # Run evaluation
                 metrics = train_and_evaluate(
                     system=system,
                     policy_factory=policy_creator,
@@ -195,7 +178,6 @@ def run_experiments(config: ExperimentConfig) -> dict[Tuple[str, str], Metrics]:
                     policy_name=approach_name,
                 )
 
-                # Store and print results
                 results[(system_cls.__name__, approach_name)] = metrics
                 print(f"\nResults for {system_cls.__name__} with {approach_name}:")
                 print(f"Success Rate: {metrics.success_rate:.2%}")
@@ -214,10 +196,9 @@ def run_experiments(config: ExperimentConfig) -> dict[Tuple[str, str], Metrics]:
 
 
 def save_results(
-    results: dict[Tuple[str, str], Metrics], config: ExperimentConfig
+    results: dict[tuple[str, str], Metrics], config: ExperimentConfig
 ) -> None:
     """Save experiment results."""
-    # Create results table
     table_data = []
     headers = ["System", "Approach", "Success Rate", "Avg Length", "Avg Reward"]
 
@@ -232,7 +213,6 @@ def save_results(
             ]
         )
 
-    # Save table
     table = tabulate(table_data, headers=headers, tablefmt="grid")
     results_file = config.results_dir / "experiment_results.txt"
     with open(results_file, "w", encoding="utf-8") as f:
