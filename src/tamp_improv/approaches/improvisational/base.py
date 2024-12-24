@@ -10,11 +10,12 @@ from tomsutils.pddl_planning import run_pddl_planner
 
 from tamp_improv.approaches.base import (
     ActType,
+    ApproachStepResult,
     BaseApproach,
     ImprovisationalTAMPSystem,
     ObsType,
 )
-from tamp_improv.approaches.improvisational.policies.base import Policy
+from tamp_improv.approaches.improvisational.policies.base import Policy, PolicyContext
 
 
 class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
@@ -63,12 +64,11 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self._current_operator: GroundOperator | None = None
         self._current_skill: Skill | None = None
         self.policy_active = False
-        self._target_atoms: set[GroundAtom] = set()
+        self.target_atoms: set[GroundAtom] = set()
         self.currently_satisfied: set[GroundAtom] = set()
         self._goal: set[GroundAtom] = set()
-        self.prev_obs: ObsType | None = None
 
-    def reset(self, obs: ObsType, info: dict[str, Any]) -> ActType:
+    def reset(self, obs: ObsType, info: dict[str, Any]) -> ApproachStepResult[ActType]:
         """Reset approach with initial observation."""
         objects, atoms, goal = self.system.perceiver.reset(obs, info)
         self._goal = goal
@@ -78,9 +78,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self._current_operator = None
         self._current_skill = None
         self.policy_active = False
-        self._target_atoms = set()
+        self.target_atoms = set()
         self.currently_satisfied = set()
-        self.prev_obs = None
 
         return self.step(obs, 0.0, False, False, info)
 
@@ -91,24 +90,22 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         terminated: bool,
         truncated: bool,
         info: dict[str, Any],
-    ) -> ActType:
+    ) -> ApproachStepResult[ActType]:
         """Step approach with new observation."""
-        # Update state info for next iteration
-        self.prev_obs = obs
         atoms = self.system.perceiver.step(obs)
 
         # Check if policy achieved its goal
         if self.policy_active:
-            if self._target_atoms.issubset(atoms) and self.currently_satisfied.issubset(
+            if self.target_atoms.issubset(atoms) and self.currently_satisfied.issubset(
                 atoms
             ):
                 print("Policy successfully achieved target atoms!")
                 self.policy_active = False
-                self._target_atoms = set()
+                self.target_atoms = set()
                 self.currently_satisfied = set()
                 self._replan(obs, info)
                 return self.step(obs, reward, terminated, truncated, info)
-            return self.policy.get_action(obs)
+            return ApproachStepResult(action=self.policy.get_action(obs))
 
         # Get new operator if needed
         if self._current_operator is None or self._operator_completed(
@@ -131,16 +128,36 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
                 # Track satisfied vs target preconditions
                 self.currently_satisfied = full_ground_op.preconditions & atoms
-                self._target_atoms = full_ground_op.preconditions - atoms
+                self.target_atoms = full_ground_op.preconditions - atoms
 
-                return self.policy.get_action(obs)
+                # Configure policy with new context
+                self.policy.configure_context(
+                    PolicyContext(
+                        preconditions_to_maintain=self.currently_satisfied,
+                        preconditions_to_achieve=self.target_atoms,
+                    )
+                )
+
+                # If in training mode, collect this state and terminate
+                if self.training_mode:
+                    return ApproachStepResult(
+                        action=self.policy.get_action(obs),
+                        terminate=True,
+                        info={
+                            "training_state": obs,
+                            "preconditions_to_maintain": self.currently_satisfied,
+                            "preconditions_to_achieve": self.target_atoms,
+                        },
+                    )
+
+                return ApproachStepResult(action=self.policy.get_action(obs))
 
             # Get skill for the operator from the base domain
             self._current_skill = self._get_skill(self._current_operator)
             self._current_skill.reset(self._current_operator)
 
         assert self._current_skill is not None
-        return self._current_skill.get_action(obs)
+        return ApproachStepResult(action=self._current_skill.get_action(obs))
 
     def _create_task_plan(
         self,
