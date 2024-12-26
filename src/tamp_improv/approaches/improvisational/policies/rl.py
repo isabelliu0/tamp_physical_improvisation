@@ -123,7 +123,12 @@ class RLPolicy(Policy[ObsType, ActType]):
                 verbose=1,
             )
 
-    def train(self, env: gym.Env, train_data: TrainingData) -> None:
+    def train(
+        self,
+        env: gym.Env,
+        train_data: TrainingData,
+        callback: BaseCallback | None = None,
+    ) -> None:
         """Train policy."""
         # Call base class train to initialize and configure env
         super().train(env, train_data)
@@ -143,9 +148,10 @@ class RLPolicy(Policy[ObsType, ActType]):
             verbose=1,
         )
 
-        callback = TrainingProgressCallback(
-            check_freq=train_data.config.get("training_record_interval", 100)
-        )
+        if callback is None:
+            callback = TrainingProgressCallback(
+                check_freq=train_data.config.get("training_record_interval", 100)
+            )
 
         # Calculate total timesteps to ensure we see each scenario multiple times
         episodes_per_scenario = train_data.config.get("episodes_per_scenario", 2)
@@ -161,10 +167,17 @@ class RLPolicy(Policy[ObsType, ActType]):
         # Train the model
         self.model.learn(total_timesteps=total_timesteps, callback=callback)
 
-        print("\nFinal Training Results:")
-        print(f"Overall Success Rate: {callback.final_success_rate:.2%}")
-        print(f"Overall Avg Episode Length: {callback.final_avg_episode_length:.2f}")
-        print(f"Overall Avg Reward: {callback.final_avg_reward:.2f}")
+        if (
+            hasattr(callback, "final_success_rate")
+            and hasattr(callback, "final_avg_episode_length")
+            and hasattr(callback, "final_avg_reward")
+        ):
+            print("\nFinal Training Results:")
+            print(f"Overall Success Rate: {callback.final_success_rate:.2%}")
+            print(
+                f"Overall Avg Episode Length: {callback.final_avg_episode_length:.2f}"
+            )
+            print(f"Overall Avg Reward: {callback.final_avg_reward:.2f}")
 
     def get_action(self, obs: ObsType) -> ActType:
         """Get action from policy."""
