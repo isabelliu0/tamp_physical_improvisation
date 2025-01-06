@@ -113,13 +113,38 @@ class Blocks2DEnv(gym.Env):
         return self.state.gripper_status
 
     def _get_default_state(self) -> Blocks2DState:
-        """Get default initial state."""
+        """Get default initial state with randomized block 2 position."""
+        # Target area properties are constant
+        target_x = self._target_area["x"]
+        target_width = self._target_area["width"]
+
+        # Calculate target area bounds
+        target_left = target_x - target_width / 2
+        target_right = target_x + target_width / 2
+
+        # Calculate valid range for block 2's x position to ensure it blocks target
+        min_overlap = self._block_width / 2  # adjustable
+        block_2_left_bound = target_left - (self._block_width / 2) + min_overlap
+        block_2_right_bound = target_right + (self._block_width / 2) - min_overlap
+
+        # Randomly position block 2 within valid range
+        block_2_x = self.np_random.uniform(block_2_left_bound, block_2_right_bound)
+
         return Blocks2DState(
             robot_position=np.array([0.5, 1.0], dtype=np.float32),
             block_1_position=np.array([0.0, 0.0], dtype=np.float32),
-            block_2_position=np.array([0.5, 0.0], dtype=np.float32),
+            block_2_position=np.array([block_2_x, 0.0], dtype=np.float32),
             gripper_status=0.0,
         )
+
+    # def _get_default_state(self) -> Blocks2DState:
+    #     """Get default initial state."""
+    #     return Blocks2DState(
+    #         robot_position=np.array([0.5, 1.0], dtype=np.float32),
+    #         block_1_position=np.array([0.0, 0.0], dtype=np.float32),
+    #         block_2_position=np.array([0.5, 0.0], dtype=np.float32),
+    #         gripper_status=0.0,
+    #     )
 
     def reset_from_state(
         self,
