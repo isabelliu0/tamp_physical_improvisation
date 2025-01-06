@@ -10,6 +10,10 @@ from tabulate import tabulate
 from tamp_improv.approaches.improvisational.policies.base import Policy
 from tamp_improv.approaches.improvisational.policies.mpc import MPCConfig, MPCPolicy
 from tamp_improv.approaches.improvisational.policies.rl import RLConfig, RLPolicy
+from tamp_improv.approaches.improvisational.policies.rl2mpc import (
+    RL2MPCConfig,
+    RL2MPCPolicy,
+)
 from tamp_improv.approaches.improvisational.training import (
     Metrics,
     TrainingConfig,
@@ -71,6 +75,43 @@ class ExperimentConfig:
         )
     )
 
+    rl2mpc_configs: dict[str, RL2MPCConfig] = field(
+        default_factory=lambda: {
+            "Blocks2DTAMPSystem": RL2MPCConfig(
+                rl_config=RLConfig(
+                    learning_rate=1e-4,
+                    batch_size=64,
+                    n_epochs=5,
+                    gamma=0.99,
+                ),
+                mpc_config=MPCConfig(
+                    num_rollouts=100,
+                    horizon=35,
+                    num_control_points=5,
+                    noise_scale=1.0,
+                ),
+                reward_threshold=-5.0,
+                window_size=50,
+            ),
+            "NumberTAMPSystem": RL2MPCConfig(
+                rl_config=RLConfig(
+                    learning_rate=1e-4,
+                    batch_size=64,
+                    n_epochs=5,
+                    gamma=0.99,
+                ),
+                mpc_config=MPCConfig(
+                    num_rollouts=20,
+                    horizon=10,
+                    num_control_points=3,
+                    noise_scale=0.5,
+                ),
+                reward_threshold=-0.5,
+                window_size=5,
+            ),
+        }
+    )
+
     def get_training_config(self) -> TrainingConfig:
         """Get training configuration for specific phase."""
         return TrainingConfig(
@@ -129,6 +170,11 @@ class PolicyFactory:
         policy.load(str(policy_path))
         return policy
 
+    def create_rl2mpc_policy(self, seed: int) -> Policy:
+        """Create RL2MPC policy for current system."""
+        rl2mpc_config = self.config.rl2mpc_configs[self.current_system]
+        return RL2MPCPolicy(seed=seed, config=rl2mpc_config)
+
 
 def get_available_systems() -> list[type[ImprovisationalTAMPSystem[Any, Any]]]:
     """Get list of available TAMP systems."""
@@ -152,6 +198,7 @@ def run_experiments(config: ExperimentConfig) -> dict[tuple[str, str], Metrics]:
         "MPC": factory.create_mpc_policy,
         "RL": factory.create_rl_policy,
         "RL_Loaded": factory.create_loaded_rl_policy,
+        "RL2MPC": factory.create_rl2mpc_policy,
     }
 
     results: dict[tuple[str, str], Metrics] = {}
@@ -200,7 +247,15 @@ def save_results(
 ) -> None:
     """Save experiment results."""
     table_data = []
-    headers = ["System", "Approach", "Success Rate", "Avg Length", "Avg Reward"]
+    headers = [
+        "System",
+        "Approach",
+        "Success Rate",
+        "Avg Length",
+        "Avg Reward",
+        "Train Time (s)",
+        "Total Time (s)",
+    ]
 
     for (system_name, approach_name), metrics in sorted(results.items()):
         table_data.append(
@@ -210,6 +265,8 @@ def save_results(
                 f"{metrics.success_rate:.2%}",
                 f"{metrics.avg_episode_length:.2f}",
                 f"{metrics.avg_reward:.2f}",
+                f"{metrics.training_time:.2f}",
+                f"{metrics.total_time:.2f}",
             ]
         )
 

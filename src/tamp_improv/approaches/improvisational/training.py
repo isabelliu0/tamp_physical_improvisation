@@ -1,5 +1,6 @@
 """Training utilities for improvisational approaches."""
 
+import time
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
@@ -54,6 +55,8 @@ class Metrics:
     success_rate: float
     avg_episode_length: float
     avg_reward: float
+    training_time: float = 0.0
+    total_time: float = 0.0
 
 
 def get_or_collect_training_data(
@@ -230,6 +233,9 @@ def train_and_evaluate(
     """Train and evaluate a policy on a system."""
     print(f"\nInitializing training for {system.name}...")
 
+    training_time = 0.0
+    start_time = time.time()
+
     # Create policy using factory
     policy = policy_factory(config.seed)
 
@@ -256,6 +262,7 @@ def train_and_evaluate(
                 )
 
             policy.train(system.wrapped_env, train_data)
+            training_time = time.time() - start_time
 
             save_path = Path(config.save_dir) / f"{system.name}_{policy_name}"
             print(f"\nSaving policy to {save_path}")
@@ -292,8 +299,11 @@ def train_and_evaluate(
         print(f"Current Avg Episode Length: {np.mean(lengths):.2f}")
         print(f"Current Avg Reward: {np.mean(rewards):.2f}")
 
+    total_time = time.time() - start_time
     return Metrics(
         success_rate=float(sum(successes) / len(successes)),
         avg_episode_length=float(np.mean(lengths)),
         avg_reward=float(np.mean(rewards)),
+        training_time=training_time,
+        total_time=total_time,
     )
