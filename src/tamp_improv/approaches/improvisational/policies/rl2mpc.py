@@ -82,6 +82,7 @@ class RL2MPCPolicy(Policy[ObsType, ActType]):
         self._start_state: ObsType | None = None
         self._using_mpc = False
         self._env: gym.Env | None = None
+        self._traj_env: gym.Env | None = None
 
     @property
     def requires_training(self) -> bool:
@@ -93,6 +94,7 @@ class RL2MPCPolicy(Policy[ObsType, ActType]):
         self._env = env
         self.rl_policy.initialize(env)
         self.mpc_policy.initialize(env)
+        self._traj_env = deepcopy(self.mpc_policy.env)
 
     def configure_context(self, context: PolicyContext) -> None:
         """Configure policy context."""
@@ -100,9 +102,6 @@ class RL2MPCPolicy(Policy[ObsType, ActType]):
 
     def train(self, env: gym.Env, train_data: TrainingData) -> None:
         """Train RL policy until threshold."""
-        if not hasattr(self, "rl_policy") or not hasattr(self, "mpc_policy"):
-            self.initialize(env)
-
         # Create callback that will stop training at threshold
         callback = RL2MPCCallback(
             reward_threshold=self.config.reward_threshold,
@@ -121,19 +120,16 @@ class RL2MPCPolicy(Policy[ObsType, ActType]):
     def _initialize_mpc_from_start_state(self) -> None:
         """Initialize MPC nominal trajectory using RL policy from start
         state."""
-        if self._env is None or self._start_state is None:
+        if self._env is None or self._start_state is None or self._traj_env is None:
             raise ValueError("Environment or start state not initialized")
 
         # Use MPC's wrapped environment for trajectory generation
-        if not hasattr(self.mpc_policy, "env") or self.mpc_policy.env is None:
+        if self.mpc_policy.env is None:
             raise ValueError("MPC environment not initialized")
-
-        # Create a separate environment instance for trajectory generation
-        temp_env = deepcopy(self.mpc_policy.env)
 
         # Generate trajectory from start state using RL
         current_obs = self._start_state
-        temp_env.reset_from_state(current_obs)  # type: ignore
+        self._traj_env.reset_from_state(current_obs)  # type: ignore
         trajectory = []
 
         for step in range(self.mpc_policy.config.horizon):
@@ -141,7 +137,7 @@ class RL2MPCPolicy(Policy[ObsType, ActType]):
             trajectory.append(action)
 
             # Step environment to get next observation
-            next_obs, _, terminated, truncated, _ = temp_env.step(action)
+            next_obs, _, terminated, truncated, _ = self._traj_env.step(action)
 
             if terminated or truncated:
                 # If episode ended early, use zero action for remaining steps
@@ -154,24 +150,9 @@ class RL2MPCPolicy(Policy[ObsType, ActType]):
             current_obs = next_obs
 
         print(f"Generated MPC trajectory from RL: {trajectory}")
-        trajectory_arr = np.array(trajectory)
+        self.mpc_policy.set_nominal_trajectory(trajectory)
 
-        # Set MPC's last solution based on action space type
-        if self.mpc_policy.is_discrete:
-            self.mpc_policy.last_solution = trajectory_arr.astype(np.int32)
-        elif self.mpc_policy.is_multidiscrete:
-            self.mpc_policy.last_solution = trajectory_arr.reshape(
-                -1, self.mpc_policy.action_dims
-            )
-        else:
-            box_space = cast(gym.spaces.Box, self._env.action_space)
-            if box_space.shape:
-                trajectory_arr = trajectory_arr.reshape(-1, *box_space.shape)
-            self.mpc_policy.last_solution = np.clip(
-                trajectory_arr, box_space.low, box_space.high
-            )
-
-        temp_env.close()  # type: ignore[no-untyped-call]
+        self._traj_env.close()  # type: ignore[no-untyped-call]
 
     def get_action(self, obs: ObsType) -> ActType:
         """Get action using either RL or MPC."""

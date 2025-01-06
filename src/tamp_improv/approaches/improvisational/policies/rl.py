@@ -72,22 +72,32 @@ class TrainingProgressCallback(BaseCallback):
 
         return True
 
+    def _on_training_end(self) -> None:
+        """Print final training statistics."""
+        print("\nFinal Training Results:")
+        if self.success_history:
+            print(f"Overall Success Rate: {self._get_success_rate:.2%}")
+            print(f"Overall Avg Episode Length: {self._get_avg_episode_length:.2f}")
+            print(f"Overall Avg Reward: {self._get_avg_reward:.2f}")
+        else:
+            print("No episodes completed during training.")
+
     @property
-    def final_success_rate(self) -> float:
+    def _get_success_rate(self) -> float:
         """Get the success rate over all training."""
         if not self.success_history:
             return 0.0
         return float(sum(self.success_history) / len(self.success_history))
 
     @property
-    def final_avg_episode_length(self) -> float:
+    def _get_avg_episode_length(self) -> float:
         """Get the average episode length over all training."""
         if not self.episode_lengths:
             return 0.0
         return float(np.mean(self.episode_lengths))
 
     @property
-    def final_avg_reward(self) -> float:
+    def _get_avg_reward(self) -> float:
         """Get the average reward over all training."""
         if not self.episode_rewards:
             return 0.0
@@ -166,18 +176,6 @@ class RLPolicy(Policy[ObsType, ActType]):
 
         # Train the model
         self.model.learn(total_timesteps=total_timesteps, callback=callback)
-
-        if (
-            hasattr(callback, "final_success_rate")
-            and hasattr(callback, "final_avg_episode_length")
-            and hasattr(callback, "final_avg_reward")
-        ):
-            print("\nFinal Training Results:")
-            print(f"Overall Success Rate: {callback.final_success_rate:.2%}")
-            print(
-                f"Overall Avg Episode Length: {callback.final_avg_episode_length:.2f}"
-            )
-            print(f"Overall Avg Reward: {callback.final_avg_reward:.2f}")
 
     def get_action(self, obs: ObsType) -> ActType:
         """Get action from policy."""

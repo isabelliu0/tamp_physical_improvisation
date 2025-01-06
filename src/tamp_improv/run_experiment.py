@@ -247,7 +247,15 @@ def save_results(
 ) -> None:
     """Save experiment results."""
     table_data = []
-    headers = ["System", "Approach", "Success Rate", "Avg Length", "Avg Reward"]
+    headers = [
+        "System",
+        "Approach",
+        "Success Rate",
+        "Avg Length",
+        "Avg Reward",
+        "Train Time (s)",
+        "Total Time (s)",
+    ]
 
     for (system_name, approach_name), metrics in sorted(results.items()):
         table_data.append(
@@ -257,6 +265,8 @@ def save_results(
                 f"{metrics.success_rate:.2%}",
                 f"{metrics.avg_episode_length:.2f}",
                 f"{metrics.avg_reward:.2f}",
+                f"{metrics.training_time:.2f}",
+                f"{metrics.total_time:.2f}",
             ]
         )
 

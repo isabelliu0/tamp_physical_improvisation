@@ -21,7 +21,7 @@ def base_config():
         seed=42,
         num_episodes=5,
         max_steps=50,
-        render=True,
+        render=False,
     )
 
 

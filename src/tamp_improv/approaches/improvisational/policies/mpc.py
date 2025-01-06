@@ -78,19 +78,45 @@ class MPCPolicy(Policy[ObsType, ActType]):
         )
 
         # Initialize last solution
+        self.last_solution = self._create_empty_trajectory()
+
+    def _create_empty_trajectory(self) -> NDArray:
+        """Create empty trajectory array with proper shape and type."""
+        if self.env is None:
+            raise ValueError("Environment not initialized")
+
         if self.is_discrete:
-            self.last_solution = np.zeros(self.config.horizon, dtype=np.int32)
+            return np.zeros(self.config.horizon, dtype=np.int32)
+        if self.is_multidiscrete:
+            return np.zeros((self.config.horizon, self.action_dims), dtype=np.int32)
+        if not self._box_space:
+            raise ValueError("Unsupported action space type")
+        box_space = cast(gym.spaces.Box, self.env.action_space)
+        action_shape = box_space.shape if box_space.shape else ()
+        shape = (self.config.horizon,) + action_shape
+        return np.zeros(shape, dtype=np.float32)
+
+    def set_nominal_trajectory(self, trajectory: list[ActType]) -> None:
+        """Set the nominal trajectory for MPC from a list of actions."""
+        if self.env is None:
+            raise ValueError("Policy not initialized")
+
+        # Use same shape/type as empty trajectory
+        new_solution = self._create_empty_trajectory()
+        trajectory_arr = np.array(trajectory)
+
+        # Set values based on action space type
+        if self.is_discrete:
+            new_solution = trajectory_arr.astype(np.int32)
         elif self.is_multidiscrete:
-            self.last_solution = np.zeros(
-                (self.config.horizon, self.action_dims), dtype=np.int32
-            )
+            new_solution = trajectory_arr.reshape(-1, self.action_dims)
         else:
-            if not self._box_space:
-                raise ValueError("Unsupported action space type")
-            box_space = cast(gym.spaces.Box, env.action_space)
-            action_shape = box_space.shape if box_space.shape else ()
-            shape = (self.config.horizon,) + action_shape
-            self.last_solution = np.zeros(shape, dtype=np.float32)
+            box_space = cast(gym.spaces.Box, self.env.action_space)
+            if box_space.shape:
+                trajectory_arr = trajectory_arr.reshape(-1, *box_space.shape)
+            new_solution = np.clip(trajectory_arr, box_space.low, box_space.high)
+
+        self.last_solution = new_solution
 
     def configure_context(self, context: PolicyContext[ObsType, ActType]) -> None:
         """Configure MPC with new context/preconditions."""
