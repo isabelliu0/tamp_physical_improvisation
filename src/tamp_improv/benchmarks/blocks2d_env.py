@@ -123,7 +123,7 @@ class Blocks2DEnv(gym.Env):
         target_right = target_x + target_width / 2
 
         # Calculate valid range for block 2's x position to ensure it blocks target
-        min_overlap = self._block_width / 2  # adjustable
+        min_overlap = 0  # adjustable
         block_2_left_bound = target_left - (self._block_width / 2) + min_overlap
         block_2_right_bound = target_right + (self._block_width / 2) - min_overlap
 
@@ -136,15 +136,6 @@ class Blocks2DEnv(gym.Env):
             block_2_position=np.array([block_2_x, 0.0], dtype=np.float32),
             gripper_status=0.0,
         )
-
-    # def _get_default_state(self) -> Blocks2DState:
-    #     """Get default initial state."""
-    #     return Blocks2DState(
-    #         robot_position=np.array([0.5, 1.0], dtype=np.float32),
-    #         block_1_position=np.array([0.0, 0.0], dtype=np.float32),
-    #         block_2_position=np.array([0.5, 0.0], dtype=np.float32),
-    #         gripper_status=0.0,
-    #     )
 
     def reset_from_state(
         self,

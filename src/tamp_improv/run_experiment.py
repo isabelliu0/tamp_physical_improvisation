@@ -30,10 +30,10 @@ class ExperimentConfig:
 
     # General settings
     seed: int = 42
-    render: bool = False
+    render: bool = True
 
     # Collection and training settings
-    collect_episodes: int = 50
+    collect_episodes: int = 100
     max_steps: int = 50
     episodes_per_scenario: int = 5
     force_collect: bool = False

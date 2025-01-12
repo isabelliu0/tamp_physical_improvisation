@@ -21,7 +21,7 @@ def base_config():
         seed=42,
         num_episodes=5,
         max_steps=50,
-        render=False,
+        render=True,
     )
 
 
@@ -90,7 +90,7 @@ def test_rl_approach(system_cls, base_config):
         max_steps=base_config.max_steps,
         render=base_config.render,
         # RL-specific settings
-        collect_episodes=50,
+        collect_episodes=100,
         episodes_per_scenario=5,
         force_collect=False,
         record_training=False,
