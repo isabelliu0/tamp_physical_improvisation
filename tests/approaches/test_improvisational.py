@@ -31,15 +31,15 @@ def base_config():
         (
             Blocks2DTAMPSystem,
             MPCConfig(
-                num_rollouts=100, horizon=35, num_control_points=5, noise_scale=1.0
+                num_rollouts=100, horizon=35, num_control_points=5, noise_scale=0.25
             ),
         ),
         (
             NumberTAMPSystem,
             MPCConfig(
                 num_rollouts=20,
-                horizon=10,
-                num_control_points=3,
+                horizon=5,
+                num_control_points=2,
                 noise_scale=0.5,
             ),
         ),

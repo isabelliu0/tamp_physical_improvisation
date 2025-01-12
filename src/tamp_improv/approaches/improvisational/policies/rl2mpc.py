@@ -28,7 +28,7 @@ class RL2MPCConfig:
 
     rl_config: RLConfig = field(default_factory=RLConfig)
     mpc_config: MPCConfig = field(default_factory=MPCConfig)
-    reward_threshold: float = -5.0  # Threshold to switch from RL to MPC
+    reward_threshold: float = -30.0  # Threshold to switch from RL to MPC
     window_size: int = 50  # Window size for computing average reward
 
 
@@ -38,7 +38,7 @@ class RL2MPCCallback(TrainingProgressCallback):
     def __init__(
         self,
         reward_threshold: float,
-        window_size: int = 50,
+        window_size: int = 10,
         check_freq: int = 100,
         verbose: int = 1,
     ):
@@ -94,11 +94,21 @@ class RL2MPCPolicy(Policy[ObsType, ActType]):
         self._env = env
         self.rl_policy.initialize(env)
         self.mpc_policy.initialize(env)
-        self._traj_env = deepcopy(self.mpc_policy.env)
+        self._traj_env = deepcopy(env)
 
     def configure_context(self, context: PolicyContext) -> None:
         """Configure policy context."""
         self.mpc_policy.configure_context(context)
+        # Also configure trajectory environment
+        if hasattr(self._traj_env, "configure_training"):
+            self._traj_env.configure_training(  # type: ignore[union-attr]
+                TrainingData(
+                    states=[],
+                    preconditions_to_maintain=[context.preconditions_to_maintain],
+                    preconditions_to_achieve=[context.preconditions_to_achieve],
+                    config={"max_steps": self.mpc_policy.config.horizon},
+                )
+            )
 
     def train(self, env: gym.Env, train_data: TrainingData) -> None:
         """Train RL policy until threshold."""

@@ -281,7 +281,7 @@ class MPCPolicy(Policy[ObsType, ActType]):
             size=(self.config.num_rollouts - 1, self.config.num_control_points)
             + (points.shape[1:] if points.ndim > 1 else ()),
         )
-        new_points = points + noise
+        new_points = np.clip(points + noise, box_space.low, box_space.high)
 
         trajectories = []
         for pts in new_points:
