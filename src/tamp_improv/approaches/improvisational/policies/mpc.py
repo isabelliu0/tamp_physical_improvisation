@@ -45,7 +45,7 @@ class MPCPolicy(Policy[ObsType, ActType]):
         # Initialize arrays with proper dtypes
         self._control_times: NDArray[np.float64] = np.zeros(0)
         self._trajectory_times: NDArray[np.float64] = np.zeros(0)
-        self.last_solution: NDArray[np.float64] = np.zeros(0)
+        self.last_solution: NDArray[np.float32] = np.zeros(0, dtype=np.float32)
         self._first_solve = False
 
     @property
