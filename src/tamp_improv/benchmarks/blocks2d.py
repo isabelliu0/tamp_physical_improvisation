@@ -501,7 +501,7 @@ class Blocks2DTAMPSystem(
         return ImprovWrapper(
             base_env=self.env,
             perceiver=components.perceiver,
-            step_penalty=-0.1,
-            precondition_violation_penalty=-0.1,
-            achievement_bonus=1.0,
+            step_penalty=-0.5,
+            precondition_violation_penalty=-0.5,
+            achievement_bonus=10.0,
         )

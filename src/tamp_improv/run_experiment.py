@@ -30,10 +30,10 @@ class ExperimentConfig:
 
     # General settings
     seed: int = 42
-    render: bool = False
+    render: bool = True
 
     # Collection and training settings
-    collect_episodes: int = 50
+    collect_episodes: int = 100
     max_steps: int = 50
     episodes_per_scenario: int = 5
     force_collect: bool = False
@@ -53,14 +53,14 @@ class ExperimentConfig:
         default_factory=lambda: {
             "Blocks2DTAMPSystem": MPCConfig(
                 num_rollouts=100,
-                horizon=35,
-                num_control_points=5,
-                noise_scale=1.0,
+                horizon=20,
+                num_control_points=10,
+                noise_scale=0.25,
             ),
             "NumberTAMPSystem": MPCConfig(
                 num_rollouts=20,
-                horizon=10,
-                num_control_points=3,
+                horizon=5,
+                num_control_points=2,
                 noise_scale=0.5,
             ),
         }
@@ -86,12 +86,12 @@ class ExperimentConfig:
                 ),
                 mpc_config=MPCConfig(
                     num_rollouts=100,
-                    horizon=35,
-                    num_control_points=5,
-                    noise_scale=1.0,
+                    horizon=20,
+                    num_control_points=10,
+                    noise_scale=0.05,
                 ),
-                reward_threshold=-5.0,
-                window_size=50,
+                reward_threshold=-30.0,
+                window_size=10,
             ),
             "NumberTAMPSystem": RL2MPCConfig(
                 rl_config=RLConfig(

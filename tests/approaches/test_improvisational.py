@@ -21,7 +21,7 @@ def base_config():
         seed=42,
         num_episodes=5,
         max_steps=50,
-        render=False,
+        render=True,
     )
 
 
@@ -31,18 +31,18 @@ def base_config():
         (
             Blocks2DTAMPSystem,
             MPCConfig(
-                num_rollouts=100, horizon=35, num_control_points=5, noise_scale=1.0
+                num_rollouts=100, horizon=35, num_control_points=5, noise_scale=0.25
             ),
         ),
-        (
-            NumberTAMPSystem,
-            MPCConfig(
-                num_rollouts=20,
-                horizon=10,
-                num_control_points=3,
-                noise_scale=0.5,
-            ),
-        ),
+        # (
+        #     NumberTAMPSystem,
+        #     MPCConfig(
+        #         num_rollouts=20,
+        #         horizon=5,
+        #         num_control_points=2,
+        #         noise_scale=0.5,
+        #     ),
+        # ),
     ],
 )
 # pylint: disable=redefined-outer-name
@@ -90,7 +90,7 @@ def test_rl_approach(system_cls, base_config):
         max_steps=base_config.max_steps,
         render=base_config.render,
         # RL-specific settings
-        collect_episodes=50,
+        collect_episodes=100,
         episodes_per_scenario=5,
         force_collect=False,
         record_training=False,

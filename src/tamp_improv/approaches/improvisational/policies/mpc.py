@@ -43,9 +43,10 @@ class MPCPolicy(Policy[ObsType, ActType]):
         self.action_dims = 1  # Default for Discrete
 
         # Initialize arrays with proper dtypes
-        self._control_times = np.zeros(0, dtype=np.float64)
-        self._trajectory_times = np.zeros(0, dtype=np.float64)
-        self.last_solution = np.zeros(0, dtype=np.float64)
+        self._control_times: NDArray[np.float64] = np.zeros(0)
+        self._trajectory_times: NDArray[np.float64] = np.zeros(0)
+        self.last_solution: NDArray[np.float32] = np.zeros(0, dtype=np.float32)
+        self._first_solve = False
 
     @property
     def requires_training(self) -> bool:
@@ -117,6 +118,7 @@ class MPCPolicy(Policy[ObsType, ActType]):
             new_solution = np.clip(trajectory_arr, box_space.low, box_space.high)
 
         self.last_solution = new_solution
+        self._first_solve = True
 
     def configure_context(self, context: PolicyContext[ObsType, ActType]) -> None:
         """Configure MPC with new context/preconditions."""
@@ -165,9 +167,13 @@ class MPCPolicy(Policy[ObsType, ActType]):
                 nominal[:-1] = self.last_solution[1:]
                 nominal[-1] = self.last_solution[-1]
             else:
-                nominal = np.zeros_like(self.last_solution)
-                nominal = np.roll(self.last_solution, -1)
-                nominal[-1] = self.last_solution[-1]
+                if self._first_solve:
+                    nominal = self.last_solution
+                    self._first_solve = False
+                else:
+                    nominal = np.zeros_like(self.last_solution)
+                    nominal = np.roll(self.last_solution, -1, axis=0)
+                    nominal[-1] = self.last_solution[-1]
 
         candidates = [nominal] + self._sample_from_nominal(nominal)
         scores = [self._score_trajectory(traj, obs) for traj in candidates]
@@ -190,13 +196,13 @@ class MPCPolicy(Policy[ObsType, ActType]):
         if self.is_multidiscrete:
             multidiscrete_space = cast(gym.spaces.MultiDiscrete, self.env.action_space)
             shape = (self.config.horizon, self.action_dims)
-            trajectory = np.zeros(shape, dtype=np.int32)
+            traj = np.zeros(shape, dtype=np.int32)
             for dim in range(self.action_dims):
                 nvec = multidiscrete_space.nvec[dim]
-                trajectory[:, dim] = self._rng.integers(
+                traj[:, dim] = self._rng.integers(
                     0, nvec, size=self.config.horizon, dtype=np.int32
                 )
-            return trajectory
+            return traj
 
         if not self._box_space:
             raise ValueError("Unsupported action space type")
@@ -214,7 +220,7 @@ class MPCPolicy(Policy[ObsType, ActType]):
             trajectory_shape = (self.config.horizon,)
 
         control_points = self._rng.standard_normal(control_shape)
-        trajectory = np.zeros(trajectory_shape, dtype=np.float32)
+        trajectory: NDArray[np.float32] = np.zeros(trajectory_shape, dtype=np.float32)
 
         # Interpolate control points
         for dim in range(
