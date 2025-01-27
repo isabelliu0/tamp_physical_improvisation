@@ -53,8 +53,8 @@ class ExperimentConfig:
         default_factory=lambda: {
             "Blocks2DTAMPSystem": MPCConfig(
                 num_rollouts=100,
-                horizon=35,
-                num_control_points=5,
+                horizon=20,
+                num_control_points=10,
                 noise_scale=0.25,
             ),
             "NumberTAMPSystem": MPCConfig(
@@ -86,9 +86,9 @@ class ExperimentConfig:
                 ),
                 mpc_config=MPCConfig(
                     num_rollouts=100,
-                    horizon=35,
-                    num_control_points=5,
-                    noise_scale=1.0,
+                    horizon=20,
+                    num_control_points=10,
+                    noise_scale=0.05,
                 ),
                 reward_threshold=-30.0,
                 window_size=10,

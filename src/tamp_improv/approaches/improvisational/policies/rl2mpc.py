@@ -83,6 +83,7 @@ class RL2MPCPolicy(Policy[ObsType, ActType]):
         self._using_mpc = False
         self._env: gym.Env | None = None
         self._traj_env: gym.Env | None = None
+        self._cached_trajectory: list[ActType] | None = None
 
     @property
     def requires_training(self) -> bool:
@@ -99,7 +100,12 @@ class RL2MPCPolicy(Policy[ObsType, ActType]):
     def configure_context(self, context: PolicyContext) -> None:
         """Configure policy context."""
         self.mpc_policy.configure_context(context)
-        # Also configure trajectory environment
+
+        # Restore cached trajectory if available
+        if self._cached_trajectory is not None:
+            self.mpc_policy.set_nominal_trajectory(self._cached_trajectory)
+
+        # Configure trajectory environment
         if hasattr(self._traj_env, "configure_training"):
             self._traj_env.configure_training(  # type: ignore[union-attr]
                 TrainingData(
@@ -160,6 +166,7 @@ class RL2MPCPolicy(Policy[ObsType, ActType]):
             current_obs = next_obs
 
         print(f"Generated MPC trajectory from RL: {trajectory}")
+        self._cached_trajectory = trajectory
         self.mpc_policy.set_nominal_trajectory(trajectory)
 
         self._traj_env.close()  # type: ignore[no-untyped-call]
@@ -174,7 +181,8 @@ class RL2MPCPolicy(Policy[ObsType, ActType]):
             return self.mpc_policy.get_action(obs)
 
         if self._using_mpc:
-            return self.mpc_policy.get_action(obs)
+            action = self.mpc_policy.get_action(obs)
+            return action
         return self.rl_policy.get_action(obs)
 
     def save(self, path: str) -> None:

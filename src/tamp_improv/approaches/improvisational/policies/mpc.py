@@ -46,6 +46,7 @@ class MPCPolicy(Policy[ObsType, ActType]):
         self._control_times = np.zeros(0, dtype=np.float64)
         self._trajectory_times = np.zeros(0, dtype=np.float64)
         self.last_solution = np.zeros(0, dtype=np.float64)
+        self._first_solve = False
 
     @property
     def requires_training(self) -> bool:
@@ -117,6 +118,7 @@ class MPCPolicy(Policy[ObsType, ActType]):
             new_solution = np.clip(trajectory_arr, box_space.low, box_space.high)
 
         self.last_solution = new_solution
+        self._first_solve = True
 
     def configure_context(self, context: PolicyContext[ObsType, ActType]) -> None:
         """Configure MPC with new context/preconditions."""
@@ -165,9 +167,13 @@ class MPCPolicy(Policy[ObsType, ActType]):
                 nominal[:-1] = self.last_solution[1:]
                 nominal[-1] = self.last_solution[-1]
             else:
-                nominal = np.zeros_like(self.last_solution)
-                nominal = np.roll(self.last_solution, -1)
-                nominal[-1] = self.last_solution[-1]
+                if self._first_solve:
+                    nominal = self.last_solution
+                    self._first_solve = False
+                else:
+                    nominal = np.zeros_like(self.last_solution)
+                    nominal = np.roll(self.last_solution, -1, axis=0)
+                    nominal[-1] = self.last_solution[-1]
 
         candidates = [nominal] + self._sample_from_nominal(nominal)
         scores = [self._score_trajectory(traj, obs) for traj in candidates]
@@ -281,7 +287,7 @@ class MPCPolicy(Policy[ObsType, ActType]):
             size=(self.config.num_rollouts - 1, self.config.num_control_points)
             + (points.shape[1:] if points.ndim > 1 else ()),
         )
-        new_points = np.clip(points + noise, box_space.low, box_space.high)
+        new_points = points + noise
 
         trajectories = []
         for pts in new_points:
