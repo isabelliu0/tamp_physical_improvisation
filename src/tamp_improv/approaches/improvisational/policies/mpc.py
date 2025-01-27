@@ -43,9 +43,9 @@ class MPCPolicy(Policy[ObsType, ActType]):
         self.action_dims = 1  # Default for Discrete
 
         # Initialize arrays with proper dtypes
-        self._control_times = np.zeros(0, dtype=np.float64)
-        self._trajectory_times = np.zeros(0, dtype=np.float64)
-        self.last_solution = np.zeros(0, dtype=np.float64)
+        self._control_times: NDArray[np.float64] = np.zeros(0)
+        self._trajectory_times: NDArray[np.float64] = np.zeros(0)
+        self.last_solution: NDArray[np.float64] = np.zeros(0)
         self._first_solve = False
 
     @property
