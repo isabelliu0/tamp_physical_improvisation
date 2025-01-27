@@ -196,13 +196,13 @@ class MPCPolicy(Policy[ObsType, ActType]):
         if self.is_multidiscrete:
             multidiscrete_space = cast(gym.spaces.MultiDiscrete, self.env.action_space)
             shape = (self.config.horizon, self.action_dims)
-            trajectory = np.zeros(shape, dtype=np.int32)
+            traj = np.zeros(shape, dtype=np.int32)
             for dim in range(self.action_dims):
                 nvec = multidiscrete_space.nvec[dim]
-                trajectory[:, dim] = self._rng.integers(
+                traj[:, dim] = self._rng.integers(
                     0, nvec, size=self.config.horizon, dtype=np.int32
                 )
-            return trajectory
+            return traj
 
         if not self._box_space:
             raise ValueError("Unsupported action space type")
@@ -220,7 +220,7 @@ class MPCPolicy(Policy[ObsType, ActType]):
             trajectory_shape = (self.config.horizon,)
 
         control_points = self._rng.standard_normal(control_shape)
-        trajectory = np.zeros(trajectory_shape, dtype=np.float32)
+        trajectory: NDArray[np.float32] = np.zeros(trajectory_shape, dtype=np.float32)
 
         # Interpolate control points
         for dim in range(
