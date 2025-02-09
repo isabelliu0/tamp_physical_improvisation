@@ -12,6 +12,7 @@ from tamp_improv.approaches.improvisational.training import (
 )
 from tamp_improv.benchmarks.blocks2d import Blocks2DTAMPSystem
 from tamp_improv.benchmarks.number import NumberTAMPSystem
+from tamp_improv.benchmarks.pybullet_clear_and_place import ClearAndPlaceTAMPSystem
 
 
 @pytest.fixture
@@ -28,6 +29,15 @@ def base_config():
 @pytest.mark.parametrize(
     "system_cls,mpc_config",
     [
+        # (
+        #     ClearAndPlaceTAMPSystem,
+        #     MPCConfig(
+        #         num_rollouts=200,
+        #         horizon=50,
+        #         num_control_points=15,
+        #         noise_scale=0.5
+        #     ),
+        # ),
         (
             Blocks2DTAMPSystem,
             MPCConfig(
@@ -48,7 +58,7 @@ def base_config():
 # pylint: disable=redefined-outer-name
 def test_mpc_approach(system_cls, mpc_config, base_config):
     """Test MPC improvisational approach."""
-    print("\n=== Testing MPC ===")
+    print("\n=== Testing MPC on {system_cls.__name__} ===")
     system = system_cls.create_default(
         seed=42, render_mode="rgb_array" if base_config.render else None
     )
@@ -67,6 +77,7 @@ def test_mpc_approach(system_cls, mpc_config, base_config):
 @pytest.mark.parametrize(
     "system_cls",
     [
+        # ClearAndPlaceTAMPSystem,
         Blocks2DTAMPSystem,
         NumberTAMPSystem,
     ],
@@ -99,7 +110,7 @@ def test_rl_approach(system_cls, base_config):
         save_dir="trained_policies",
     )
 
-    print("\n=== Testing RL Initial Training ===")
+    print(f"\n=== Testing RL Initial Training on {system_cls.__name__} ===")
     # Test training from scratch
     system = system_cls.create_default(
         seed=42, render_mode="rgb_array" if rl_config.render else None
@@ -122,7 +133,7 @@ def test_rl_approach(system_cls, base_config):
     if not policy_file.exists():
         pytest.skip(f"Policy file not found at {policy_file}")
 
-    print("\n=== Testing RL Loaded Policy ===")
+    print(f"\n=== Testing RL Loaded Policy on {system_cls.__name__} ===")
     # Create new system for loaded policy
     system = system_cls.create_default(
         seed=42, render_mode="rgb_array" if rl_config.render else None

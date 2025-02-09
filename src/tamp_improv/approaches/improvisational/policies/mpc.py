@@ -279,6 +279,9 @@ class MPCPolicy(Policy[ObsType, ActType]):
             raise ValueError("Unsupported action space type")
 
         box_space = cast(gym.spaces.Box, self.env.action_space)
+        print(
+            f"box_space: {box_space}, upper bound: {box_space.high}, lower bound: {box_space.low}"
+        )
         points = np.array([nominal[int(t)] for t in self._control_times])
 
         noise = self._rng.normal(

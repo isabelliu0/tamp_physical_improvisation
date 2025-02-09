@@ -50,6 +50,7 @@ def test_pybullet_import():
 
     for step in range(10000):
         action = planner.step(obs)
+        print(f"Step {step}: {action}")
         obs, _, done, _, _ = env.step(action)
         if done:
             print(f"Goal reached in {step + 1} steps!")
