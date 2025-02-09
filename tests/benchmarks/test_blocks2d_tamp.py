@@ -18,7 +18,6 @@ def test_blocks2d_tamp_system():
 
     # # Uncomment to generate videos.
     # from gymnasium.wrappers import RecordVideo
-
     # env = RecordVideo(env, "videos/blocks2d-planning-test")
 
     # Create planner using environment's components
