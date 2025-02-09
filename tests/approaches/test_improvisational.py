@@ -31,18 +31,18 @@ def base_config():
         (
             Blocks2DTAMPSystem,
             MPCConfig(
-                num_rollouts=100, horizon=35, num_control_points=5, noise_scale=0.25
+                num_rollouts=100, horizon=20, num_control_points=10, noise_scale=0.25
             ),
         ),
-        # (
-        #     NumberTAMPSystem,
-        #     MPCConfig(
-        #         num_rollouts=20,
-        #         horizon=5,
-        #         num_control_points=2,
-        #         noise_scale=0.5,
-        #     ),
-        # ),
+        (
+            NumberTAMPSystem,
+            MPCConfig(
+                num_rollouts=20,
+                horizon=5,
+                num_control_points=2,
+                noise_scale=0.5,
+            ),
+        ),
     ],
 )
 # pylint: disable=redefined-outer-name
