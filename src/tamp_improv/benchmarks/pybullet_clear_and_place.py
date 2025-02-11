@@ -57,6 +57,7 @@ class ClearAndPlaceTAMPSystem(
         scene_description = ClearAndPlaceSceneDescription(
             num_obstacle_blocks=3,
             stack_blocks=True,
+            robot_max_joint_delta=0.1,
         )
 
         # Create sim for perceiver
@@ -106,6 +107,7 @@ class ClearAndPlaceTAMPSystem(
         scene_description = ClearAndPlaceSceneDescription(
             num_obstacle_blocks=3,
             stack_blocks=True,
+            robot_max_joint_delta=0.1,
         )
         return ClearAndPlacePyBulletBlocksEnv(
             scene_description=scene_description,

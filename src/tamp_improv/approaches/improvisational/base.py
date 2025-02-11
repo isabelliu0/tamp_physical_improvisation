@@ -195,7 +195,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
     def _replan(self, obs: ObsType, info: dict[str, Any]) -> None:
         """Create new plan from current state."""
+        print("Replanning...")
         objects, atoms, _ = self.system.perceiver.reset(obs, info)
+        print(f"Current atoms: {atoms}")
         self._current_task_plan = self._create_task_plan(objects, atoms, self._goal)
         self._current_operator = None
         self._current_skill = None

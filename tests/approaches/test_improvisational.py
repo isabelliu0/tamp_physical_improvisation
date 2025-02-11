@@ -12,7 +12,6 @@ from tamp_improv.approaches.improvisational.training import (
 )
 from tamp_improv.benchmarks.blocks2d import Blocks2DTAMPSystem
 from tamp_improv.benchmarks.number import NumberTAMPSystem
-
 # from tamp_improv.benchmarks.pybullet_clear_and_place import ClearAndPlaceTAMPSystem
 
 
