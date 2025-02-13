@@ -198,7 +198,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         print("Replanning...")
         objects, atoms, _ = self.system.perceiver.reset(obs, info)
         print(f"Current atoms: {atoms}")
-        print(f"Current obs: {obs}")
         self._current_task_plan = self._create_task_plan(objects, atoms, self._goal)
         self._current_operator = None
         self._current_skill = None

@@ -22,6 +22,7 @@ from relational_structs import PDDLDomain
 from task_then_motion_planning.structs import Skill
 
 from tamp_improv.benchmarks.base import (
+    BaseTAMPSystem,
     ImprovisationalTAMPSystem,
     PlanningComponents,
 )
@@ -41,10 +42,46 @@ class ClearAndPlacePredicates:
         return set(PREDICATES)
 
 
-class ClearAndPlaceTAMPSystem(
-    ImprovisationalTAMPSystem[NDArray[np.float32], NDArray[np.float32]]
+class BaseClearAndPlaceTAMPSystem(
+    BaseTAMPSystem[NDArray[np.float32], NDArray[np.float32]]
 ):
-    """TAMP system for ClearAndPlace environment."""
+    """Base TAMP system for ClearAndPlace environment."""
+
+    def __init__(
+        self,
+        planning_components: PlanningComponents[NDArray[np.float32]],
+        seed: int | None = None,
+        render_mode: str | None = None,
+    ) -> None:
+        """Initialize ClearAndPlace TAMP system."""
+        super().__init__(planning_components, name="ClearAndPlaceTAMPSystem", seed=seed)
+        self._render_mode = render_mode
+
+    def _create_env(self) -> gym.Env:
+        """Create base environment."""
+        scene_description = ClearAndPlaceSceneDescription(
+            num_obstacle_blocks=3,
+            stack_blocks=True,
+            robot_max_joint_delta=0.1,
+        )
+        return ClearAndPlacePyBulletBlocksEnv(
+            scene_description=scene_description,
+            render_mode=self._render_mode,
+            use_gui=False,
+        )
+
+    def _get_domain_name(self) -> str:
+        """Get domain name."""
+        return "clear-and-place-domain"
+
+    def get_domain(self) -> PDDLDomain:
+        """Get PDDL domain."""
+        return PDDLDomain(
+            self._get_domain_name(),
+            self.components.operators,
+            self.components.predicate_container.as_set(),
+            self.components.types,
+        )
 
     @staticmethod
     def create_default(
@@ -102,18 +139,13 @@ class ClearAndPlaceTAMPSystem(
 
         return system
 
-    def _create_env(self) -> gym.Env:
-        """Create base environment."""
-        scene_description = ClearAndPlaceSceneDescription(
-            num_obstacle_blocks=3,
-            stack_blocks=True,
-            robot_max_joint_delta=0.1,
-        )
-        return ClearAndPlacePyBulletBlocksEnv(
-            scene_description=scene_description,
-            render_mode=self._render_mode,
-            use_gui=False,
-        )
+
+class ClearAndPlaceTAMPSystem(
+    ImprovisationalTAMPSystem[NDArray[np.float32], NDArray[np.float32]],
+    BaseClearAndPlaceTAMPSystem,
+):
+    """TAMP system for ClearAndPlace environment with improvisational policy
+    learning enabled."""
 
     def _create_wrapped_env(
         self, components: PlanningComponents[NDArray[np.float32]]
@@ -122,20 +154,7 @@ class ClearAndPlaceTAMPSystem(
         return ImprovWrapper(
             base_env=self.env,
             perceiver=components.perceiver,
-            step_penalty=-0.5,
+            step_penalty=-1.0,
             precondition_violation_penalty=-0.5,
-            achievement_bonus=10.0,
-        )
-
-    def _get_domain_name(self) -> str:
-        """Get domain name."""
-        return "clear-and-place-domain"
-
-    def get_domain(self) -> PDDLDomain:
-        """Get PDDL domain."""
-        return PDDLDomain(
-            self._get_domain_name(),
-            self.components.operators,
-            self.components.predicate_container.as_set(),
-            self.components.types,
+            achievement_bonus=100.0,
         )

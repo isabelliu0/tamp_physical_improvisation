@@ -12,8 +12,7 @@ from tamp_improv.approaches.improvisational.training import (
 )
 from tamp_improv.benchmarks.blocks2d import Blocks2DTAMPSystem
 from tamp_improv.benchmarks.number import NumberTAMPSystem
-
-# from tamp_improv.benchmarks.pybullet_clear_and_place import ClearAndPlaceTAMPSystem
+from tamp_improv.benchmarks.pybullet_clear_and_place import ClearAndPlaceTAMPSystem
 
 
 @pytest.fixture
@@ -30,15 +29,12 @@ def base_config():
 @pytest.mark.parametrize(
     "system_cls,mpc_config",
     [
-        # (
-        #     ClearAndPlaceTAMPSystem,
-        #     MPCConfig(
-        #         num_rollouts=200,
-        #         horizon=50,
-        #         num_control_points=15,
-        #         noise_scale=0.5
-        #     ),
-        # ),
+        (
+            ClearAndPlaceTAMPSystem,
+            MPCConfig(
+                num_rollouts=100, horizon=30, num_control_points=10, noise_scale=0.5
+            ),
+        ),
         (
             Blocks2DTAMPSystem,
             MPCConfig(
@@ -78,7 +74,7 @@ def test_mpc_approach(system_cls, mpc_config, base_config):
 @pytest.mark.parametrize(
     "system_cls",
     [
-        # ClearAndPlaceTAMPSystem,
+        ClearAndPlaceTAMPSystem,
         Blocks2DTAMPSystem,
         NumberTAMPSystem,
     ],
@@ -103,7 +99,7 @@ def test_rl_approach(system_cls, base_config):
         render=base_config.render,
         # RL-specific settings
         collect_episodes=100,
-        episodes_per_scenario=5,
+        episodes_per_scenario=10,
         force_collect=False,
         record_training=False,
         training_record_interval=50,
