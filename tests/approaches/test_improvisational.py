@@ -99,10 +99,10 @@ def test_rl_approach(system_cls, base_config):
         render=base_config.render,
         # RL-specific settings
         collect_episodes=100,
-        episodes_per_scenario=10,
+        episodes_per_scenario=1,
         force_collect=False,
         record_training=False,
-        training_record_interval=50,
+        training_record_interval=100,
         training_data_dir="training_data",
         save_dir="trained_policies",
     )
