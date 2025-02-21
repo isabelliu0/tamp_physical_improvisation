@@ -29,51 +29,94 @@ def test_replan():
 
     # Create both env and sim like in original test
     env = ClearAndPlacePyBulletBlocksEnv(
-        scene_description=scene_description,
-        use_gui=True
+        scene_description=scene_description, use_gui=True
     )
     sim = ClearAndPlacePyBulletBlocksEnv(
-        scene_description=scene_description,
-        use_gui=False
+        scene_description=scene_description, use_gui=False
     )
 
     # Create components for planning
     perceiver = ClearAndPlacePyBulletBlocksPerceiver(sim)
     operators, skill_types = get_active_operators_and_skills(False)
-    skills = {
-        s(sim, max_motion_planning_time=0.1) for s in skill_types
-    }
+    skills = {s(sim, max_motion_planning_time=0.1) for s in skill_types}
 
     # Create planner
     planner = TaskThenMotionPlanner(
-        TYPES,
-        PREDICATES,
-        perceiver,
-        operators,
-        skills,
-        planner_id="pyperplan"
+        TYPES, PREDICATES, perceiver, operators, skills, planner_id="pyperplan"
     )
 
     # The observation at replanning time
-    obs = np.array([
-        1.00000000e+00,  5.83175652e-01,  3.08012688e-02,  1.05573158e-01,
-        -1.71591001e-01,  5.85455622e-01,  2.22821466e-01,  7.60360992e-01,
-        0.00000000e+00,  0.00000000e+00,  1.00000000e+00,  6.24083958e-01,
-        5.61019213e-02,  1.19680503e-01, -1.54332868e-01,  5.89235766e-01,
-        2.45583750e-01,  7.54102911e-01,  1.00000000e+00,  0.00000000e+00,
-        1.00000000e+00,  6.02183780e-01,  1.63817541e-01,  9.95943905e-02,
-        5.58437883e-01,  8.29527911e-01, -4.81639167e-03, -2.71631185e-03,
-        2.00000000e+00,  0.00000000e+00,  1.00000000e+00,  3.79715741e-01,
-        2.50915647e-01,  1.31794140e-01,  3.49683751e-02, -1.27801325e-01,
-        4.98037621e-01,  8.56972906e-01,  1.90000000e+01,  1.00000000e+00,
-        1.00000000e+00,  5.00000000e-01,  0.00000000e+00,  7.60000000e-02,
-        0.00000000e+00,  0.00000000e+00,  0.00000000e+00,  1.00000000e+00,
-        0.00000000e+00,  7.49191062e-01,  8.12193130e-02, -1.03522521e-01,
-        -2.69474700e+00,  4.25908762e-01,  3.02862195e+00,  1.53268713e+00,
-        4.00000000e-02,  4.00000000e-02,  1.00000000e+00, -1.78739429e-04,
-        2.14964151e-04,  3.77617776e-04,  7.06966817e-01,  7.07246721e-01,
-        -5.84696318e-05, -1.75990244e-05
-    ], dtype=np.float32)
+    obs = np.array(
+        [
+            1.00000000e00,
+            5.83175652e-01,
+            3.08012688e-02,
+            1.05573158e-01,
+            -1.71591001e-01,
+            5.85455622e-01,
+            2.22821466e-01,
+            7.60360992e-01,
+            0.00000000e00,
+            0.00000000e00,
+            1.00000000e00,
+            6.24083958e-01,
+            5.61019213e-02,
+            1.19680503e-01,
+            -1.54332868e-01,
+            5.89235766e-01,
+            2.45583750e-01,
+            7.54102911e-01,
+            1.00000000e00,
+            0.00000000e00,
+            1.00000000e00,
+            6.02183780e-01,
+            1.63817541e-01,
+            9.95943905e-02,
+            5.58437883e-01,
+            8.29527911e-01,
+            -4.81639167e-03,
+            -2.71631185e-03,
+            2.00000000e00,
+            0.00000000e00,
+            1.00000000e00,
+            3.79715741e-01,
+            2.50915647e-01,
+            1.31794140e-01,
+            3.49683751e-02,
+            -1.27801325e-01,
+            4.98037621e-01,
+            8.56972906e-01,
+            1.90000000e01,
+            1.00000000e00,
+            1.00000000e00,
+            5.00000000e-01,
+            0.00000000e00,
+            7.60000000e-02,
+            0.00000000e00,
+            0.00000000e00,
+            0.00000000e00,
+            1.00000000e00,
+            0.00000000e00,
+            7.49191062e-01,
+            8.12193130e-02,
+            -1.03522521e-01,
+            -2.69474700e00,
+            4.25908762e-01,
+            3.02862195e00,
+            1.53268713e00,
+            4.00000000e-02,
+            4.00000000e-02,
+            1.00000000e00,
+            -1.78739429e-04,
+            2.14964151e-04,
+            3.77617776e-04,
+            7.06966817e-01,
+            7.07246721e-01,
+            -5.84696318e-05,
+            -1.75990244e-05,
+        ],
+        dtype=np.float32,
+    )
 
     # Set environments to this state
     print("\nResetting environments to replanning state...")
