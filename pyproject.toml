@@ -19,9 +19,10 @@ dependencies = [
    "tomsgeoms2d@git+https://github.com/tomsilver/toms-geoms-2d",
    "task-then-motion-planning@git+https://github.com/tomsilver/task-then-motion-planning.git",
    "relational-structs@git+https://github.com/tomsilver/relational-structs.git",
-   "gymnasium",
+   "pybullet-blocks@git+https://github.com/tomsilver/pybullet-blocks.git",
+   "gymnasium>=1.0.0",
    "moviepy",
-   "stable_baselines3",
+   "stable_baselines3>=2.5.0",
    "types-tabulate",
 ]
 
