@@ -30,7 +30,7 @@ class ExperimentConfig:
 
     # General settings
     seed: int = 42
-    render: bool = True
+    render: bool = False
 
     # Collection and training settings
     collect_episodes: int = 100
