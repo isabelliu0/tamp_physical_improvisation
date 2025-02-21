@@ -1,5 +1,7 @@
 """Test Clear and Place replanning behavior."""
 
+import time
+
 import numpy as np
 import pytest
 from pybullet_blocks.envs.clear_and_place_env import (
@@ -8,9 +10,9 @@ from pybullet_blocks.envs.clear_and_place_env import (
 )
 from pybullet_blocks.planning_models.action import get_active_operators_and_skills
 from pybullet_blocks.planning_models.perception import (
-    ClearAndPlacePyBulletBlocksPerceiver,
-    TYPES,
     PREDICATES,
+    TYPES,
+    ClearAndPlacePyBulletBlocksPerceiver,
 )
 from task_then_motion_planning.planning import TaskThenMotionPlanner
 
@@ -24,10 +26,10 @@ def test_replan():
         stack_blocks=True,
         robot_max_joint_delta=0.1,
     )
-    
+
     # Create both env and sim like in original test
     env = ClearAndPlacePyBulletBlocksEnv(
-        scene_description=scene_description, 
+        scene_description=scene_description,
         use_gui=True
     )
     sim = ClearAndPlacePyBulletBlocksEnv(
@@ -73,10 +75,9 @@ def test_replan():
         -5.84696318e-05, -1.75990244e-05
     ], dtype=np.float32)
 
-
     # Set environments to this state
     print("\nResetting environments to replanning state...")
-    obs_env, _ = env.reset_from_state(obs)
+    _ = env.reset_from_state(obs)
     obs_sim, info_sim = sim.reset_from_state(obs)
 
     print("\nInitial state:")
@@ -88,24 +89,23 @@ def test_replan():
     # Reset planner and get first action
     print("\nResetting planner...")
     planner.reset(obs_sim, info_sim)
-    
+
     print("\nTaking first planned action...")
     try:
         action = planner.step(obs_sim)
         print(f"Planned action: {action}")
-        
+
         # Verify action validity
         valid = env.action_space.contains(action)
         print(f"Action valid: {valid}")
         print(f"Action space: {env.action_space}")
-        
+
         # Take step
-        obs_env, reward, done, _, _ = env.step(action)
+        _ = env.step(action)
         print("Step successful")
-        
-        import time
+
         time.sleep(1.0)  # Pause to observe result
-        
+
     except AssertionError as e:
         print(f"Step failed with assertion: {e}")
         raise
