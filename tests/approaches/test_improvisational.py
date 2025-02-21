@@ -32,8 +32,8 @@ def base_config():
         (
             ClearAndPlaceTAMPSystem,
             MPCConfig(
-                num_rollouts=100, horizon=20, num_control_points=10, noise_scale=0.10
-            ),
+                num_rollouts=50, horizon=10, num_control_points=10, noise_scale=0.10
+            ),  # small num_rollouts for faster unit testing (temporary)
         ),
         (
             Blocks2DTAMPSystem,
