@@ -195,7 +195,21 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
     def _replan(self, obs: ObsType, info: dict[str, Any]) -> None:
         """Create new plan from current state."""
+        print("Replanning...")
         objects, atoms, _ = self.system.perceiver.reset(obs, info)
+        print(f"Current atoms: {atoms}")
+        print(f"Current observations: {obs}")
+
+        # # Uncomment to show current scene during replanning
+        # import matplotlib.pyplot as plt
+
+        # img = self.system.env.render()
+        # plt.figure(figsize=(10, 10))
+        # plt.imshow(img)
+        # plt.title("Current Scene During Replanning")
+        # plt.axis('on')
+        # plt.show(block=True)  # This will pause execution until window is closed
+
         self._current_task_plan = self._create_task_plan(objects, atoms, self._goal)
         self._current_operator = None
         self._current_skill = None
