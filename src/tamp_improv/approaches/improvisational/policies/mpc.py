@@ -43,8 +43,8 @@ class MPCPolicy(Policy[ObsType, ActType]):
         self.action_dims = 1  # Default for Discrete
 
         # Initialize arrays with proper dtypes
-        self._control_times: NDArray[np.float64] = np.zeros(0)
-        self._trajectory_times: NDArray[np.float64] = np.zeros(0)
+        self._control_times: NDArray[np.float32] = np.zeros(0, dtype=np.float32)
+        self._trajectory_times: NDArray[np.float32] = np.zeros(0, dtype=np.float32)
         self.last_solution: NDArray[np.float32] = np.zeros(0, dtype=np.float32)
         self._first_solve = False
 
@@ -73,9 +73,9 @@ class MPCPolicy(Policy[ObsType, ActType]):
             raise ValueError("Unsupported action space type")
 
         # Initialize trajectory arrays
-        self._trajectory_times = np.arange(self.config.horizon, dtype=np.float64)
+        self._trajectory_times = np.arange(self.config.horizon, dtype=np.float32)
         self._control_times = np.linspace(
-            0, self.config.horizon - 1, self.config.num_control_points, dtype=np.float64
+            0, self.config.horizon - 1, self.config.num_control_points, dtype=np.float32
         )
 
         # Initialize last solution
@@ -291,7 +291,9 @@ class MPCPolicy(Policy[ObsType, ActType]):
 
         trajectories = []
         for pts in new_points:
-            trajectory = np.zeros((self.config.horizon,) + box_space.shape)
+            trajectory = np.zeros(
+                (self.config.horizon,) + box_space.shape, dtype=np.float32
+            )
             for dim in range(pts.shape[-1] if pts.ndim > 1 else 1):
                 idx = (..., dim) if pts.ndim > 1 else ...
                 trajectory[idx] = np.interp(

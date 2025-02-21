@@ -252,6 +252,10 @@ def train_and_evaluate(
             # Set up rendering if available
             render_mode = getattr(system.wrapped_env, "render_mode", None)
             can_render = render_mode is not None
+
+            if hasattr(system.wrapped_env, "configure_training"):
+                system.wrapped_env.configure_training(train_data)
+
             if config.record_training and can_render:
                 video_folder = Path(f"videos/{system.name}_{policy_name}_train")
                 video_folder.mkdir(parents=True, exist_ok=True)
