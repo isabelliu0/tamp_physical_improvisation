@@ -32,7 +32,7 @@ def base_config():
         (
             ClearAndPlaceTAMPSystem,
             MPCConfig(
-                num_rollouts=100, horizon=30, num_control_points=10, noise_scale=0.5
+                num_rollouts=100, horizon=20, num_control_points=10, noise_scale=0.10
             ),
         ),
         (
