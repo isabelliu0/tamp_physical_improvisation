@@ -1,4 +1,3 @@
-# type: ignore
 """Simple script to plot training metrics from log file."""
 
 import re
