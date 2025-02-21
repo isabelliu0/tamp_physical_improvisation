@@ -6,6 +6,7 @@ trained_policies/
 logs/
 training_data/
 results/
+plots/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
