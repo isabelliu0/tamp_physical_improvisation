@@ -55,7 +55,7 @@ def base_config():
 # pylint: disable=redefined-outer-name
 def test_mpc_approach(system_cls, mpc_config, base_config):
     """Test MPC improvisational approach."""
-    print("\n=== Testing MPC on {system_cls.__name__} ===")
+    print(f"\n=== Testing MPC on {system_cls.__name__} ===")
     system = system_cls.create_default(
         seed=42, render_mode="rgb_array" if base_config.render else None
     )

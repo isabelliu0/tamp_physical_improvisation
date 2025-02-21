@@ -29,7 +29,7 @@ from tamp_improv.benchmarks.base import (
 from tamp_improv.benchmarks.wrappers import ImprovWrapper
 
 
-@dataclass
+@dataclass(frozen=True)
 class ClearAndPlacePredicates:
     """Container for ClearAndPlace predicates."""
 
