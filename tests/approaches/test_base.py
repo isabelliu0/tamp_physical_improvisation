@@ -5,6 +5,7 @@ import pytest
 from tamp_improv.approaches.random import RandomApproach
 from tamp_improv.benchmarks.blocks2d import Blocks2DTAMPSystem
 from tamp_improv.benchmarks.number import NumberTAMPSystem
+from tamp_improv.benchmarks.pybullet_clear_and_place import ClearAndPlaceTAMPSystem
 
 
 def run_episode(system, approach, max_steps: int):
@@ -28,10 +29,7 @@ def run_episode(system, approach, max_steps: int):
 
 @pytest.mark.parametrize(
     "system_cls,max_steps",
-    [
-        (Blocks2DTAMPSystem, 100),
-        (NumberTAMPSystem, 10),
-    ],
+    [(Blocks2DTAMPSystem, 100), (NumberTAMPSystem, 10), (ClearAndPlaceTAMPSystem, 200)],
 )
 def test_random_approach(system_cls, max_steps):
     """Test random approach on different environments."""

@@ -12,6 +12,7 @@ from tamp_improv.approaches.improvisational.training import (
 )
 from tamp_improv.benchmarks.blocks2d import Blocks2DTAMPSystem
 from tamp_improv.benchmarks.number import NumberTAMPSystem
+from tamp_improv.benchmarks.pybullet_clear_and_place import ClearAndPlaceTAMPSystem
 
 
 @pytest.fixture
@@ -29,26 +30,32 @@ def base_config():
     "system_cls,mpc_config",
     [
         (
+            ClearAndPlaceTAMPSystem,
+            MPCConfig(
+                num_rollouts=50, horizon=10, num_control_points=10, noise_scale=0.10
+            ),  # small num_rollouts for faster unit testing (temporary)
+        ),
+        (
             Blocks2DTAMPSystem,
             MPCConfig(
-                num_rollouts=100, horizon=35, num_control_points=5, noise_scale=0.25
+                num_rollouts=100, horizon=20, num_control_points=10, noise_scale=0.25
             ),
         ),
-        # (
-        #     NumberTAMPSystem,
-        #     MPCConfig(
-        #         num_rollouts=20,
-        #         horizon=5,
-        #         num_control_points=2,
-        #         noise_scale=0.5,
-        #     ),
-        # ),
+        (
+            NumberTAMPSystem,
+            MPCConfig(
+                num_rollouts=20,
+                horizon=5,
+                num_control_points=2,
+                noise_scale=0.5,
+            ),
+        ),
     ],
 )
 # pylint: disable=redefined-outer-name
 def test_mpc_approach(system_cls, mpc_config, base_config):
     """Test MPC improvisational approach."""
-    print("\n=== Testing MPC ===")
+    print(f"\n=== Testing MPC on {system_cls.__name__} ===")
     system = system_cls.create_default(
         seed=42, render_mode="rgb_array" if base_config.render else None
     )
@@ -67,6 +74,7 @@ def test_mpc_approach(system_cls, mpc_config, base_config):
 @pytest.mark.parametrize(
     "system_cls",
     [
+        ClearAndPlaceTAMPSystem,
         Blocks2DTAMPSystem,
         NumberTAMPSystem,
     ],
@@ -91,15 +99,15 @@ def test_rl_approach(system_cls, base_config):
         render=base_config.render,
         # RL-specific settings
         collect_episodes=100,
-        episodes_per_scenario=5,
+        episodes_per_scenario=1,
         force_collect=False,
         record_training=False,
-        training_record_interval=50,
+        training_record_interval=100,
         training_data_dir="training_data",
         save_dir="trained_policies",
     )
 
-    print("\n=== Testing RL Initial Training ===")
+    print(f"\n=== Testing RL Initial Training on {system_cls.__name__} ===")
     # Test training from scratch
     system = system_cls.create_default(
         seed=42, render_mode="rgb_array" if rl_config.render else None
@@ -122,7 +130,7 @@ def test_rl_approach(system_cls, base_config):
     if not policy_file.exists():
         pytest.skip(f"Policy file not found at {policy_file}")
 
-    print("\n=== Testing RL Loaded Policy ===")
+    print(f"\n=== Testing RL Loaded Policy on {system_cls.__name__} ===")
     # Create new system for loaded policy
     system = system_cls.create_default(
         seed=42, render_mode="rgb_array" if rl_config.render else None
