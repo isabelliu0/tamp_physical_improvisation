@@ -13,6 +13,7 @@ from gymnasium.wrappers import RecordVideo
 from tamp_improv.approaches.improvisational.base import ImprovisationalTAMPApproach
 from tamp_improv.approaches.improvisational.policies.base import Policy, TrainingData
 from tamp_improv.benchmarks.base import ImprovisationalTAMPSystem
+from tamp_improv.utils.gpu_utils import set_torch_seed
 
 ObsType = TypeVar("ObsType")
 ActType = TypeVar("ActType")
@@ -238,6 +239,11 @@ def train_and_evaluate(
     """Train and evaluate a policy on a system."""
     print(f"\nInitializing training for {system.name}...")
 
+    # Set all random seeds at the entry point
+    seed = config.seed
+    np.random.seed(seed)
+    set_torch_seed(seed)
+
     # Print GPU information
     print("GPU Status:")
     if torch.cuda.is_available():
@@ -247,6 +253,7 @@ def train_and_evaluate(
         print(f"  Device name: {torch.cuda.get_device_name()}")
         print(f"  Memory allocated: {torch.cuda.memory_allocated() / 1e9:.2f} GB")
         print(f"  Memory cached: {torch.cuda.memory_reserved() / 1e9:.2f} GB")
+        print(f"  CUDA initialized and seeded with: {seed}")
     else:
         print("  CUDA not available, running on CPU")
 

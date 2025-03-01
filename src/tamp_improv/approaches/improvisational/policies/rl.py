@@ -115,7 +115,10 @@ class RLPolicy(Policy[ObsType, ActType]):
         super().__init__(seed)
         self.config = config or RLConfig()
         self.device_ctx = DeviceContext(self.config.device)
-        print(f"RLPolicy initialized with device: {self.device_ctx.device}")
+
+        self._torch_generator = torch.Generator(device=self.device_ctx.device)
+        self._torch_generator.manual_seed(seed)
+
         self.model: PPO | None = None
 
     @property

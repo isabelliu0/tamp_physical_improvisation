@@ -6,6 +6,7 @@ from typing import cast
 
 import gymnasium as gym
 import numpy as np
+import torch
 
 from tamp_improv.approaches.improvisational.policies.base import (
     ActType,
@@ -71,6 +72,8 @@ class RL2MPCPolicy(Policy[ObsType, ActType]):
         super().__init__(seed)
         self.config = config or RL2MPCConfig()
         self.device_ctx = DeviceContext(self.config.device)
+        self._torch_generator = torch.Generator(device=self.device_ctx.device)
+        self._torch_generator.manual_seed(seed)
 
         # Ensure component policies use same device
         rl_config = self.config.rl_config

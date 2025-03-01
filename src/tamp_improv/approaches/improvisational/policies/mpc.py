@@ -37,9 +37,12 @@ class MPCPolicy(Policy[ObsType, ActType]):
         super().__init__(seed)
         self.config = config or MPCConfig()
         self.device_ctx = DeviceContext(self.config.device)
-        print(f"MPCPolicy initialized with device: {self.device_ctx.device}")
         self.env: gym.Env | None = None
+
+        # Seeding
         self._rng = np.random.default_rng(seed)
+        self._torch_generator = torch.Generator(device=self.device_ctx.device)
+        self._torch_generator.manual_seed(seed)
 
         # Space type flags
         self.is_discrete = False
@@ -242,9 +245,12 @@ class MPCPolicy(Policy[ObsType, ActType]):
 
         if self.is_discrete:
             probs = torch.tensor([0.5, 0.5], device=self.device_ctx.device)
-            return torch.multinomial(probs, self.config.horizon, replacement=True).to(
-                torch.int32
-            )
+            return torch.multinomial(
+                probs,
+                self.config.horizon,
+                replacement=True,
+                generator=self._torch_generator,
+            ).to(torch.int32)
 
         if self.is_multidiscrete:
             multidiscrete_space = cast(gym.spaces.MultiDiscrete, self.env.action_space)
@@ -257,7 +263,11 @@ class MPCPolicy(Policy[ObsType, ActType]):
             for dim in range(self.action_dims):
                 nvec = multidiscrete_space.nvec[dim]
                 traj[:, dim] = torch.randint(
-                    0, nvec, (self.config.horizon,), device=self.device_ctx.device
+                    0,
+                    nvec,
+                    (self.config.horizon,),
+                    device=self.device_ctx.device,
+                    generator=self._torch_generator,
                 )
             return traj
 
@@ -272,7 +282,11 @@ class MPCPolicy(Policy[ObsType, ActType]):
             control_shape = (self.config.num_control_points,)
             trajectory_shape = (self.config.horizon,)
 
-        control_points = torch.randn(control_shape, device=self.device_ctx.device)
+        control_points = torch.randn(
+            control_shape,
+            device=self.device_ctx.device,
+            generator=self._torch_generator,
+        )
         trajectory = torch.zeros(
             trajectory_shape, dtype=torch.float32, device=self.device_ctx.device
         )
@@ -305,7 +319,11 @@ class MPCPolicy(Policy[ObsType, ActType]):
             trajectories = []
             for _ in range(batch_size):
                 flip_mask = (
-                    torch.rand(self.config.horizon, device=self.device_ctx.device)
+                    torch.rand(
+                        self.config.horizon,
+                        device=self.device_ctx.device,
+                        generator=self._torch_generator,
+                    )
                     < self.config.noise_scale
                 )
 
@@ -322,7 +340,11 @@ class MPCPolicy(Policy[ObsType, ActType]):
                 for dim in range(self.action_dims):
                     nvec = multidiscrete_space.nvec[dim]
                     flip_mask = (
-                        torch.rand(self.config.horizon, device=self.device_ctx.device)
+                        torch.rand(
+                            self.config.horizon,
+                            device=self.device_ctx.device,
+                            generator=self._torch_generator,
+                        )
                         < self.config.noise_scale
                     )
                     # For each flip, randomly choose a different valid action
@@ -336,7 +358,13 @@ class MPCPolicy(Policy[ObsType, ActType]):
                             if valid_values:
                                 new_val = valid_values[
                                     int(
-                                        torch.randint(0, len(valid_values), (1,)).item()
+                                        torch.randint(
+                                            0,
+                                            len(valid_values),
+                                            (1,),
+                                            device=self.device_ctx.device,
+                                            generator=self._torch_generator,
+                                        ).item()
                                     )
                                 ]
                                 new_traj[idx, dim] = new_val
@@ -356,7 +384,11 @@ class MPCPolicy(Policy[ObsType, ActType]):
             noise_shape = (batch_size, self.config.num_control_points)
 
         noise = (
-            torch.randn(noise_shape, device=self.device_ctx.device)
+            torch.randn(
+                noise_shape,
+                device=self.device_ctx.device,
+                generator=self._torch_generator,
+            )
             * self.config.noise_scale
         )
         noisy_points = points.unsqueeze(0) + noise
