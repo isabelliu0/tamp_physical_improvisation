@@ -156,7 +156,7 @@ class RLPolicy(Policy[ObsType, ActType]):
                 f"  CUDA device: {torch.cuda.get_device_name(self.device_ctx.device)}"
             )
             print(
-                f"  CUDA memory before training: {torch.cuda.memory_allocated(self.device_ctx.device) / 1e9:.2f} GB"    # pylint: disable=line-too-long
+                f"  CUDA memory before training: {torch.cuda.memory_allocated(self.device_ctx.device) / 1e9:.2f} GB"  # pylint: disable=line-too-long
             )
 
         # Initialize and train PPO
@@ -194,7 +194,7 @@ class RLPolicy(Policy[ObsType, ActType]):
 
         if self.device_ctx.device.type == "cuda":
             print(
-                f"  CUDA memory after training: {torch.cuda.memory_allocated(self.device_ctx.device) / 1e9:.2f} GB"    # pylint: disable=line-too-long
+                f"  CUDA memory after training: {torch.cuda.memory_allocated(self.device_ctx.device) / 1e9:.2f} GB"  # pylint: disable=line-too-long
             )
 
     def get_action(self, obs: ObsType) -> ActType:

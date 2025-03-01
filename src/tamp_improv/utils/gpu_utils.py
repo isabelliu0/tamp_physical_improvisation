@@ -12,10 +12,10 @@ def __init__(self, device_name: str = "cuda"):
     if self.device.type == "cuda":
         print(f"  CUDA device: {torch.cuda.get_device_name(self.device)}")
         print(
-            f"  CUDA memory allocated: {torch.cuda.memory_allocated(self.device) / 1e9:.2f} GB"    # pylint: disable=line-too-long
+            f"  CUDA memory allocated: {torch.cuda.memory_allocated(self.device) / 1e9:.2f} GB"  # pylint: disable=line-too-long
         )
         print(
-            f"  CUDA memory cached: {torch.cuda.memory_reserved(self.device) / 1e9:.2f} GB"    # pylint: disable=line-too-long
+            f"  CUDA memory cached: {torch.cuda.memory_reserved(self.device) / 1e9:.2f} GB"  # pylint: disable=line-too-long
         )
 
 
