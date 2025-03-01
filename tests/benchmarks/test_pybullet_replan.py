@@ -17,7 +17,7 @@ from pybullet_blocks.planning_models.perception import (
 from task_then_motion_planning.planning import TaskThenMotionPlanner
 
 
-@pytest.mark.skip(reason="Debugging...")
+@pytest.mark.skip(reason="for debugging use only")
 def test_replan():
     """Test replanning behavior with specific observation."""
     # Create environment
@@ -29,7 +29,8 @@ def test_replan():
 
     # Create both env and sim like in original test
     env = ClearAndPlacePyBulletBlocksEnv(
-        scene_description=scene_description, use_gui=True
+        scene_description=scene_description,
+        use_gui=True,
     )
     sim = ClearAndPlacePyBulletBlocksEnv(
         scene_description=scene_description, use_gui=False
@@ -38,7 +39,7 @@ def test_replan():
     # Create components for planning
     perceiver = ClearAndPlacePyBulletBlocksPerceiver(sim)
     operators, skill_types = get_active_operators_and_skills(False)
-    skills = {s(sim, max_motion_planning_time=0.1) for s in skill_types}
+    skills = {s(sim, max_motion_planning_time=1.0) for s in skill_types}
 
     # Create planner
     planner = TaskThenMotionPlanner(
@@ -133,28 +134,40 @@ def test_replan():
     print("\nResetting planner...")
     planner.reset(obs_sim, info_sim)
 
-    print("\nTaking first planned action...")
-    try:
-        action = planner.step(obs_sim)
-        print(f"Planned action: {action}")
+    # Keep stepping until termination or failure
+    max_steps = 100
+    step = 0
+    terminated = False
 
-        # Verify action validity
-        valid = env.action_space.contains(action)
-        print(f"Action valid: {valid}")
-        print(f"Action space: {env.action_space}")
+    while not terminated and step < max_steps:
+        print(f"\nTaking step {step}...")
+        try:
+            action = planner.step(obs_sim)
+            print(f"Planned action: {action}")
 
-        # Take step
-        _ = env.step(action)
-        print("Step successful")
+            # Verify action validity
+            valid = env.action_space.contains(action)
+            print(f"Action valid: {valid}")
 
-        time.sleep(1.0)  # Pause to observe result
+            # Take step
+            obs_sim, reward, terminated, _, _ = env.step(action)
+            print(f"Step result - Reward: {reward}, Terminated: {terminated}")
 
-    except AssertionError as e:
-        print(f"Step failed with assertion: {e}")
-        raise
-    except Exception as e:
-        print(f"Step failed with error: {e}")
-        raise
+            time.sleep(0.5)  # Longer pause to observe each action
+
+            step += 1
+
+        except AssertionError as e:
+            print(f"Step failed with assertion: {e}")
+            raise
+        except Exception as e:
+            print(f"Step failed with error: {e}")
+            raise
+
+    if terminated:
+        print("\nSuccessfully placed target block in target area!")
+    else:
+        print("\nFailed to complete task within max steps")
 
     env.close()
     sim.close()
