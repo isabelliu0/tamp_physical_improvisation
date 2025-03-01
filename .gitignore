@@ -1,12 +1,17 @@
 .DS_Store
 .python-version
 .vscode
+
+# Training artifacts
 videos/
 trained_policies/
 logs/
 training_data/
 results/
 plots/
+*.slurm
+*.out
+*.err
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -14,7 +19,8 @@ __pycache__/
 *$py.class
 
 # C extensions
-# *.so
+*.so
+*.a
 
 # Distribution / packaging
 .Python

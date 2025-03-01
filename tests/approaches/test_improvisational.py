@@ -87,7 +87,7 @@ def test_rl_approach(system_cls, base_config):
 
     # Create RL-specific policy config
     rl_policy_config = RLConfig(
-        learning_rate=1e-4, batch_size=64, n_epochs=5, gamma=0.99
+        learning_rate=1e-4, batch_size=32, n_epochs=5, gamma=0.99
     )
 
     # Create training config

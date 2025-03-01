@@ -5,6 +5,7 @@ from typing import cast
 
 import gymnasium as gym
 import numpy as np
+import torch
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
 
@@ -14,6 +15,7 @@ from tamp_improv.approaches.improvisational.policies.base import (
     Policy,
     TrainingData,
 )
+from tamp_improv.utils.gpu_utils import DeviceContext
 
 
 @dataclass
@@ -21,9 +23,10 @@ class RLConfig:
     """Configuration for RL policy."""
 
     learning_rate: float = 1e-4
-    batch_size: int = 64
+    batch_size: int = 32
     n_epochs: int = 5
     gamma: float = 0.99
+    device: str = "cuda"
 
 
 class TrainingProgressCallback(BaseCallback):
@@ -111,6 +114,11 @@ class RLPolicy(Policy[ObsType, ActType]):
         """Initialize policy."""
         super().__init__(seed)
         self.config = config or RLConfig()
+        self.device_ctx = DeviceContext(self.config.device)
+
+        self._torch_generator = torch.Generator(device=self.device_ctx.device)
+        self._torch_generator.manual_seed(seed)
+
         self.model: PPO | None = None
 
     @property
@@ -129,6 +137,7 @@ class RLPolicy(Policy[ObsType, ActType]):
                 batch_size=self.config.batch_size,
                 n_epochs=self.config.n_epochs,
                 gamma=self.config.gamma,
+                device=self.device_ctx.device,
                 seed=self._seed,
                 verbose=1,
             )
@@ -144,6 +153,14 @@ class RLPolicy(Policy[ObsType, ActType]):
         super().train(env, train_data)
 
         print(f"\nStarting RL training on {len(train_data.states)} scenarios")
+        print(f"\nStarting RL training on device: {self.device_ctx.device}")
+        if self.device_ctx.device.type == "cuda":
+            print(
+                f"  CUDA device: {torch.cuda.get_device_name(self.device_ctx.device)}"
+            )
+            print(
+                f"  CUDA memory before training: {torch.cuda.memory_allocated(self.device_ctx.device) / 1e9:.2f} GB"  # pylint: disable=line-too-long
+            )
 
         # Initialize and train PPO
         self.model = PPO(
@@ -154,6 +171,7 @@ class RLPolicy(Policy[ObsType, ActType]):
             batch_size=self.config.batch_size,
             n_epochs=self.config.n_epochs,
             gamma=self.config.gamma,
+            device=self.device_ctx.device,
             seed=self._seed,
             verbose=1,
         )
@@ -177,20 +195,26 @@ class RLPolicy(Policy[ObsType, ActType]):
         # Train the model
         self.model.learn(total_timesteps=total_timesteps, callback=callback)
 
+        if self.device_ctx.device.type == "cuda":
+            print(
+                f"  CUDA memory after training: {torch.cuda.memory_allocated(self.device_ctx.device) / 1e9:.2f} GB"  # pylint: disable=line-too-long
+            )
+
     def get_action(self, obs: ObsType) -> ActType:
         """Get action from policy."""
         if self.model is None:
             raise ValueError("Policy not trained or loaded")
 
-        # Convert observation
-        if isinstance(obs, (int, float)):
-            np_obs = np.array([obs])
-        else:
-            np_obs = np.array(obs)
+        obs_tensor = self.device_ctx(obs)
+        obs_cpu = (
+            obs_tensor.cpu() if torch.is_tensor(obs_tensor) else obs_tensor
+        )  # move to CPU for stable_baselines3
+        obs_numpy = self.device_ctx.numpy(obs_cpu)
 
-        action, _ = self.model.predict(np_obs, deterministic=True)
+        with torch.no_grad():
+            action, _ = self.model.predict(obs_numpy, deterministic=True)
 
-        # Convert action back
+        # Convert back to original type
         if isinstance(obs, (int, float)):
             return cast(ActType, int(action[0]))
         return cast(ActType, action)

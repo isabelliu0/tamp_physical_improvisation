@@ -5,7 +5,7 @@ from typing import cast
 
 import gymnasium as gym
 import numpy as np
-from numpy.typing import NDArray
+import torch
 
 from tamp_improv.approaches.improvisational.policies.base import (
     ActType,
@@ -14,6 +14,7 @@ from tamp_improv.approaches.improvisational.policies.base import (
     PolicyContext,
     TrainingData,
 )
+from tamp_improv.utils.gpu_utils import DeviceContext
 
 
 @dataclass
@@ -24,6 +25,8 @@ class MPCConfig:
     noise_scale: float = 1.0
     num_control_points: int = 5
     horizon: int = 35
+    device: str = "cuda"
+    batch_size: int = 32
 
 
 class MPCPolicy(Policy[ObsType, ActType]):
@@ -33,8 +36,13 @@ class MPCPolicy(Policy[ObsType, ActType]):
         """Initialize policy."""
         super().__init__(seed)
         self.config = config or MPCConfig()
+        self.device_ctx = DeviceContext(self.config.device)
         self.env: gym.Env | None = None
+
+        # Seeding
         self._rng = np.random.default_rng(seed)
+        self._torch_generator = torch.Generator(device=self.device_ctx.device)
+        self._torch_generator.manual_seed(seed)
 
         # Space type flags
         self.is_discrete = False
@@ -43,9 +51,9 @@ class MPCPolicy(Policy[ObsType, ActType]):
         self.action_dims = 1  # Default for Discrete
 
         # Initialize arrays with proper dtypes
-        self._control_times: NDArray[np.float32] = np.zeros(0, dtype=np.float32)
-        self._trajectory_times: NDArray[np.float32] = np.zeros(0, dtype=np.float32)
-        self.last_solution: NDArray[np.float32] = np.zeros(0, dtype=np.float32)
+        self._control_times = torch.zeros(0, device=self.device_ctx.device)
+        self._trajectory_times = torch.zeros(0, device=self.device_ctx.device)
+        self.last_solution = torch.zeros(0, device=self.device_ctx.device)
         self._first_solve = False
 
     @property
@@ -73,51 +81,66 @@ class MPCPolicy(Policy[ObsType, ActType]):
             raise ValueError("Unsupported action space type")
 
         # Initialize trajectory arrays
-        self._trajectory_times = np.arange(self.config.horizon, dtype=np.float32)
-        self._control_times = np.linspace(
-            0, self.config.horizon - 1, self.config.num_control_points, dtype=np.float32
+        self._trajectory_times = torch.arange(
+            self.config.horizon, dtype=torch.float32, device=self.device_ctx.device
+        )
+        self._control_times = torch.linspace(
+            0,
+            self.config.horizon - 1,
+            self.config.num_control_points,
+            dtype=torch.float32,
+            device=self.device_ctx.device,
         )
 
         # Initialize last solution
         self.last_solution = self._create_empty_trajectory()
 
-    def _create_empty_trajectory(self) -> NDArray:
+    def _create_empty_trajectory(self) -> torch.Tensor:
         """Create empty trajectory array with proper shape and type."""
         if self.env is None:
             raise ValueError("Environment not initialized")
 
         if self.is_discrete:
-            return np.zeros(self.config.horizon, dtype=np.int32)
+            return torch.zeros(
+                self.config.horizon, dtype=torch.int32, device=self.device_ctx.device
+            )
         if self.is_multidiscrete:
-            return np.zeros((self.config.horizon, self.action_dims), dtype=np.int32)
+            return torch.zeros(
+                (self.config.horizon, self.action_dims),
+                dtype=torch.int32,
+                device=self.device_ctx.device,
+            )
         if not self._box_space:
             raise ValueError("Unsupported action space type")
         box_space = cast(gym.spaces.Box, self.env.action_space)
         action_shape = box_space.shape if box_space.shape else ()
         shape = (self.config.horizon,) + action_shape
-        return np.zeros(shape, dtype=np.float32)
+        return torch.zeros(shape, dtype=torch.float32, device=self.device_ctx.device)
 
     def set_nominal_trajectory(self, trajectory: list[ActType]) -> None:
         """Set the nominal trajectory for MPC from a list of actions."""
         if self.env is None:
             raise ValueError("Policy not initialized")
 
-        # Use same shape/type as empty trajectory
-        new_solution = self._create_empty_trajectory()
-        trajectory_arr = np.array(trajectory)
+        trajectory_tensor = torch.tensor(trajectory, device=self.device_ctx.device)
 
         # Set values based on action space type
         if self.is_discrete:
-            new_solution = trajectory_arr.astype(np.int32)
+            self.last_solution = trajectory_tensor.to(torch.int32)
         elif self.is_multidiscrete:
-            new_solution = trajectory_arr.reshape(-1, self.action_dims)
+            self.last_solution = trajectory_tensor.reshape(-1, self.action_dims).to(
+                torch.int32
+            )
         else:
             box_space = cast(gym.spaces.Box, self.env.action_space)
             if box_space.shape:
-                trajectory_arr = trajectory_arr.reshape(-1, *box_space.shape)
-            new_solution = np.clip(trajectory_arr, box_space.low, box_space.high)
+                trajectory_tensor = trajectory_tensor.reshape(-1, *box_space.shape)
+            self.last_solution = torch.clamp(
+                trajectory_tensor,
+                torch.tensor(box_space.low, device=self.device_ctx.device),
+                torch.tensor(box_space.high, device=self.device_ctx.device),
+            )
 
-        self.last_solution = new_solution
         self._first_solve = True
 
     def configure_context(self, context: PolicyContext[ObsType, ActType]) -> None:
@@ -141,29 +164,32 @@ class MPCPolicy(Policy[ObsType, ActType]):
         if self.env is None:
             raise ValueError("Policy not initialized")
         action = self._solve(obs)
+        action_np = self.device_ctx.numpy(action)
 
         # Convert action to appropriate type
         if self.is_discrete:
-            return cast(ActType, int(action))
+            return cast(ActType, int(action_np))
         if self.is_multidiscrete:
-            return cast(ActType, action.astype(np.int32))
-        return cast(ActType, action)
+            return cast(ActType, action_np.astype(np.int32))
+        return cast(ActType, action_np)
 
-    def _solve(self, obs: ObsType) -> NDArray:
+    def _solve(self, obs: ObsType) -> torch.Tensor:
         """Run one iteration of predictive sampling."""
         if self.env is None:
             raise ValueError("Policy not initialized")
 
+        obs_tensor = self.device_ctx(obs)
+
         # Get candidates
-        if np.all(self.last_solution == 0):
+        if torch.all(self.last_solution == 0):
             nominal = self._get_initialization()
         else:
             # Shift the solution forward
             if self.is_discrete:
-                nominal = np.roll(self.last_solution, -1)
+                nominal = torch.roll(self.last_solution, -1)
                 nominal[-1] = self.last_solution[-1]
             elif self.is_multidiscrete:
-                nominal = np.zeros_like(self.last_solution)
+                nominal = torch.zeros_like(self.last_solution)
                 nominal[:-1] = self.last_solution[1:]
                 nominal[-1] = self.last_solution[-1]
             else:
@@ -171,36 +197,77 @@ class MPCPolicy(Policy[ObsType, ActType]):
                     nominal = self.last_solution
                     self._first_solve = False
                 else:
-                    nominal = np.zeros_like(self.last_solution)
-                    nominal = np.roll(self.last_solution, -1, axis=0)
+                    nominal = torch.roll(self.last_solution, -1, dims=0)
                     nominal[-1] = self.last_solution[-1]
 
-        candidates = [nominal] + self._sample_from_nominal(nominal)
-        scores = [self._score_trajectory(traj, obs) for traj in candidates]
+        # Process trajectories in batches
+        all_candidates = []
+        all_scores = []
 
-        # Pick best trajectory
-        best_idx = np.argmax(scores)
-        self.last_solution = candidates[best_idx]
-        assert isinstance(
-            self.last_solution, np.ndarray
-        ), "Expected numpy array trajectory"
+        # Add nominal trajectory
+        all_candidates.append(nominal)
+        nominal_score = self._score_trajectory(nominal, obs_tensor)
+        all_scores.append(nominal_score)
+
+        # Generate batches of candidates
+        num_batches = (
+            self.config.num_rollouts - 1 + self.config.batch_size - 1
+        ) // self.config.batch_size
+
+        for batch_idx in range(num_batches):
+            start_idx = batch_idx * self.config.batch_size
+            end_idx = min(
+                start_idx + self.config.batch_size, self.config.num_rollouts - 1
+            )
+            batch_size = end_idx - start_idx
+
+            if batch_size <= 0:
+                break
+
+            batch_candidates = self._sample_from_nominal(nominal, batch_size)
+            batch_scores = [
+                self._score_trajectory(cand, obs_tensor) for cand in batch_candidates
+            ]
+
+            all_candidates.extend(batch_candidates)
+            all_scores.extend(batch_scores)
+
+        # Find best trajectory
+        best_idx = int(
+            torch.argmax(torch.tensor(all_scores, device=self.device_ctx.device)).item()
+        )
+        self.last_solution = all_candidates[best_idx]
         return self.last_solution[0]
 
-    def _get_initialization(self) -> NDArray:
+    def _get_initialization(self) -> torch.Tensor:
         """Initialize trajectory."""
         assert self.env is not None
 
         if self.is_discrete:
-            return self._rng.choice([0, 1], size=self.config.horizon, p=[0.5, 0.5])
+            probs = torch.tensor([0.5, 0.5], device=self.device_ctx.device)
+            return torch.multinomial(
+                probs,
+                self.config.horizon,
+                replacement=True,
+                generator=self._torch_generator,
+            ).to(torch.int32)
 
         if self.is_multidiscrete:
             multidiscrete_space = cast(gym.spaces.MultiDiscrete, self.env.action_space)
-            shape = (self.config.horizon, self.action_dims)
-            traj = np.zeros(shape, dtype=np.int32)
+            traj = torch.zeros(
+                (self.config.horizon, self.action_dims),
+                dtype=torch.int32,
+                device=self.device_ctx.device,
+            )
+
             for dim in range(self.action_dims):
                 nvec = multidiscrete_space.nvec[dim]
-                traj[:, dim] = self._rng.integers(
-                    0, nvec, size=self.config.horizon, dtype=np.int32
+                traj[:, dim] = torch.randint(
+                    0,
+                    nvec,
+                    (self.config.horizon,),
+                    device=self.device_ctx.device,
+                    generator=self._torch_generator,
                 )
             return traj
 
@@ -209,47 +276,58 @@ class MPCPolicy(Policy[ObsType, ActType]):
 
         box_space = cast(gym.spaces.Box, self.env.action_space)
         if box_space.shape:
-            control_shape = cast(
-                tuple[int, ...], (self.config.num_control_points,) + box_space.shape
-            )
-            trajectory_shape = cast(
-                tuple[int, ...], (self.config.horizon,) + box_space.shape
-            )
+            control_shape = (self.config.num_control_points,) + box_space.shape
+            trajectory_shape = (self.config.horizon,) + box_space.shape
         else:
             control_shape = (self.config.num_control_points,)
             trajectory_shape = (self.config.horizon,)
 
-        control_points = self._rng.standard_normal(control_shape)
-        trajectory: NDArray[np.float32] = np.zeros(trajectory_shape, dtype=np.float32)
+        control_points = torch.randn(
+            control_shape,
+            device=self.device_ctx.device,
+            generator=self._torch_generator,
+        )
+        trajectory = torch.zeros(
+            trajectory_shape, dtype=torch.float32, device=self.device_ctx.device
+        )
 
         # Interpolate control points
         for dim in range(
             control_points.shape[-1] if len(control_points.shape) > 1 else 1
         ):
-            trajectory[:, dim] = np.interp(
-                self._trajectory_times,
-                self._control_times,
-                (
-                    control_points[:, dim]
-                    if len(control_points.shape) > 1
-                    else control_points
-                ),
-            )
+            idx = (..., dim) if len(control_points.shape) > 1 else ...
+            trajectory[idx] = torch.nn.functional.interpolate(
+                control_points[idx].unsqueeze(0).unsqueeze(0),
+                size=self.config.horizon,
+                mode="linear",
+                align_corners=True,
+            ).squeeze()
 
-        return np.clip(trajectory, box_space.low, box_space.high)
+        # Clamp to action space bounds
+        low = torch.tensor(box_space.low, device=self.device_ctx.device)
+        high = torch.tensor(box_space.high, device=self.device_ctx.device)
+        return torch.clamp(trajectory, low, high)
 
-    def _sample_from_nominal(self, nominal: NDArray) -> list[NDArray]:
-        """Sample trajectories around nominal."""
+    def _sample_from_nominal(
+        self, nominal: torch.Tensor, batch_size: int
+    ) -> list[torch.Tensor]:
+        """Sample a batch of trajectories around nominal trajectory."""
         if self.env is None:
             raise ValueError("Policy not initialized")
 
         if self.is_discrete:
             trajectories = []
-            for _ in range(self.config.num_rollouts - 1):
+            for _ in range(batch_size):
                 flip_mask = (
-                    self._rng.random(size=self.config.horizon) < self.config.noise_scale
+                    torch.rand(
+                        self.config.horizon,
+                        device=self.device_ctx.device,
+                        generator=self._torch_generator,
+                    )
+                    < self.config.noise_scale
                 )
-                new_traj = nominal.copy()
+
+                new_traj = nominal.clone()
                 new_traj[flip_mask] = 1 - new_traj[flip_mask]
                 trajectories.append(new_traj)
             return trajectories
@@ -257,60 +335,97 @@ class MPCPolicy(Policy[ObsType, ActType]):
         if self.is_multidiscrete:
             multidiscrete_space = cast(gym.spaces.MultiDiscrete, self.env.action_space)
             trajectories = []
-            for _ in range(self.config.num_rollouts - 1):
-                new_traj = nominal.copy()
+            for _ in range(batch_size):
+                new_traj = nominal.clone()
                 for dim in range(self.action_dims):
+                    nvec = multidiscrete_space.nvec[dim]
                     flip_mask = (
-                        self._rng.random(size=self.config.horizon)
+                        torch.rand(
+                            self.config.horizon,
+                            device=self.device_ctx.device,
+                            generator=self._torch_generator,
+                        )
                         < self.config.noise_scale
                     )
-                    nvec = multidiscrete_space.nvec[dim]
                     # For each flip, randomly choose a different valid action
-                    flips = flip_mask.nonzero()[0]
-                    for idx in flips:
-                        current_val = new_traj[idx, dim]
-                        valid_values = list(range(nvec))
-                        valid_values.remove(current_val)
-                        new_traj[idx, dim] = self._rng.choice(valid_values)
+                    flips = flip_mask.nonzero(as_tuple=True)[0]
+                    if len(flips) > 0:
+                        for idx in flips:
+                            current_val = int(new_traj[idx, dim].item())
+                            valid_values = list(range(nvec))
+                            valid_values.remove(current_val)
+
+                            if valid_values:
+                                new_val = valid_values[
+                                    int(
+                                        torch.randint(
+                                            0,
+                                            len(valid_values),
+                                            (1,),
+                                            device=self.device_ctx.device,
+                                            generator=self._torch_generator,
+                                        ).item()
+                                    )
+                                ]
+                                new_traj[idx, dim] = new_val
                 trajectories.append(new_traj)
             return trajectories
 
-        if not self._box_space:
-            raise ValueError("Unsupported action space type")
-
         box_space = cast(gym.spaces.Box, self.env.action_space)
-        points = np.array([nominal[int(t)] for t in self._control_times])
+        points = torch.stack([nominal[int(t)] for t in self._control_times])
 
-        noise = self._rng.normal(
-            loc=0,
-            scale=self.config.noise_scale,
-            size=(self.config.num_rollouts - 1, self.config.num_control_points)
-            + (points.shape[1:] if points.ndim > 1 else ()),
+        if len(points.shape) > 1:
+            noise_shape = (
+                batch_size,
+                self.config.num_control_points,
+                *points.shape[1:],
+            )
+        else:
+            noise_shape = (batch_size, self.config.num_control_points)
+
+        noise = (
+            torch.randn(
+                noise_shape,
+                device=self.device_ctx.device,
+                generator=self._torch_generator,
+            )
+            * self.config.noise_scale
         )
-        new_points = points + noise
+        noisy_points = points.unsqueeze(0) + noise
 
         trajectories = []
-        for pts in new_points:
-            trajectory = np.zeros(
-                (self.config.horizon,) + box_space.shape, dtype=np.float32
+        for pts in noisy_points:
+            trajectory = torch.zeros(
+                (self.config.horizon,) + box_space.shape, device=self.device_ctx.device
             )
             for dim in range(pts.shape[-1] if pts.ndim > 1 else 1):
                 idx = (..., dim) if pts.ndim > 1 else ...
-                trajectory[idx] = np.interp(
-                    self._trajectory_times, self._control_times, pts[idx]
-                )
-            trajectory = np.clip(trajectory, box_space.low, box_space.high)
+                trajectory[idx] = torch.nn.functional.interpolate(
+                    pts[idx].unsqueeze(0).unsqueeze(0),
+                    size=self.config.horizon,
+                    mode="linear",
+                    align_corners=True,
+                ).squeeze()
+            low = torch.tensor(box_space.low, device=self.device_ctx.device)
+            high = torch.tensor(box_space.high, device=self.device_ctx.device)
+            trajectory = torch.clamp(trajectory, low, high)
             trajectories.append(trajectory)
         return trajectories
 
-    def _score_trajectory(self, trajectory: NDArray, init_obs: ObsType) -> float:
+    def _score_trajectory(
+        self, trajectory: torch.Tensor, init_obs: torch.Tensor
+    ) -> float:
         """Score trajectory by simulation."""
         assert self.env is not None
 
-        _ = self.env.reset_from_state(init_obs)  # type: ignore[attr-defined]
+        # Convert tensors to numpy for environment interaction
+        trajectory_np = self.device_ctx.numpy(trajectory)
+        init_obs_np = self.device_ctx.numpy(init_obs)
+
+        _ = self.env.reset_from_state(init_obs_np)  # type: ignore[attr-defined]
         total_reward = 0.0
 
-        for action in trajectory:
+        for action in trajectory_np:
             if self.is_discrete:
                 action = int(action)
             elif self.is_multidiscrete:
