@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Callable, TypeVar, Union, cast
 
 import numpy as np
+import torch
 from gymnasium.wrappers import RecordVideo
 
 from tamp_improv.approaches.improvisational.base import ImprovisationalTAMPApproach
@@ -39,6 +40,10 @@ class TrainingConfig:
     render: bool = False
     record_training: bool = False
     training_record_interval: int = 50
+
+    # Device settings
+    device: str = "cuda"
+    batch_size: int = 32
 
     # Policy-specific settings
     policy_config: dict[str, Any] | None = None
@@ -232,6 +237,18 @@ def train_and_evaluate(
 ) -> Metrics:
     """Train and evaluate a policy on a system."""
     print(f"\nInitializing training for {system.name}...")
+
+    # Print GPU information
+    print("GPU Status:")
+    if torch.cuda.is_available():
+        print(f"  CUDA available: {torch.cuda.is_available()}")
+        print(f"  CUDA device count: {torch.cuda.device_count()}")
+        print(f"  Current CUDA device: {torch.cuda.current_device()}")
+        print(f"  Device name: {torch.cuda.get_device_name()}")
+        print(f"  Memory allocated: {torch.cuda.memory_allocated() / 1e9:.2f} GB")
+        print(f"  Memory cached: {torch.cuda.memory_reserved() / 1e9:.2f} GB")
+    else:
+        print("  CUDA not available, running on CPU")
 
     training_time = 0.0
     start_time = time.time()

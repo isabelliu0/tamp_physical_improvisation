@@ -20,6 +20,7 @@ from tamp_improv.approaches.improvisational.policies.rl import (
     RLPolicy,
     TrainingProgressCallback,
 )
+from tamp_improv.utils.gpu_utils import DeviceContext
 
 
 @dataclass
@@ -30,6 +31,7 @@ class RL2MPCConfig:
     mpc_config: MPCConfig = field(default_factory=MPCConfig)
     reward_threshold: float = -30.0  # Threshold to switch from RL to MPC
     window_size: int = 50  # Window size for computing average reward
+    device: str = "cuda"
 
 
 class RL2MPCCallback(TrainingProgressCallback):
@@ -68,6 +70,13 @@ class RL2MPCPolicy(Policy[ObsType, ActType]):
         """Initialize policy."""
         super().__init__(seed)
         self.config = config or RL2MPCConfig()
+        self.device_ctx = DeviceContext(self.config.device)
+
+        # Ensure component policies use same device
+        rl_config = self.config.rl_config
+        rl_config.device = self.config.device
+        mpc_config = self.config.mpc_config
+        mpc_config.device = self.config.device
 
         # Create component policies
         self.rl_policy: RLPolicy[ObsType, ActType] = RLPolicy(
