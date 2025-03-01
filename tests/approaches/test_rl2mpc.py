@@ -17,11 +17,31 @@ from tamp_improv.approaches.improvisational.training import (
 )
 from tamp_improv.benchmarks.blocks2d import Blocks2DTAMPSystem
 from tamp_improv.benchmarks.number import NumberTAMPSystem
+from tamp_improv.benchmarks.pybullet_clear_and_place import ClearAndPlaceTAMPSystem
 
 
 @pytest.mark.parametrize(
     "system_cls,config",
     [
+        (
+            ClearAndPlaceTAMPSystem,
+            RL2MPCConfig(
+                rl_config=RLConfig(
+                    learning_rate=1e-4,
+                    batch_size=64,
+                    n_epochs=5,
+                    gamma=0.99,
+                ),
+                mpc_config=MPCConfig(
+                    num_rollouts=100,
+                    horizon=50,
+                    num_control_points=10,
+                    noise_scale=0.10,
+                ),
+                reward_threshold=-90.0,
+                window_size=20,
+            ),
+        ),
         (
             Blocks2DTAMPSystem,
             RL2MPCConfig(
@@ -126,3 +146,87 @@ def test_rl2mpc_approach(system_cls, config):
     print(f"Success Rate: {loaded_metrics.success_rate:.2%}")
     print(f"Average Episode Length: {loaded_metrics.avg_episode_length:.2f}")
     print(f"Average Reward: {loaded_metrics.avg_reward:.2f}")
+
+
+@pytest.mark.parametrize(
+    "system_cls,config",
+    [
+        (
+            ClearAndPlaceTAMPSystem,
+            RL2MPCConfig(
+                rl_config=RLConfig(
+                    learning_rate=1e-4,
+                    batch_size=64,
+                    n_epochs=5,
+                    gamma=0.99,
+                ),
+                mpc_config=MPCConfig(
+                    num_rollouts=20,
+                    horizon=10,
+                    num_control_points=10,
+                    noise_scale=0.10,
+                ),  # small num_rollouts/horizon for faster unit testing
+                reward_threshold=-30.0,
+                window_size=1,  # Small window to quickly switch to MPC
+            ),
+        ),
+    ],
+)
+def test_pretrained_rl_with_mpc(system_cls, config):
+    """Test loading pre-trained RL policy and using MPC immediately."""
+    # Create minimal config - no training/collection needed
+    eval_config = TrainingConfig(
+        seed=42,
+        num_episodes=5,
+        max_steps=100,
+        render=True,
+        collect_episodes=0,
+        force_collect=False,
+        episodes_per_scenario=0,
+    )
+
+    print(f"\n=== Testing Pre-trained RL + MPC on {system_cls.__name__} ===")
+
+    # Create system
+    system = system_cls.create_default(
+        seed=42, render_mode="rgb_array" if eval_config.render else None
+    )
+
+    class PreTrainedRL2MPCPolicy(RL2MPCPolicy[ObsType, ActType]):
+        """Modified RL2MPC policy that skips training."""
+
+        @property
+        def requires_training(self) -> bool:
+            return False
+
+    def policy_factory(seed: int) -> PreTrainedRL2MPCPolicy:
+        policy: PreTrainedRL2MPCPolicy = PreTrainedRL2MPCPolicy(
+            seed=seed, config=config
+        )
+
+        rl_policy_file = (
+            Path("trained_policies") / f"{system_cls.__name__}_RLPolicy.zip"
+        )
+        if not rl_policy_file.exists():
+            pytest.skip(f"Pre-trained RL policy not found at {rl_policy_file}")
+
+        print(f"\nLoading pre-trained RL policy from: {rl_policy_file}")
+        policy.rl_policy.load(str(rl_policy_file))
+
+        # Force immediate switch to MPC
+        policy._threshold_reached = True  # pylint: disable=protected-access
+
+        return policy
+
+    # Run evaluation
+    metrics = train_and_evaluate(
+        system,
+        policy_factory,
+        eval_config,
+        policy_name="PretrainedRL_with_MPC",
+    )
+
+    print("\nPre-trained RL + MPC Results:")
+    print(f"Success Rate: {metrics.success_rate:.2%}")
+    print(f"Average Episode Length: {metrics.avg_episode_length:.2f}")
+    print(f"Average Reward: {metrics.avg_reward:.2f}")

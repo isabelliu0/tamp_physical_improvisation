@@ -23,7 +23,7 @@ class RLConfig:
     """Configuration for RL policy."""
 
     learning_rate: float = 1e-4
-    batch_size: int = 64
+    batch_size: int = 32
     n_epochs: int = 5
     gamma: float = 0.99
     device: str = "cuda"
@@ -214,7 +214,7 @@ class RLPolicy(Policy[ObsType, ActType]):
         with torch.no_grad():
             action, _ = self.model.predict(obs_numpy, deterministic=True)
 
-        # Convert back to numpy/original type
+        # Convert back to original type
         if isinstance(obs, (int, float)):
             return cast(ActType, int(action[0]))
         return cast(ActType, action)
