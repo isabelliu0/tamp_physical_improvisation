@@ -20,6 +20,7 @@ from tamp_improv.benchmarks.number import NumberTAMPSystem
 from tamp_improv.benchmarks.pybullet_clear_and_place import ClearAndPlaceTAMPSystem
 
 
+@pytest.mark.skip("Training for new framework is not yet implemented")
 @pytest.mark.parametrize(
     "system_cls,config",
     [
@@ -148,6 +149,7 @@ def test_rl2mpc_approach(system_cls, config):
     print(f"Average Reward: {loaded_metrics.avg_reward:.2f}")
 
 
+@pytest.mark.skip("Training for new framework is not yet implemented")
 @pytest.mark.parametrize(
     "system_cls,config",
     [

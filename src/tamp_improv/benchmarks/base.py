@@ -1,12 +1,14 @@
 """Base environment interface."""
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Generic, Protocol, TypeVar
 
 import gymnasium as gym
 from relational_structs import LiftedOperator, PDDLDomain, Predicate, Type
 from task_then_motion_planning.structs import Perceiver, Skill
+
+from tamp_improv.approaches.improvisational.policies.base import Policy
 
 ObsType = TypeVar("ObsType")
 ActType = TypeVar("ActType")
@@ -28,11 +30,17 @@ class PlanningComponents(Generic[ObsType]):
 
     types: set[Type]
     predicate_container: PredicateContainer
-    base_operators: set[LiftedOperator]
-    full_operators: set[LiftedOperator]
-    full_operators_active: bool
     skills: set[Skill]
     perceiver: Perceiver[ObsType]
+
+    shortcut_policies: dict[tuple[frozenset[str], frozenset[str]], Policy] = field(
+        default_factory=dict
+    )
+
+    # For compatibility (will be removed later)
+    base_operators: set[LiftedOperator] = field(default_factory=set)
+    full_operators: set[LiftedOperator] = field(default_factory=set)
+    full_operators_active: bool = False
 
     @property
     def operators(self) -> set[LiftedOperator]:

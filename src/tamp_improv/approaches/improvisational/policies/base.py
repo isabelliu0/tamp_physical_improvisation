@@ -22,9 +22,13 @@ class TrainingData:
     """Container for policy training data."""
 
     states: list[Any]  # List of states where intervention needed
-    preconditions_to_maintain: list[set[GroundAtom]]
-    preconditions_to_achieve: list[set[GroundAtom]]
+    current_atoms: list[set[GroundAtom]]
+    preimages: list[set[GroundAtom]]
     config: dict[str, Any]
+
+    # For compatibility (will be removed later)
+    preconditions_to_maintain: list[set[GroundAtom]] = field(default_factory=list)
+    preconditions_to_achieve: list[set[GroundAtom]] = field(default_factory=list)
 
     def __len__(self) -> int:
         return len(self.states)
@@ -37,12 +41,14 @@ class TrainingData:
         states_path = path / "states.npy"
         np.save(states_path, np.array(self.states))
 
-        # Save preconditions as pickle (since they contain custom objects)
-        preconditions_paths = {
+        # Save atoms and preimages as pickle (since they contain custom objects)
+        data_paths = {
+            "current_atoms": self.current_atoms,
+            "preimages": self.preimages,
             "preconditions_to_maintain": self.preconditions_to_maintain,
             "preconditions_to_achieve": self.preconditions_to_achieve,
         }
-        for name, obj in preconditions_paths.items():
+        for name, obj in data_paths.items():
             file_path = path / f"{name}.pkl"
             with open(file_path, "wb") as f:
                 pickle.dump(obj, f)
@@ -59,13 +65,22 @@ class TrainingData:
         states_path = path / "states.npy"
         states = list(np.load(states_path))
 
-        # Load preconditions
-        preconditions = {}
-        preconditions_names = ["preconditions_to_maintain", "preconditions_to_achieve"]
-        for name in preconditions_names:
+        # Load atoms and preimages
+        data = {}
+        data_names = [
+            "current_atoms",
+            "preimages",
+            "preconditions_to_maintain",
+            "preconditions_to_achieve",
+        ]
+        for name in data_names:
             file_path = path / f"{name}.pkl"
-            with open(file_path, "rb") as f:
-                preconditions[name] = pickle.load(f)
+            if file_path.exists():  # For compatibility
+                with open(file_path, "rb") as f:
+                    data[name] = pickle.load(f)
+            else:
+                print(f"Warning: {file_path} not found, using empty list.")
+                data[name] = []
 
         # Load config
         config_path = path / "config.json"
@@ -74,8 +89,10 @@ class TrainingData:
 
         return cls(
             states=states,
-            preconditions_to_maintain=preconditions["preconditions_to_maintain"],
-            preconditions_to_achieve=preconditions["preconditions_to_achieve"],
+            current_atoms=data["current_atoms"],
+            preimages=data["preimages"],
+            preconditions_to_maintain=data.get("preconditions_to_maintain", []),
+            preconditions_to_achieve=data.get("preconditions_to_achieve", []),
             config=config,
         )
 
@@ -84,9 +101,13 @@ class TrainingData:
 class PolicyContext(Generic[ObsType, ActType]):
     """Context information passed from approach to policy."""
 
-    preconditions_to_maintain: set[GroundAtom]
-    preconditions_to_achieve: set[GroundAtom]
+    preimage: set[GroundAtom]
+    current_atoms: set[GroundAtom]
     info: dict[str, Any] = field(default_factory=dict)
+
+    # For compatibility (will be removed later)
+    preconditions_to_maintain: set[GroundAtom] = field(default_factory=set)
+    preconditions_to_achieve: set[GroundAtom] = field(default_factory=set)
 
 
 class Policy(Generic[ObsType, ActType], ABC):

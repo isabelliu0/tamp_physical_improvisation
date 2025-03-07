@@ -153,6 +153,8 @@ class MPCPolicy(Policy[ObsType, ActType]):
             self.env.configure_training(
                 TrainingData(
                     states=[],  # MPC doesn't need example states
+                    current_atoms=[],
+                    preimages=[],
                     preconditions_to_maintain=[context.preconditions_to_maintain],
                     preconditions_to_achieve=[context.preconditions_to_achieve],
                     config={"max_steps": self.config.horizon},
@@ -295,13 +297,23 @@ class MPCPolicy(Policy[ObsType, ActType]):
         for dim in range(
             control_points.shape[-1] if len(control_points.shape) > 1 else 1
         ):
-            idx = (..., dim) if len(control_points.shape) > 1 else ...
-            trajectory[idx] = torch.nn.functional.interpolate(
-                control_points[idx].unsqueeze(0).unsqueeze(0),
-                size=self.config.horizon,
-                mode="linear",
-                align_corners=True,
-            ).squeeze()
+            if len(control_points.shape) > 1:
+                control_points_slice = control_points[..., dim]
+                traj_slice = torch.nn.functional.interpolate(
+                    control_points_slice.unsqueeze(0).unsqueeze(0),
+                    size=self.config.horizon,
+                    mode="linear",
+                    align_corners=True,
+                ).squeeze()
+                trajectory[..., dim] = traj_slice
+            else:
+                traj_slice = torch.nn.functional.interpolate(
+                    control_points.unsqueeze(0).unsqueeze(0),
+                    size=self.config.horizon,
+                    mode="linear",
+                    align_corners=True,
+                ).squeeze()
+                trajectory[:] = traj_slice
 
         # Clamp to action space bounds
         low = torch.tensor(box_space.low, device=self.device_ctx.device)

@@ -110,13 +110,17 @@ def collect_training_data(
 ) -> TrainingData:
     """Collect training data from TAMP execution."""
     training_states: list[Union[int, ObsType]] = []
+    current_atoms_list = []
+    preimages_list = []
+
+    # For compatibility (will be removed later)
     preconditions_to_maintain = []
     preconditions_to_achieve = []
 
     print("\nCollecting training data...")
     approach.training_mode = True
 
-    # Run episodes to collect states where preconditions aren't met
+    # Run episodes to collect states for shortcut learning
     for episode in range(config.collect_episodes):
         print(f"\nCollection episode {episode + 1}/{config.collect_episodes}")
 
@@ -126,13 +130,18 @@ def collect_training_data(
         # Check first step from reset
         if step_result.terminate and step_result.info:
             training_states.append(step_result.info["training_state"])
-            preconditions_to_maintain.append(
-                step_result.info["preconditions_to_maintain"]
-            )
-            preconditions_to_achieve.append(
-                step_result.info["preconditions_to_achieve"]
-            )
-            continue
+            current_atoms_list.append(step_result.info["current_atoms"])
+            preimages_list.append(step_result.info["preimage"])
+
+            # For compatibility (will be removed later)
+            if "preconditions_to_maintain" in step_result.info:
+                preconditions_to_maintain.append(
+                    step_result.info["preconditions_to_maintain"]
+                )
+                preconditions_to_achieve.append(
+                    step_result.info["preconditions_to_achieve"]
+                )
+                continue
 
         obs, _, term, trunc, info = system.env.step(step_result.action)
         if term or trunc:
@@ -142,15 +151,22 @@ def collect_training_data(
         for _ in range(1, config.max_steps):
             step_result = approach.step(obs, 0, False, False, info)
 
-            # When preconditions aren't met, collect training data
+            # When shortcut needed, collect training data
             if step_result.terminate and step_result.info:
                 training_states.append(step_result.info["training_state"])
-                preconditions_to_maintain.append(
-                    step_result.info["preconditions_to_maintain"]
-                )
-                preconditions_to_achieve.append(
-                    step_result.info["preconditions_to_achieve"]
-                )
+
+                current_atoms_list.append(step_result.info["current_atoms"])
+                preimages_list.append(step_result.info["preimage"])
+
+                # For compatibility (will be removed later)
+                if "preconditions_to_maintain" in step_result.info:
+                    preconditions_to_maintain.append(
+                        step_result.info["preconditions_to_maintain"]
+                    )
+                    preconditions_to_achieve.append(
+                        step_result.info["preconditions_to_achieve"]
+                    )
+
                 break
 
             obs, _, term, trunc, info = system.env.step(step_result.action)
@@ -163,6 +179,8 @@ def collect_training_data(
 
     return TrainingData(
         states=training_states,
+        current_atoms=current_atoms_list,
+        preimages=preimages_list,
         preconditions_to_maintain=preconditions_to_maintain,
         preconditions_to_achieve=preconditions_to_achieve,
         config=config.__dict__,

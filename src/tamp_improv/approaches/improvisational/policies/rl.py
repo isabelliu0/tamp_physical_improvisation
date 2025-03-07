@@ -26,6 +26,7 @@ class RLConfig:
     batch_size: int = 32
     n_epochs: int = 5
     gamma: float = 0.99
+    ent_coef: float = 0.01
     device: str = "cuda"
 
 
@@ -137,6 +138,7 @@ class RLPolicy(Policy[ObsType, ActType]):
                 batch_size=self.config.batch_size,
                 n_epochs=self.config.n_epochs,
                 gamma=self.config.gamma,
+                ent_coef=self.config.ent_coef,
                 device=self.device_ctx.device,
                 seed=self._seed,
                 verbose=1,
@@ -171,6 +173,7 @@ class RLPolicy(Policy[ObsType, ActType]):
             batch_size=self.config.batch_size,
             n_epochs=self.config.n_epochs,
             gamma=self.config.gamma,
+            ent_coef=self.config.ent_coef,
             device=self.device_ctx.device,
             seed=self._seed,
             verbose=1,

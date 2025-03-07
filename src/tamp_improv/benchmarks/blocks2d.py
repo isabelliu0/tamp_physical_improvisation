@@ -10,7 +10,6 @@ import numpy as np
 from numpy.typing import NDArray
 from relational_structs import (
     GroundAtom,
-    LiftedAtom,
     LiftedOperator,
     Object,
     PDDLDomain,
@@ -25,20 +24,35 @@ from tamp_improv.benchmarks.base import (
     ImprovisationalTAMPSystem,
     PlanningComponents,
 )
-from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv, is_block_1_in_target_area
+from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv, is_block_in_target_area
 from tamp_improv.benchmarks.wrappers import ImprovWrapper
+
+
+@dataclass
+class Blocks2DTypes:
+    """Container for blocks2d types."""
+
+    def __init__(self) -> None:
+        """Initialize types."""
+        self.robot = Type("robot")
+        self.block = Type("block")
+        self.surface = Type("surface")
+
+    def as_set(self) -> set[Type]:
+        """Convert to set of types."""
+        return {self.robot, self.block, self.surface}
 
 
 @dataclass
 class Blocks2DPredicates:
     """Container for blocks2d predicates."""
 
-    block_in_target_area: Predicate
-    block_not_in_target_area: Predicate
-    holding: Predicate
-    gripper_empty: Predicate
-    target_area_clear: Predicate | None = None
-    target_area_blocked: Predicate | None = None
+    def __init__(self, types: Blocks2DTypes) -> None:
+        """Initialize predicates."""
+        self.on = Predicate("On", [types.block, types.surface])
+        self.holding = Predicate("Holding", [types.robot, types.block])
+        self.gripper_empty = Predicate("GripperEmpty", [types.robot])
+        self.clear = Predicate("Clear", [types.surface])
 
     def __getitem__(self, key: str) -> Predicate:
         """Get predicate by name."""
@@ -46,17 +60,12 @@ class Blocks2DPredicates:
 
     def as_set(self) -> set[Predicate]:
         """Convert to set of predicates."""
-        predicates = {
-            self.block_in_target_area,
-            self.block_not_in_target_area,
+        return {
+            self.on,
             self.holding,
             self.gripper_empty,
+            self.clear,
         }
-        if self.target_area_clear is not None:
-            predicates.add(self.target_area_clear)
-        if self.target_area_blocked is not None:
-            predicates.add(self.target_area_blocked)
-        return predicates
 
 
 class BaseBlocks2DSkill(LiftedOperatorSkill[NDArray[np.float32], NDArray[np.float32]]):
@@ -81,57 +90,6 @@ class BaseBlocks2DSkill(LiftedOperatorSkill[NDArray[np.float32], NDArray[np.floa
         raise NotImplementedError
 
 
-class ClearTargetAreaSkill(BaseBlocks2DSkill):
-    """Skill for clearing target area."""
-
-    def _get_operator_name(self) -> str:
-        return "ClearTargetArea"
-
-    def _get_action_given_objects(
-        self,
-        objects: Sequence[Object],
-        obs: NDArray[np.float32],
-    ) -> NDArray[np.float32]:
-        robot_x, robot_y, robot_width = obs[0:3]
-        block_1_x = obs[4]
-        block_2_x, block_2_y = obs[6:8]
-        block_width = obs[8]
-        target_x = obs[11]
-        target_width = obs[13]
-
-        # Determine push direction
-        space_on_left = (
-            abs((target_x - target_width / 2) - (block_1_x + block_width / 2))
-            if block_1_x < target_x
-            else abs(target_x - target_width / 2)
-        )
-        space_on_right = (
-            abs((block_1_x - block_width / 2) - (target_x + target_width / 2))
-            if block_1_x > target_x
-            else abs(1.0 - (target_x + target_width / 2))
-        )
-
-        # Push in direction with more space
-        push_direction = -0.1 if space_on_left > space_on_right else 0.1
-
-        # Calculate target position for pushing
-        target_x_offset = (robot_width + block_width) / 2  # robot_width + block_width
-        target_x_offset *= -np.sign(push_direction)
-        target_robot_x = block_2_x + target_x_offset
-
-        # Calculate distance to pushing position
-        dist_to_target = np.hypot(target_robot_x - robot_x, block_2_y - robot_y)
-
-        if dist_to_target > 0.1:
-            # Move to pushing position
-            dx = np.clip(target_robot_x - robot_x, -0.1, 0.1)
-            dy = np.clip(block_2_y - robot_y, -0.1, 0.1)
-            return np.array([dx, dy, obs[10]])
-
-        # Push
-        return np.array([push_direction, 0.0, obs[10]])
-
-
 class PickUpSkill(BaseBlocks2DSkill):
     """Skill for picking up blocks."""
 
@@ -145,7 +103,13 @@ class PickUpSkill(BaseBlocks2DSkill):
     ) -> NDArray[np.float32]:
         robot_x, robot_y = obs[0:2]
         robot_height = obs[3]
-        block_x, block_y = obs[4:6]
+
+        # Get which block to pick up and its position
+        block_obj = objects[1]
+        if block_obj.name == "block1":
+            block_x, block_y = obs[4:6]
+        else:
+            block_x, block_y = obs[6:8]
         block_height = obs[9]
 
         # Target position above block
@@ -189,9 +153,17 @@ class PutDownSkill(BaseBlocks2DSkill):
         robot_height = obs[3]
         block_height = obs[9]
         gripper_status = obs[10]
-        target_x, target_y = obs[11:13]
 
-        # Target position above target area
+        # Get which surface to place on and its position
+        surface_obj = objects[2]
+        if surface_obj.name == "target_area":
+            target_x, target_y = obs[11:13]
+        else:
+            # Put on table (right of target area)
+            target_x = 0.7
+            target_y = 0.0
+
+        # Target position above drop location
         target_y = target_y + block_height / 2 + robot_height / 2
 
         # Calculate distance to target
@@ -223,12 +195,15 @@ class PutDownSkill(BaseBlocks2DSkill):
 class Blocks2DPerceiver(Perceiver[NDArray[np.float32]]):
     """Perceiver for blocks2d environment."""
 
-    def __init__(self, robot_type: Type, block_type: Type) -> None:
+    def __init__(self, types: Blocks2DTypes) -> None:
         """Initialize with required types."""
-        self._robot = Object("robot", robot_type)
-        self._block_1 = Object("block1", block_type)
-        self._block_2 = Object("block2", block_type)
+        self._robot = Object("robot", types.robot)
+        self._block_1 = Object("block1", types.block)
+        self._block_2 = Object("block2", types.block)
+        self._table = Object("table", types.surface)
+        self._target_area = Object("target_area", types.surface)
         self._predicates: Blocks2DPredicates | None = None
+        self._types = types
 
     def initialize(self, predicates: Blocks2DPredicates) -> None:
         """Initialize predicates after environment creation."""
@@ -247,10 +222,16 @@ class Blocks2DPerceiver(Perceiver[NDArray[np.float32]]):
         _info: dict[str, Any],
     ) -> tuple[set[Object], set[GroundAtom], set[GroundAtom]]:
         """Reset perceiver with observation and info."""
-        objects = {self._robot, self._block_1, self._block_2}
+        objects = {
+            self._robot,
+            self._block_1,
+            self._block_2,
+            self._table,
+            self._target_area,
+        }
         atoms = self._get_atoms(obs)
         goal = {
-            self.predicates["BlockInTargetArea"]([self._block_1]),
+            self.predicates["On"]([self._block_1, self._target_area]),
             self.predicates["GripperEmpty"]([self._robot]),
         }
         return objects, atoms, goal
@@ -264,13 +245,33 @@ class Blocks2DPerceiver(Perceiver[NDArray[np.float32]]):
 
         # Get positions from observation
         robot_x, robot_y = obs[0:2]
-        block_1_x, block_1_y, block_2_x = obs[4:7]
+        block_1_x, block_1_y = obs[4:6]
+        block_2_x, block_2_y = obs[6:8]
         block_width, block_height = obs[8:10]
         gripper_status = obs[10]
         target_x, target_y, target_width, target_height = obs[11:15]
 
+        # Check gripper status
+        block1_held = False
+        block2_held = False
+        if gripper_status > 0.0:
+            if np.isclose(block_1_x, robot_x, atol=1e-3) and np.isclose(
+                block_1_y, robot_y, atol=1e-3
+            ):
+                atoms.add(self.predicates["Holding"]([self._robot, self._block_1]))
+                block1_held = True
+            elif np.isclose(block_2_x, robot_x, atol=1e-3) and np.isclose(
+                block_2_y, robot_y, atol=1e-3
+            ):
+                atoms.add(self.predicates["Holding"]([self._robot, self._block_2]))
+                block2_held = True
+            else:
+                atoms.add(self.predicates["GripperEmpty"]([self._robot]))
+        else:
+            atoms.add(self.predicates["GripperEmpty"]([self._robot]))
+
         # Check block 1 target area status
-        if is_block_1_in_target_area(
+        if is_block_in_target_area(
             block_1_x,
             block_1_y,
             block_width,
@@ -280,25 +281,34 @@ class Blocks2DPerceiver(Perceiver[NDArray[np.float32]]):
             target_width,
             target_height,
         ):
-            atoms.add(self.predicates["BlockInTargetArea"]([self._block_1]))
-        else:
-            atoms.add(self.predicates["BlockNotInTargetArea"]([self._block_1]))
+            atoms.add(self.predicates["On"]([self._block_1, self._target_area]))
+        elif not block1_held:
+            atoms.add(self.predicates["On"]([self._block_1, self._table]))
 
-        # Check gripper status
-        if (
-            gripper_status > 0.0
-            and np.isclose(block_1_x, robot_x, atol=1e-3)
-            and np.isclose(block_1_y, robot_y, atol=1e-3)
+        # Check block 2 target area status
+        if is_block_in_target_area(
+            block_2_x,
+            block_2_y,
+            block_width,
+            block_height,
+            target_x,
+            target_y,
+            target_width,
+            target_height,
         ):
-            atoms.add(self.predicates["Holding"]([self._robot, self._block_1]))
-        else:
-            atoms.add(self.predicates["GripperEmpty"]([self._robot]))
+            atoms.add(self.predicates["On"]([self._block_2, self._target_area]))
+        elif not block2_held:
+            atoms.add(self.predicates["On"]([self._block_2, self._table]))
 
-        # Check target area blocking
-        if self._is_target_area_blocked(block_2_x, block_width, target_x, target_width):
-            atoms.add(GroundAtom(self.predicates["TargetAreaBlocked"], []))
-        else:
-            atoms.add(GroundAtom(self.predicates["TargetAreaClear"], []))
+        # Check if surface is clear: Target area is blocked by block 2 if overlapped
+        is_target_clear = block2_held or not self._is_target_area_blocked(
+            block_2_x, block_width, target_x, target_width
+        )
+        if is_target_clear:
+            atoms.add(self.predicates["Clear"]([self._target_area]))
+
+        # Table is always "clear" since we can place things on it
+        atoms.add(self.predicates["Clear"]([self._table]))
 
         return atoms
 
@@ -370,102 +380,67 @@ class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.floa
     @staticmethod
     def create_default(
         seed: int | None = None,
-        include_pushing_models: bool = False,
         render_mode: str | None = None,
     ) -> Blocks2DTAMPSystem:
         """Factory method for creating system with default components."""
         # Create types
-        robot_type = Type("robot")
-        block_type = Type("block")
-        types = {robot_type, block_type}
+        types_container = Blocks2DTypes()
+        types_set = types_container.as_set()
 
         # Create predicates
-        predicates = Blocks2DPredicates(
-            block_in_target_area=Predicate("BlockInTargetArea", [block_type]),
-            block_not_in_target_area=Predicate("BlockNotInTargetArea", [block_type]),
-            holding=Predicate("Holding", [robot_type, block_type]),
-            gripper_empty=Predicate("GripperEmpty", [robot_type]),
-            target_area_clear=Predicate("TargetAreaClear", []),
-            target_area_blocked=Predicate("TargetAreaBlocked", []),
-        )
+        predicates = Blocks2DPredicates(types_container)
 
         # Create perceiver
-        perceiver = Blocks2DPerceiver(robot_type, block_type)
+        perceiver = Blocks2DPerceiver(types_container)
         perceiver.initialize(predicates)
 
         # Create variables for operators
-        robot = Variable("?robot", robot_type)
-        block = Variable("?block", block_type)
+        robot = Variable("?robot", types_container.robot)
+        block = Variable("?block", types_container.block)
+        from_surface = Variable("?from_surface", types_container.surface)
+        to_surface = Variable("?to_surface", types_container.surface)
 
-        # Create base operators (without pushing)
-        base_operators = {
+        # Create operators
+        operators = {
             LiftedOperator(
                 "PickUp",
-                [robot, block],
+                [robot, block, from_surface],
                 preconditions={
                     predicates["GripperEmpty"]([robot]),
-                    predicates["BlockNotInTargetArea"]([block]),
+                    predicates["On"]([block, from_surface]),
                 },
-                add_effects={predicates["Holding"]([robot, block])},
-                delete_effects={predicates["GripperEmpty"]([robot])},
+                add_effects={
+                    predicates["Holding"]([robot, block]),
+                    predicates["Clear"]([from_surface]),
+                },
+                delete_effects={
+                    predicates["GripperEmpty"]([robot]),
+                    predicates["On"]([block, from_surface]),
+                },
             ),
             LiftedOperator(
                 "PutDown",
-                [robot, block],
-                preconditions={predicates["Holding"]([robot, block])},
+                [robot, block, to_surface],
+                preconditions={
+                    predicates["Holding"]([robot, block]),
+                    predicates["Clear"]([to_surface]),
+                },
                 add_effects={
-                    predicates["BlockInTargetArea"]([block]),
+                    predicates["On"]([block, to_surface]),
                     predicates["GripperEmpty"]([robot]),
                 },
                 delete_effects={predicates["Holding"]([robot, block])},
-            ),
-        }
-
-        # Create full operators (with pushing)
-        full_operators = {
-            LiftedOperator(
-                "PickUp",
-                [robot, block],
-                preconditions={
-                    predicates["GripperEmpty"]([robot]),
-                    predicates["BlockNotInTargetArea"]([block]),
-                },
-                add_effects={predicates["Holding"]([robot, block])},
-                delete_effects={predicates["GripperEmpty"]([robot])},
-            ),
-            LiftedOperator(
-                "PutDown",
-                [robot, block],
-                preconditions={
-                    predicates["Holding"]([robot, block]),
-                    LiftedAtom(predicates["TargetAreaClear"], []),
-                },
-                add_effects={
-                    predicates["BlockInTargetArea"]([block]),
-                    predicates["GripperEmpty"]([robot]),
-                },
-                delete_effects={predicates["Holding"]([robot, block])},
-            ),
-            LiftedOperator(
-                "ClearTargetArea",
-                [robot, block],
-                preconditions={
-                    LiftedAtom(predicates["TargetAreaBlocked"], []),
-                    predicates["Holding"]([robot, block]),
-                },
-                add_effects={LiftedAtom(predicates["TargetAreaClear"], [])},
-                delete_effects={LiftedAtom(predicates["TargetAreaBlocked"], [])},
             ),
         }
 
         # Create system
         system = Blocks2DTAMPSystem(
             PlanningComponents(
-                types=types,
+                types=types_set,
                 predicate_container=predicates,
-                base_operators=base_operators,
-                full_operators=full_operators,
-                full_operators_active=include_pushing_models,
+                base_operators=operators,
+                full_operators=operators,
+                full_operators_active=False,
                 skills=set(),
                 perceiver=perceiver,
             ),
@@ -478,8 +453,6 @@ class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.floa
             PickUpSkill(system.components),
             PutDownSkill(system.components),
         }
-        if include_pushing_models:
-            skills.add(ClearTargetAreaSkill(system.components))
 
         # Update components with skills
         system.components.skills.update(skills)

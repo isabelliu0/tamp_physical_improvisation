@@ -10,11 +10,11 @@ def test_blocks2d_tamp_system():
     """Test Blocks2D environment with TAMP planner."""
     # Create TAMP system
     tamp_system = BaseBlocks2DTAMPSystem.create_default(
-        include_pushing_models=True, render_mode="rgb_array", seed=42
+        render_mode="rgb_array", seed=42
     )
 
     # Create environment with time limit
-    env = TimeLimit(tamp_system.env, max_episode_steps=100)
+    env = TimeLimit(tamp_system.env, max_episode_steps=50)
 
     # # Uncomment to generate videos.
     # from gymnasium.wrappers import RecordVideo

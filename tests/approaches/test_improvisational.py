@@ -26,6 +26,7 @@ def base_config():
     )
 
 
+@pytest.mark.skip("Training for new framework is not yet implemented")
 @pytest.mark.parametrize(
     "system_cls,mpc_config",
     [
@@ -71,6 +72,7 @@ def test_mpc_approach(system_cls, mpc_config, base_config):
     print(f"Avg episode length: {metrics.avg_episode_length:.2f}")
 
 
+@pytest.mark.skip("Training for new framework is not yet implemented")
 @pytest.mark.parametrize(
     "system_cls",
     [

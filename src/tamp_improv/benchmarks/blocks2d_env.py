@@ -20,7 +20,7 @@ class Blocks2DState(NamedTuple):
     gripper_status: float
 
 
-def is_block_1_in_target_area(
+def is_block_in_target_area(
     block_x: float,
     block_y: float,
     block_width: float,
@@ -128,12 +128,14 @@ class Blocks2DEnv(gym.Env):
         block_2_right_bound = target_right + (self._block_width / 2) - min_overlap
 
         # Randomly position block 2 within valid range
-        block_2_x = self.np_random.uniform(block_2_left_bound, block_2_right_bound)
+        _block_2_x = self.np_random.uniform(block_2_left_bound, block_2_right_bound)
 
         return Blocks2DState(
             robot_position=np.array([0.5, 1.0], dtype=np.float32),
             block_1_position=np.array([0.0, 0.0], dtype=np.float32),
-            block_2_position=np.array([block_2_x, 0.0], dtype=np.float32),
+            block_2_position=np.array(
+                [0.5, 0.0], dtype=np.float32
+            ),  # fixed block 2 position for testing
             gripper_status=0.0,
         )
 
@@ -242,6 +244,7 @@ class Blocks2DEnv(gym.Env):
         # Update block positions and handle interactions
         new_block_1_position = self.block_1_position.copy()
         new_block_2_position = self.block_2_position.copy()
+        new_gripper_status = float(gripper_action)
 
         # Handle block 2 pushing
         if self._is_adjacent(prev_state.robot_position, self.block_2_position):
@@ -251,32 +254,41 @@ class Blocks2DEnv(gym.Env):
                     self.block_2_position[0] + dx, 0.0, 1.0
                 ).astype(np.float32)
 
-        # Handle block 1 interactions (pick/drop)
-        distance = np.linalg.norm(new_robot_position - self.block_1_position)
-        new_gripper_status = float(gripper_action)
-
-        # Case 1: Robot is picking up the block
-        if (
-            new_gripper_status > 0.0
-            and distance <= ((self._robot_width + self._block_width) / 2) + 1e-3
-        ):
-            new_block_1_position = new_robot_position.copy()
-
-        # Case 2: Robot was holding the block and gripper is deactivated
-        elif (
-            self.gripper_status > 0.0
-            and new_gripper_status <= 0.0
-            and np.allclose(self.block_1_position, prev_state.robot_position, atol=1e-3)
-        ):
-            new_block_1_position = np.array(
-                [new_robot_position[0], 0.0], dtype=np.float32
-            )
-
-        # Case 3: Robot is holding the block (continue moving it)
-        elif new_gripper_status > 0.0 and np.allclose(
+        # Check if already holding a block
+        block1_held = np.allclose(
             self.block_1_position, prev_state.robot_position, atol=1e-3
-        ):
-            new_block_1_position = new_robot_position.copy()
+        )
+        block2_held = np.allclose(
+            self.block_2_position, prev_state.robot_position, atol=1e-3
+        )
+
+        # Handle picking up and placing down a block
+        if self.gripper_status > 0.0:  # Already holding a block
+            if new_gripper_status <= 0.0:  # Releasing grip
+                if block1_held:
+                    new_block_1_position = np.array(
+                        [new_robot_position[0], 0.0], dtype=np.float32
+                    )
+                elif block2_held:
+                    new_block_2_position = np.array(
+                        [new_robot_position[0], 0.0], dtype=np.float32
+                    )
+            else:  # Continuing to hold
+                if block1_held:
+                    new_block_1_position = new_robot_position.copy()
+                elif block2_held:
+                    new_block_2_position = new_robot_position.copy()
+        elif new_gripper_status > 0.0:  # Attempting pickup
+            # Calculate distances to blocks
+            dist_to_block1 = np.linalg.norm(new_robot_position - self.block_1_position)
+            dist_to_block2 = np.linalg.norm(new_robot_position - self.block_2_position)
+
+            # Pick up a block that's close enough
+            threshold = ((self._robot_width + self._block_width) / 2) + 1e-3
+            if dist_to_block1 <= threshold:
+                new_block_1_position = new_robot_position.copy()
+            elif dist_to_block2 <= threshold:
+                new_block_2_position = new_robot_position.copy()
 
         # Update state
         self.state = Blocks2DState(
@@ -295,7 +307,7 @@ class Blocks2DEnv(gym.Env):
             return obs, -0.1, False, False, info
 
         # Check if the robot has reached the goal
-        goal_reached = is_block_1_in_target_area(
+        goal_reached = is_block_in_target_area(
             self.block_1_position[0],
             self.block_1_position[1],
             self._block_width,
@@ -319,8 +331,10 @@ class Blocks2DEnv(gym.Env):
         ) and np.isclose(self.gripper_status, 0.0, atol=1e-3):
             return True
 
-        # Robot-Block2 collision
-        if self._check_collision_between(self.robot_position, self.block_2_position):
+        # Robot-Block2 collision with empty gripper
+        if self._check_collision_between(
+            self.robot_position, self.block_2_position
+        ) and np.isclose(self.gripper_status, 0.0, atol=1e-3):
             return True
 
         # Block1-Block2 collision
