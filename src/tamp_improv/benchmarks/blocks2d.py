@@ -53,6 +53,8 @@ class Blocks2DPredicates:
         self.holding = Predicate("Holding", [types.robot, types.block])
         self.gripper_empty = Predicate("GripperEmpty", [types.robot])
         self.clear = Predicate("Clear", [types.surface])
+        self.is_target = Predicate("IsTarget", [types.surface])
+        self.not_is_target = Predicate("NotIsTarget", [types.surface])
 
     def __getitem__(self, key: str) -> Predicate:
         """Get predicate by name."""
@@ -65,6 +67,8 @@ class Blocks2DPredicates:
             self.holding,
             self.gripper_empty,
             self.clear,
+            self.is_target,
+            self.not_is_target,
         }
 
 
@@ -91,7 +95,7 @@ class BaseBlocks2DSkill(LiftedOperatorSkill[NDArray[np.float32], NDArray[np.floa
 
 
 class PickUpSkill(BaseBlocks2DSkill):
-    """Skill for picking up blocks."""
+    """Skill for picking up blocks from non-target surfaces."""
 
     def _get_operator_name(self) -> str:
         return "PickUp"
@@ -138,8 +142,15 @@ class PickUpSkill(BaseBlocks2DSkill):
         return np.array([0.0, 0.0, 1.0])
 
 
+class PickUpFromTargetSkill(PickUpSkill):
+    """Skill for picking up blocks from target area."""
+
+    def _get_operator_name(self) -> str:
+        return "PickUpFromTarget"
+
+
 class PutDownSkill(BaseBlocks2DSkill):
-    """Skill for putting down blocks."""
+    """Skill for putting down blocks on non-target surfaces."""
 
     def _get_operator_name(self) -> str:
         return "PutDown"
@@ -190,6 +201,13 @@ class PutDownSkill(BaseBlocks2DSkill):
             return np.array([0.0, 0.0, -1.0])
 
         return np.array([0.0, 0.0, 0.0])
+
+
+class PutDownOnTargetSkill(PutDownSkill):
+    """Skill for putting down blocks in target area."""
+
+    def _get_operator_name(self) -> str:
+        return "PutDownOnTarget"
 
 
 class Blocks2DPerceiver(Perceiver[NDArray[np.float32]]):
@@ -250,6 +268,10 @@ class Blocks2DPerceiver(Perceiver[NDArray[np.float32]]):
         block_width, block_height = obs[8:10]
         gripper_status = obs[10]
         target_x, target_y, target_width, target_height = obs[11:15]
+
+        # Add target identification predicates
+        atoms.add(self.predicates["IsTarget"]([self._target_area]))
+        atoms.add(self.predicates["NotIsTarget"]([self._table]))
 
         # Check gripper status
         block1_held = False
@@ -397,39 +419,74 @@ class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.floa
         # Create variables for operators
         robot = Variable("?robot", types_container.robot)
         block = Variable("?block", types_container.block)
-        from_surface = Variable("?from_surface", types_container.surface)
-        to_surface = Variable("?to_surface", types_container.surface)
+        surface = Variable("?surface", types_container.surface)
 
         # Create operators
         operators = {
             LiftedOperator(
                 "PickUp",
-                [robot, block, from_surface],
+                [robot, block, surface],
                 preconditions={
                     predicates["GripperEmpty"]([robot]),
-                    predicates["On"]([block, from_surface]),
+                    predicates["On"]([block, surface]),
+                    predicates["NotIsTarget"]([surface]),
                 },
                 add_effects={
                     predicates["Holding"]([robot, block]),
-                    predicates["Clear"]([from_surface]),
+                    predicates["Clear"]([surface]),
                 },
                 delete_effects={
                     predicates["GripperEmpty"]([robot]),
-                    predicates["On"]([block, from_surface]),
+                    predicates["On"]([block, surface]),
+                },
+            ),
+            LiftedOperator(
+                "PickUpFromTarget",
+                [robot, block, surface],
+                preconditions={
+                    predicates["GripperEmpty"]([robot]),
+                    predicates["On"]([block, surface]),
+                    predicates["IsTarget"]([surface]),
+                },
+                add_effects={
+                    predicates["Holding"]([robot, block]),
+                    predicates["Clear"]([surface]),
+                },
+                delete_effects={
+                    predicates["GripperEmpty"]([robot]),
+                    predicates["On"]([block, surface]),
                 },
             ),
             LiftedOperator(
                 "PutDown",
-                [robot, block, to_surface],
+                [robot, block, surface],
                 preconditions={
                     predicates["Holding"]([robot, block]),
-                    predicates["Clear"]([to_surface]),
+                    predicates["Clear"]([surface]),
+                    predicates["NotIsTarget"]([surface]),
                 },
                 add_effects={
-                    predicates["On"]([block, to_surface]),
+                    predicates["On"]([block, surface]),
                     predicates["GripperEmpty"]([robot]),
                 },
                 delete_effects={predicates["Holding"]([robot, block])},
+            ),
+            LiftedOperator(
+                "PutDownOnTarget",
+                [robot, block, surface],
+                preconditions={
+                    predicates["Holding"]([robot, block]),
+                    predicates["Clear"]([surface]),
+                    predicates["IsTarget"]([surface]),
+                },
+                add_effects={
+                    predicates["On"]([block, surface]),
+                    predicates["GripperEmpty"]([robot]),
+                },
+                delete_effects={
+                    predicates["Holding"]([robot, block]),
+                    predicates["Clear"]([surface]),
+                },
             ),
         }
 
@@ -451,7 +508,9 @@ class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.floa
         # Create skills with reference to components
         skills = {
             PickUpSkill(system.components),
+            PickUpFromTargetSkill(system.components),
             PutDownSkill(system.components),
+            PutDownOnTargetSkill(system.components),
         }
 
         # Update components with skills
