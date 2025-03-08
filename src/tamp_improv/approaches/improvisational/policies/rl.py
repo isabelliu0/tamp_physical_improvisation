@@ -144,6 +144,9 @@ class RLPolicy(Policy[ObsType, ActType]):
                 verbose=1,
             )
 
+    def can_initiate(self):
+        return True
+
     def train(
         self,
         env: gym.Env,

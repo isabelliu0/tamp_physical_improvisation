@@ -95,6 +95,9 @@ class MPCPolicy(Policy[ObsType, ActType]):
         # Initialize last solution
         self.last_solution = self._create_empty_trajectory()
 
+    def can_initiate(self):
+        return True
+
     def _create_empty_trajectory(self) -> torch.Tensor:
         """Create empty trajectory array with proper shape and type."""
         if self.env is None:

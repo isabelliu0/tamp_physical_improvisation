@@ -3,20 +3,20 @@
 import gymnasium as gym
 import numpy as np
 from numpy.typing import NDArray
-from relational_structs import GroundAtom
+from relational_structs import GroundAtom, Object
 
 from tamp_improv.approaches.improvisational.policies.base import (
     Policy,
     PolicyContext,
     TrainingData,
 )
+from tamp_improv.benchmarks.blocks2d import Blocks2DPredicates, Blocks2DTypes
 
 
 class PushingPolicy(Policy[NDArray[np.float32], NDArray[np.float32]]):
     """Hard-coded policy for pushing block 2 out of the way."""
 
     def __init__(self, seed: int) -> None:
-        """Initialize policy."""
         super().__init__(seed)
         self._env: gym.Env | None = None
         self._current_atoms: set[GroundAtom] | None = None
@@ -24,15 +24,32 @@ class PushingPolicy(Policy[NDArray[np.float32], NDArray[np.float32]]):
 
     @property
     def requires_training(self) -> bool:
-        """Whether this policy requires training data and training."""
         return False
 
     def initialize(self, env: gym.Env) -> None:
-        """Initialize policy with environment."""
         self._env = env
 
+    def can_initiate(self) -> bool:
+        types = Blocks2DTypes()
+        predicates = Blocks2DPredicates(types)
+        On = predicates["On"]
+        Clear = predicates["Clear"]
+        GripperEmpty = predicates["GripperEmpty"]
+        block2 = Object("block2", types.block)
+        target_area = Object("target_area", types.surface)
+        robot = Object("robot", types.robot)
+        init = {
+            GroundAtom(On, [block2, target_area]),
+            GroundAtom(GripperEmpty, [robot]),
+        }
+        goal = {GroundAtom(Clear, [target_area]), GroundAtom(GripperEmpty, [robot])}
+        assert self._current_atoms is not None
+        assert self._target_preimage is not None
+        return init.issubset(self._current_atoms) and goal.issubset(
+            self._target_preimage
+        )
+
     def configure_context(self, context: PolicyContext) -> None:
-        """Configure policy with context information."""
         self._current_atoms = context.current_atoms
         self._target_preimage = context.preimage
 
