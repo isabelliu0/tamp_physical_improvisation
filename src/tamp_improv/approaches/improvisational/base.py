@@ -83,16 +83,16 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         )
 
         # Compute preimages
-        if self._planning_graph:
-            self._planning_graph.compute_preimages(goal)
+        self._planning_graph.compute_preimages(goal)
 
-            # Try to add shortcuts (initially just for pushing)
-            self._try_add_shortcuts(self._planning_graph, atoms)
+        # Try to add shortcuts
+        self._try_add_shortcuts(self._planning_graph, atoms)
 
-            # Find shortest path
-            self._current_path = self._planning_graph.find_shortest_path(atoms, goal)
-        else:
-            self._current_path = []
+        # Compute edge costs
+        self._compute_planning_graph_edge_costs(obs, info)
+
+        # Find shortest path
+        self._current_path = self._planning_graph.find_shortest_path(atoms, goal)
 
         # Reset state
         self._current_operator = None
@@ -125,10 +125,11 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             return ApproachStepResult(action=self.policy.get_action(obs))
 
         # Get next edge if needed
+        assert self._planning_graph is not None
         if not self._current_edge and self._current_path:
             self._current_edge = self._current_path.pop(0)
 
-            if self._current_edge.is_shortcut and self._planning_graph:
+            if self._current_edge.is_shortcut:
                 print("Using shortcut edge")
                 self.policy_active = True
 
@@ -275,13 +276,13 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     # Create edge to existing node
                     next_node = visited_states[next_atoms_frozen]
                     print(f"State already visited (Node {next_node.id}), creating edge")
-                    graph.add_edge(current_node, next_node, op, cost=1.0)
+                    graph.add_edge(current_node, next_node, op)
                 else:
                     # Create new node and edge
                     next_node = graph.add_node(next_atoms)
                     print(f"    Created new Node {next_node.id}")
                     visited_states[next_atoms_frozen] = next_node
-                    graph.add_edge(current_node, next_node, op, cost=1.0)
+                    graph.add_edge(current_node, next_node, op)
                     queue.append((next_node, depth + 1))
 
         print(
@@ -450,11 +451,24 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             and block2_on_table_in_target
         ):
             print(f"Adding pushing shortcut: {initial_node.id} to {target_node.id}")
-            cost = 0.0  # will change this in the future
-            graph.add_edge(initial_node, target_node, None, cost, is_shortcut=True)
+            graph.add_edge(
+                initial_node, target_node, None, float("inf"), is_shortcut=True
+            )
 
         else:
             print("No pushing shortcut opportunity detected:")
             print(f"  - Target clear in initial node: {target_clear_in_initial}")
             print(f"  - Target clear in target node: {target_clear_in_target}")
             print(f"  - Block2 on table in target node: {block2_on_table_in_target}")
+
+    def _compute_planning_graph_edge_costs(
+        self, obs: ObsType, info: dict[str, Any]
+    ) -> None:
+        """Add edge costs to the current planning graph."""
+        # TODO
+        assert self._planning_graph is not None
+        for edge in self._planning_graph.edges:
+            if edge.is_shortcut:
+                edge.cost = 0.0
+            else:
+                edge.cost = 1.0

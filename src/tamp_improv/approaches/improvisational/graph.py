@@ -56,7 +56,7 @@ class PlanningGraph:
         source: PlanningGraphNode,
         target: PlanningGraphNode,
         operator: GroundOperator | None = None,
-        cost: float = 1.0,
+        cost: float = float("inf"),
         is_shortcut: bool = False,
     ) -> PlanningGraphEdge:
         """Add an edge to the graph."""
