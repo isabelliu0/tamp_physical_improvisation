@@ -89,7 +89,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self._planning_graph.compute_preimages(goal)
 
         # Try to add shortcuts
-        self._try_add_shortcuts(self._planning_graph, atoms)
+        self._try_add_shortcuts(self._planning_graph)
 
         # Compute edge costs
         self._compute_planning_graph_edge_costs(obs, info)
@@ -379,90 +379,28 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
         return groundings
 
-    def _try_add_shortcuts(
-        self, graph: PlanningGraph, init_atoms: set[GroundAtom]
-    ) -> None:
-        """Try to add shortcut edges to the graph.
+    def _try_add_shortcuts(self, graph: PlanningGraph) -> None:
+        """Try to add shortcut edges to the graph."""
 
-        For now, manually detect pushing opportunity in the blocks2d
-        scenario.
-        """
-        # For the initial version, we'll just add the shortcut for pushing block 2
-        # Start --> Push block 2 out of target area --> Pick up block 1
-
-        # Find initial node
-        initial_node = graph.node_map[frozenset(init_atoms)]
-
-        # Target node should be the node right before "Pick up block 1" operation
-        target_node_candidates = [n for n in graph.nodes if n.id == 3]
-        assert len(target_node_candidates) == 1
-
-        if not target_node_candidates:
-            print("No suitable target node found for shortcut")
-            return
-
-        target_node = target_node_candidates[0]
-
-        # Check if this is a potential pushing scenario
-        # In new predicate structure:
-        # - Initial state: target_area is NOT clear (block 2 is blocking it)
-        # - Target state: target_area IS clear (block 2 has been moved)
-
-        # Find target_area object
-        target_area_atom = next(
-            (
-                atom
-                for atom in target_node.atoms
-                if atom.predicate.name == "Clear"
-                and len(atom.objects) == 1
-                and atom.objects[0].name == "target_area"
-            ),
-            None,
-        )
-
-        if not target_area_atom:
-            print("Could not find target_area object in node atoms")
-            return
-
-        initial_atoms_str = str(initial_node.atoms)
-        target_atoms_str = str(target_node.atoms)
-        print(f"Initial node atoms: {initial_atoms_str}")
-        print(f"Target node atoms: {target_atoms_str}")
-
-        # Check if target_area is not clear in initial state but is clear in target state
-        target_clear_in_initial = any(
-            atom.predicate.name == "Clear" and atom.objects[0].name == "target_area"
-            for atom in initial_node.atoms
-        )
-
-        target_clear_in_target = any(
-            atom.predicate.name == "Clear" and atom.objects[0].name == "target_area"
-            for atom in target_node.atoms
-        )
-
-        # Block 2 should be on table in target state (moved from target area)
-        block2_on_table_in_target = any(
-            atom.predicate.name == "On"
-            and atom.objects[0].name == "block2"
-            and atom.objects[1].name == "table"
-            for atom in target_node.atoms
-        )
-
-        if (
-            (not target_clear_in_initial)
-            and target_clear_in_target
-            and block2_on_table_in_target
-        ):
-            print(f"Adding pushing shortcut: {initial_node.id} to {target_node.id}")
-            graph.add_edge(
-                initial_node, target_node, None, float("inf"), is_shortcut=True
-            )
-
-        else:
-            print("No pushing shortcut opportunity detected:")
-            print(f"  - Target clear in initial node: {target_clear_in_initial}")
-            print(f"  - Target clear in target node: {target_clear_in_target}")
-            print(f"  - Block2 on table in target node: {block2_on_table_in_target}")
+        # Consider all pairs of initial nodes and preimages and check if the
+        # policy can be initiated given that context.
+        for source_node in graph.nodes:
+            for target_node in graph.nodes:
+                if source_node == target_node:
+                    continue
+                # Don't bother trying to take a shortcut if we already have an
+                # operator for source -> target.
+                if target_node in graph.node_to_outgoing_edges[source_node]:
+                    continue
+                self.policy.configure_context(
+                    PolicyContext(
+                        preimage=graph.preimages[target_node],
+                        current_atoms=set(source_node.atoms),
+                    )
+                )
+                if self.policy.can_initiate():
+                    print(f"Adding shortcut: {source_node.id} to {target_node.id}")
+                    graph.add_edge(source_node, target_node, None, is_shortcut=True)
 
     def _compute_planning_graph_edge_costs(
         self, obs: ObsType, info: dict[str, Any]

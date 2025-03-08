@@ -109,6 +109,9 @@ class RL2MPCPolicy(Policy[ObsType, ActType]):
         self.mpc_policy.initialize(env)
         self._traj_env = deepcopy(env)
 
+    def can_initiate(self):
+        return True
+
     def configure_context(self, context: PolicyContext) -> None:
         """Configure policy context."""
         self.mpc_policy.configure_context(context)

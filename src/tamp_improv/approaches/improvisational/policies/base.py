@@ -127,6 +127,11 @@ class Policy(Generic[ObsType, ActType], ABC):
         """Initialize policy with environment."""
 
     @abstractmethod
+    def can_initiate(self) -> bool:
+        """Check whether the policy can be executed given the current
+        context."""
+
+    @abstractmethod
     def get_action(self, obs: ObsType) -> ActType:
         """Get action from policy."""
 
