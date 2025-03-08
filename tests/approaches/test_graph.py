@@ -76,8 +76,6 @@ def visualize_graph(graph, output_path=None):
         plt.savefig(output_path, dpi=300, bbox_inches="tight")
         print(f"Graph visualization saved to {output_path}")
 
-    plt.show()
-
 
 def test_planning_graph_visualization():
     """Test building and visualizing the planning graph."""

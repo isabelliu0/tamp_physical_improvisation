@@ -8,7 +8,7 @@ from tamp_improv.benchmarks.number import NumberTAMPSystem
 from tamp_improv.benchmarks.pybullet_clear_and_place import ClearAndPlaceTAMPSystem
 
 
-def run_episode(system, approach, max_steps: int):
+def run_episode(system, approach, max_steps):
     """Run single episode with approach."""
     obs, info = system.reset()
     step_result = approach.reset(obs, info)

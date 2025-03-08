@@ -10,8 +10,8 @@ from tamp_improv.approaches.improvisational.training import (
 from tamp_improv.benchmarks.blocks2d import Blocks2DTAMPSystem
 
 
-@pytest.fixture
-def test_config():
+@pytest.fixture(scope="function", name="training_config")
+def _get_training_config():
     """Test configuration."""
     return TrainingConfig(
         seed=42,
@@ -21,14 +21,13 @@ def test_config():
     )
 
 
-# pylint: disable=redefined-outer-name
-def test_framework_with_hardcoded_policy(test_config):
+def test_framework_with_hardcoded_policy(training_config):
     """Test the framework using a hard-coded pushing policy."""
     print("\n=== Testing Framework with Hard-coded Pushing Policy ===")
 
     # Create system
     system = Blocks2DTAMPSystem.create_default(
-        seed=42, render_mode="rgb_array" if test_config.render else None
+        seed=42, render_mode="rgb_array" if training_config.render else None
     )
 
     # Create policy
@@ -37,7 +36,7 @@ def test_framework_with_hardcoded_policy(test_config):
 
     # Run test
     metrics = train_and_evaluate(
-        system, policy_factory, test_config, policy_name="PushingPolicy"
+        system, policy_factory, training_config, policy_name="PushingPolicy"
     )
 
     print("\nResults:")
