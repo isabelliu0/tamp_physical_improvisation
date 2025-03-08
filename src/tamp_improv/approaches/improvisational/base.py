@@ -25,6 +25,7 @@ from tamp_improv.approaches.base import (
 )
 from tamp_improv.approaches.improvisational.graph import (
     PlanningGraph,
+    PlanningGraphNode,
     PlanningGraphEdge,
 )
 from tamp_improv.approaches.improvisational.policies.base import Policy, PolicyContext
@@ -44,11 +45,13 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         policy: Policy[ObsType, ActType],
         seed: int,
         planner_id: str = "pyperplan",
+        max_skill_steps: int = 10_000,
     ) -> None:
         """Initialize approach."""
         super().__init__(system, seed)
         self.policy = policy
         self.planner_id = planner_id
+        self._max_skill_steps = max_skill_steps
 
         # Initialize policy with wrapped environment
         policy.initialize(system.wrapped_env)
@@ -465,10 +468,43 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self, obs: ObsType, info: dict[str, Any]
     ) -> None:
         """Add edge costs to the current planning graph."""
-        # TODO
+
         assert self._planning_graph is not None
-        for edge in self._planning_graph.edges:
-            if edge.is_shortcut:
-                edge.cost = 0.0
-            else:
-                edge.cost = 1.0
+
+        _, init_atoms, _ = self.system.perceiver.reset(obs, info)
+        node_to_obs: dict[PlanningGraphNode, ObsType] = {}
+        initial_node = self._planning_graph.node_map[frozenset(init_atoms)]
+        node_to_obs[initial_node] = obs
+
+        sim = self.system.wrapped_env  # issue #31
+
+        queue = [initial_node]
+        visited_edges: set[PlanningGraphEdge] = set()
+        while queue:
+            node = queue.pop()
+            obs = node_to_obs[node]
+            sim.reset_from_state(obs)  # type: ignore
+            self.system.perceiver.reset(obs, info)
+            for edge in self._planning_graph.node_to_outgoing_edges[node]:
+                if edge in visited_edges:
+                    continue
+                preimage = self._planning_graph.preimages[edge.target]
+                if edge.is_shortcut:
+                    import ipdb; ipdb.set_trace()
+                else:
+                    assert edge.operator is not None
+                    skill = self._get_skill(edge.operator)
+                    skill.reset(edge.operator)
+                num_steps = 0
+                for _ in range(self._max_skill_steps):
+                    act = skill.get_action(obs)
+                    obs, _, _, _, _ = sim.step(act)
+                    num_steps += 1
+                    atoms = self.system.perceiver.step(obs)
+                    if atoms.issubset(preimage):
+                        break  # success
+                else:
+                    raise NotImplementedError("TODO")
+                edge.cost = num_steps
+                queue.append(edge.target)
+    
