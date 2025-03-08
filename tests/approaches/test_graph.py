@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import networkx as nx  # type: ignore
+import networkx as nx
 
 from tamp_improv.approaches.improvisational.base import ImprovisationalTAMPApproach
 from tamp_improv.approaches.improvisational.policies.pushing import PushingPolicy
@@ -23,7 +23,7 @@ def visualize_graph(graph, output_path=None):
             count += 1
 
         label = f"Node {node.index}\n" + "\n".join(atoms_str)
-        G.add_node(node.index, label=label)
+        G.add_node(node, label=label)
 
     for edge in graph.edges:
         edge_label = ""
@@ -36,17 +36,25 @@ def visualize_graph(graph, output_path=None):
         else:
             edge_label = "Shortcut" if edge.is_shortcut else ""
 
-        G.add_edge(edge.source.index, edge.target.index, label=edge_label)
+        G.add_edge(edge.source, edge.target, label=edge_label)
 
     plt.figure(figsize=(14, 10))
 
     if len(G.nodes) <= 10:
-        pos = nx.spring_layout(G, seed=42, k=0.5)
+        pos = nx.spring_layout(G, seed=42, k=1.0)
     else:
         pos = nx.kamada_kawai_layout(G)
 
     nx.draw_networkx_nodes(G, pos, node_size=2000, node_color="lightblue", alpha=0.8)
-    nx.draw_networkx_edges(G, pos, width=1.5, arrowsize=20, arrowstyle="->", alpha=0.7)
+    nx.draw_networkx_edges(
+        G,
+        pos,
+        width=1.5,
+        arrowsize=20,
+        connectionstyle="arc3,rad=0.2",
+        arrowstyle="->",
+        alpha=0.7,
+    )
     nx.draw_networkx_labels(
         G,
         pos,
@@ -56,7 +64,9 @@ def visualize_graph(graph, output_path=None):
     )
 
     edge_labels = {(u, v): d["label"] for u, v, d in G.edges(data=True)}
-    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_size=8)
+    nx.draw_networkx_edge_labels(
+        G, pos, connectionstyle="arc3,rad=0.2", edge_labels=edge_labels, font_size=8
+    )
 
     plt.title("Planning Graph Visualization", fontsize=16, pad=20)
     plt.axis("off")

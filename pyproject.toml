@@ -63,5 +63,6 @@ exclude = ["venv/*", "scripts/*"]
 [[tool.mypy.overrides]]
 module = [
     "matplotlib.*",
+    "networkx.*",
 ]
 ignore_missing_imports = true
