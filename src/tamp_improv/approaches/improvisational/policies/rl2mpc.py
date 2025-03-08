@@ -122,6 +122,8 @@ class RL2MPCPolicy(Policy[ObsType, ActType]):
             self._traj_env.configure_training(  # type: ignore[union-attr]
                 TrainingData(
                     states=[],
+                    current_atoms=[],
+                    preimages=[],
                     preconditions_to_maintain=[context.preconditions_to_maintain],
                     preconditions_to_achieve=[context.preconditions_to_achieve],
                     config={"max_steps": self.mpc_policy.config.horizon},
