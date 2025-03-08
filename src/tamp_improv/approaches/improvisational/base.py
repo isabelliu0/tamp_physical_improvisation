@@ -25,8 +25,8 @@ from tamp_improv.approaches.base import (
 )
 from tamp_improv.approaches.improvisational.graph import (
     PlanningGraph,
-    PlanningGraphNode,
     PlanningGraphEdge,
+    PlanningGraphNode,
 )
 from tamp_improv.approaches.improvisational.policies.base import Policy, PolicyContext
 
@@ -45,7 +45,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         policy: Policy[ObsType, ActType],
         seed: int,
         planner_id: str = "pyperplan",
-        max_skill_steps: int = 10_000,
+        max_skill_steps: int = 1_000,
     ) -> None:
         """Initialize approach."""
         super().__init__(system, seed)
@@ -472,25 +472,28 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         assert self._planning_graph is not None
 
         _, init_atoms, _ = self.system.perceiver.reset(obs, info)
-        node_to_obs: dict[PlanningGraphNode, ObsType] = {}
         initial_node = self._planning_graph.node_map[frozenset(init_atoms)]
-        node_to_obs[initial_node] = obs
+        node_to_obs_info: dict[PlanningGraphNode, tuple[ObsType, dict]] = {}
+        node_to_obs_info[initial_node] = (obs, info)
 
         sim = self.system.wrapped_env  # issue #31
 
         queue = [initial_node]
-        visited_edges: set[PlanningGraphEdge] = set()
         while queue:
             node = queue.pop()
-            obs = node_to_obs[node]
-            sim.reset_from_state(obs)  # type: ignore
-            self.system.perceiver.reset(obs, info)
             for edge in self._planning_graph.node_to_outgoing_edges[node]:
-                if edge in visited_edges:
-                    continue
+                obs, info = node_to_obs_info[node]
+                sim.reset_from_state(obs)  # type: ignore
+                _, init_atoms, _ = self.system.perceiver.reset(obs, info)
                 preimage = self._planning_graph.preimages[edge.target]
                 if edge.is_shortcut:
-                    import ipdb; ipdb.set_trace()
+                    self.policy.configure_context(
+                        PolicyContext(
+                            preimage=preimage,
+                            current_atoms=init_atoms,
+                        )
+                    )
+                    skill: Policy | Skill = self.policy
                 else:
                     assert edge.operator is not None
                     skill = self._get_skill(edge.operator)
@@ -498,13 +501,20 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 num_steps = 0
                 for _ in range(self._max_skill_steps):
                     act = skill.get_action(obs)
-                    obs, _, _, _, _ = sim.step(act)
+                    obs, _, _, _, info = sim.step(act)
                     num_steps += 1
                     atoms = self.system.perceiver.step(obs)
-                    if atoms.issubset(preimage):
+                    if preimage.issubset(atoms):
                         break  # success
                 else:
-                    raise NotImplementedError("TODO")
+                    # Edge expansion failed.
+                    continue
+                assert edge.cost == float("inf")
                 edge.cost = num_steps
-                queue.append(edge.target)
-    
+                # NOTE: we are making the strong assumption that it does not
+                # matter which low-level state you are in within the abstract
+                # state, so if there are multiple observations for a node, we
+                # just keep one arbitrarily.
+                if edge.target not in node_to_obs_info:
+                    node_to_obs_info[edge.target] = (obs, info)
+                    queue.append(edge.target)

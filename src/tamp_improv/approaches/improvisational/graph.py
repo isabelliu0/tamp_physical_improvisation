@@ -37,7 +37,11 @@ class PlanningGraphEdge:
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, PlanningGraphEdge):
             return False
-        return self.source == other.source and self.target == other.target and self.operator == other.operator
+        return (
+            self.source == other.source
+            and self.target == other.target
+            and self.operator == other.operator
+        )
 
 
 class PlanningGraph:
@@ -46,8 +50,12 @@ class PlanningGraph:
     def __init__(self) -> None:
         self.nodes: list[PlanningGraphNode] = []
         self.edges: list[PlanningGraphEdge] = []
-        self.node_to_incoming_edges: dict[PlanningGraphNode, list[PlanningGraphEdge]] = {}
-        self.node_to_outgoing_edges: dict[PlanningGraphNode, list[PlanningGraphEdge]] = {}
+        self.node_to_incoming_edges: dict[
+            PlanningGraphNode, list[PlanningGraphEdge]
+        ] = {}
+        self.node_to_outgoing_edges: dict[
+            PlanningGraphNode, list[PlanningGraphEdge]
+        ] = {}
         self.node_map: dict[frozenset[GroundAtom], PlanningGraphNode] = {}
         self.preimages: dict[PlanningGraphNode, set[GroundAtom]] = {}
 
