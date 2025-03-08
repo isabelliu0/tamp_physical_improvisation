@@ -22,7 +22,7 @@ def visualize_graph(graph, output_path=None):
             atoms_str.append(atom_str)
             count += 1
 
-        label = f"Node {node.index}\n" + "\n".join(atoms_str)
+        label = f"Node {node.id}\n" + "\n".join(atoms_str)
         G.add_node(node, label=label)
 
     for edge in graph.edges:

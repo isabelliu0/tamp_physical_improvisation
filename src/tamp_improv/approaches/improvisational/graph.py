@@ -10,7 +10,7 @@ class PlanningGraphNode:
     """Node in the planning graph representing a set of atoms."""
 
     atoms: frozenset[GroundAtom]
-    index: int  # Step index in the plan
+    id: int
 
     def __hash__(self) -> int:
         return hash(self.atoms)
@@ -38,18 +38,17 @@ class PlanningGraph:
     def __init__(self) -> None:
         self.nodes: list[PlanningGraphNode] = []
         self.edges: list[PlanningGraphEdge] = []
-        self._node_map: dict[frozenset[GroundAtom], PlanningGraphNode] = {}
+        self.node_map: dict[frozenset[GroundAtom], PlanningGraphNode] = {}
         self.preimages: dict[PlanningGraphNode, set[GroundAtom]] = {}
 
-    def add_node(self, atoms: set[GroundAtom], index: int) -> PlanningGraphNode:
+    def add_node(self, atoms: set[GroundAtom]) -> PlanningGraphNode:
         """Add a node to the graph."""
         frozen_atoms = frozenset(atoms)
-        if frozen_atoms in self._node_map:
-            return self._node_map[frozen_atoms]
-
-        node = PlanningGraphNode(frozen_atoms, index)
+        assert frozen_atoms not in self.node_map
+        node_id = len(self.nodes)
+        node = PlanningGraphNode(frozen_atoms, node_id)
         self.nodes.append(node)
-        self._node_map[frozen_atoms] = node
+        self.node_map[frozen_atoms] = node
         return node
 
     def add_edge(
@@ -65,52 +64,55 @@ class PlanningGraph:
         self.edges.append(edge)
         return edge
 
-    def compute_preimages(self) -> dict[PlanningGraphNode, set[GroundAtom]]:
-        """Compute preimages for all nodes.
+    def compute_preimages(self, goal: set[GroundAtom]) -> None:
+        """Compute self.preimages for all nodes.
 
         Preimage(j) := Preimage(j+1) + op(j)[preconditions] - op(j)[add
         effects]
         """
         self.preimages = {}
-        # Start from the goal node (last node)
-        if not self.nodes:
-            return self.preimages
+        goal_nodes = [node for node in self.nodes if goal.issubset(node.atoms)]
+        assert len(goal_nodes) == 1, "Figure out how to handle this"
+        goal_node = goal_nodes[0]
+        self.preimages[goal_node] = set(goal)
 
-        goal_node = max(self.nodes, key=lambda n: n.index)
-        self.preimages[goal_node] = set(goal_node.atoms)
+        node_to_in_edges: dict[PlanningGraphNode, list[PlanningGraphEdge]] = {
+            n: [] for n in self.nodes
+        }
+        for edge in self.edges:
+            node_to_in_edges[edge.target].append(edge)
 
-        # Work backwards
-        for node in sorted(self.nodes, key=lambda n: n.index, reverse=True):
-            if node not in self.preimages:
-                continue
-
-            incoming_edges = [edge for edge in self.edges if edge.target == node]
+        # Work backwards from the goal in (reverse) breadth-first order
+        queue = [goal_node]
+        while queue:
+            node = queue.pop(0)  # breadth-first
+            assert node in self.preimages
+            incoming_edges = node_to_in_edges[node]
             for edge in incoming_edges:
-                if edge.operator:
-                    source_preimage = self.preimages[node].copy()
-                    source_preimage.difference_update(edge.operator.add_effects)
-                    source_preimage.update(edge.operator.preconditions)
+                assert edge.operator and not edge.is_shortcut
+                source_preimage = self.preimages[node].copy()
+                source_preimage.difference_update(edge.operator.add_effects)
+                source_preimage.update(edge.operator.preconditions)
+                # If there is more than one path to get to the goal, prefer
+                # the one that is closer to the goal -- this should happen
+                # because we are expanding in reverse breadth-first order.
+                # It's possible that there are ties, in which case we are
+                # tiebreaking arbitrarily.
+                if edge.source not in self.preimages:
+                    self.preimages[edge.source] = source_preimage
+                    queue.append(edge.source)
 
-                    if edge.source in self.preimages:
-                        self.preimages[edge.source].update(source_preimage)
-                    else:
-                        self.preimages[edge.source] = source_preimage
-                elif edge.is_shortcut:
-                    # For shortcuts, the preimage is the same as the target
-                    if edge.source in self.preimages:
-                        self.preimages[edge.source].update(self.preimages[node])
-                    else:
-                        self.preimages[edge.source] = self.preimages[node].copy()
-
-        return self.preimages
-
-    def find_shortest_path(self) -> list[PlanningGraphEdge]:
+    def find_shortest_path(
+        self, init_atoms: set[GroundAtom], goal: set[GroundAtom]
+    ) -> list[PlanningGraphEdge]:
         """Find shortest path from initial node to goal node."""
         if not self.nodes:
             return []
 
-        initial_node = min(self.nodes, key=lambda n: n.index)
-        goal_node = max(self.nodes, key=lambda n: n.index)
+        initial_node = self.node_map[frozenset(init_atoms)]
+        goal_nodes = [node for node in self.nodes if goal.issubset(node.atoms)]
+        assert len(goal_nodes) == 1, "Figure out how to handle this"
+        goal_node = goal_nodes[0]
 
         # Dijkstra's algorithm
         distances = {node: float("inf") for node in self.nodes}

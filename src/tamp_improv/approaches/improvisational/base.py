@@ -84,13 +84,13 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
         # Compute preimages
         if self._planning_graph:
-            self._planning_graph.compute_preimages()
+            self._planning_graph.compute_preimages(goal)
 
             # Try to add shortcuts (initially just for pushing)
-            self._try_add_shortcuts(self._planning_graph)
+            self._try_add_shortcuts(self._planning_graph, atoms)
 
             # Find shortest path
-            self._current_path = self._planning_graph.find_shortest_path()
+            self._current_path = self._planning_graph.find_shortest_path(atoms, goal)
         else:
             self._current_path = []
 
@@ -227,7 +227,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         agnostic.
         """
         graph = PlanningGraph()
-        initial_node = graph.add_node(init_atoms, 0)
+        initial_node = graph.add_node(init_atoms)
         visited_states = {frozenset(init_atoms): initial_node}
         queue = deque([(initial_node, 0)])  # Queue for BFS: [(node, depth)]
         node_count = 0
@@ -274,14 +274,12 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 if next_atoms_frozen in visited_states:
                     # Create edge to existing node
                     next_node = visited_states[next_atoms_frozen]
-                    print(
-                        f"State already visited (Node {next_node.index}), creating edge"
-                    )
+                    print(f"State already visited (Node {next_node.id}), creating edge")
                     graph.add_edge(current_node, next_node, op, cost=1.0)
                 else:
                     # Create new node and edge
-                    next_node = graph.add_node(next_atoms, depth + 1)
-                    print(f"    Created new Node {next_node.index}")
+                    next_node = graph.add_node(next_atoms)
+                    print(f"    Created new Node {next_node.id}")
                     visited_states[next_atoms_frozen] = next_node
                     graph.add_edge(current_node, next_node, op, cost=1.0)
                     queue.append((next_node, depth + 1))
@@ -292,8 +290,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
         # Print detailed graph structure
         print("\nDetailed Graph Structure:")
-        for node in sorted(graph.nodes, key=lambda n: n.index):
-            print(f"\nNode {node.index}:")
+        for node in sorted(graph.nodes, key=lambda n: n.id):
+            print(f"\nNode {node.id}:")
             print("  Key atoms:")
             count = 0
             for atom in node.atoms:
@@ -303,9 +301,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         print("\nGraph Edges:")
         for edge in graph.edges:
             op_str = f"{edge.operator.name}" if edge.operator else "SHORTCUT"
-            print(
-                f"  Node {edge.source.index} --[{op_str}]--> Node {edge.target.index}"
-            )
+            print(f"  Node {edge.source.id} --[{op_str}]--> Node {edge.target.id}")
         return graph
 
     def _find_applicable_operators(
@@ -379,26 +375,23 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
         return groundings
 
-    def _try_add_shortcuts(self, graph: PlanningGraph) -> None:
+    def _try_add_shortcuts(
+        self, graph: PlanningGraph, init_atoms: set[GroundAtom]
+    ) -> None:
         """Try to add shortcut edges to the graph.
 
         For now, manually detect pushing opportunity in the blocks2d
         scenario.
         """
-        if not graph.nodes or len(graph.nodes) < 3:
-            print("Graph too small for shortcuts")
-            return
-
         # For the initial version, we'll just add the shortcut for pushing block 2
         # Start --> Push block 2 out of target area --> Pick up block 1
 
         # Find initial node
-        initial_node = min(graph.nodes, key=lambda n: n.index)
+        initial_node = graph.node_map[frozenset(init_atoms)]
 
         # Target node should be the node right before "Pick up block 1" operation
-        # In our 5-step plan, it should be node with index 2
-        # (after "Put down block 2 on table" but before "Pick up block 1")
-        target_node_candidates = [n for n in graph.nodes if n.index == 2]
+        target_node_candidates = [n for n in graph.nodes if n.id == 3]
+        assert len(target_node_candidates) == 1
 
         if not target_node_candidates:
             print("No suitable target node found for shortcut")
@@ -456,25 +449,10 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             and target_clear_in_target
             and block2_on_table_in_target
         ):
-            print(
-                f"Adding pushing shortcut: {initial_node.index} to {target_node.index}"
-            )
-            # Add shortcut with lower cost (0.5 * standard path length)
-            cost = 0.5 * (target_node.index - initial_node.index)
+            print(f"Adding pushing shortcut: {initial_node.id} to {target_node.id}")
+            cost = 0.0  # will change this in the future
             graph.add_edge(initial_node, target_node, None, cost, is_shortcut=True)
 
-            # Update preimages if they've been computed
-            if graph.preimages:
-                # Make sure initial node has the preimage for target node
-                if target_node in graph.preimages:
-                    if initial_node in graph.preimages:
-                        graph.preimages[initial_node].update(
-                            graph.preimages[target_node]
-                        )
-                    else:
-                        graph.preimages[initial_node] = graph.preimages[
-                            target_node
-                        ].copy()
         else:
             print("No pushing shortcut opportunity detected:")
             print(f"  - Target clear in initial node: {target_clear_in_initial}")
