@@ -46,7 +46,15 @@ def visualize_graph(graph, output_path=None):
         pos = nx.kamada_kawai_layout(G)
 
     nx.draw_networkx_nodes(G, pos, node_size=2000, node_color="lightblue", alpha=0.8)
-    nx.draw_networkx_edges(G, pos, width=1.5, arrowsize=20, connectionstyle="arc3,rad=0.2", arrowstyle="->", alpha=0.7)
+    nx.draw_networkx_edges(
+        G,
+        pos,
+        width=1.5,
+        arrowsize=20,
+        connectionstyle="arc3,rad=0.2",
+        arrowstyle="->",
+        alpha=0.7,
+    )
     nx.draw_networkx_labels(
         G,
         pos,
@@ -56,7 +64,9 @@ def visualize_graph(graph, output_path=None):
     )
 
     edge_labels = {(u, v): d["label"] for u, v, d in G.edges(data=True)}
-    nx.draw_networkx_edge_labels(G, pos, connectionstyle="arc3,rad=0.2", edge_labels=edge_labels, font_size=8)
+    nx.draw_networkx_edge_labels(
+        G, pos, connectionstyle="arc3,rad=0.2", edge_labels=edge_labels, font_size=8
+    )
 
     plt.title("Planning Graph Visualization", fontsize=16, pad=20)
     plt.axis("off")

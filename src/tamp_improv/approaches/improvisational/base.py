@@ -281,7 +281,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     graph.add_edge(current_node, next_node, op, cost=1.0)
                 else:
                     # Create new node and edge
-                    next_node: PlanningGraphNode = graph.add_node(next_atoms, depth + 1)
+                    next_node = graph.add_node(next_atoms, depth + 1)
                     print(f"    Created new Node {next_node.index}")
                     visited_states[next_atoms_frozen] = next_node
                     graph.add_edge(current_node, next_node, op, cost=1.0)
