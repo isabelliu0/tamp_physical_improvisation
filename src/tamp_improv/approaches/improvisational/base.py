@@ -1,8 +1,16 @@
 """Base improvisational TAMP approach."""
 
+import itertools
+from collections import deque
 from typing import Any
 
-from relational_structs import GroundAtom, GroundOperator, Object, PDDLProblem
+from relational_structs import (
+    GroundAtom,
+    GroundOperator,
+    LiftedOperator,
+    Object,
+    PDDLProblem,
+)
 from relational_structs.utils import parse_pddl_plan
 from task_then_motion_planning.planning import TaskThenMotionPlanningFailure
 from task_then_motion_planning.structs import Skill
@@ -18,6 +26,7 @@ from tamp_improv.approaches.base import (
 from tamp_improv.approaches.improvisational.graph import (
     PlanningGraph,
     PlanningGraphEdge,
+    PlanningGraphNode,
 )
 from tamp_improv.approaches.improvisational.policies.base import Policy, PolicyContext
 
@@ -207,30 +216,169 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
     def _create_planning_graph(
         self,
-        _objects: set[Object],
+        objects: set[Object],
         init_atoms: set[GroundAtom],
-        task_plan: list[GroundOperator],
+        _task_plan: list[GroundOperator] | None = None,  # For compatibility
     ) -> PlanningGraph:
-        """Create planning graph from task plan."""
+        """Create a tree-based planning graph by exploring possible action
+        sequences.
+
+        This builds a graph representing multiple possible plans rather
+        than just following a single task plan. This method is domain-
+        agnostic.
+        """
         graph = PlanningGraph()
+        initial_node = graph.add_node(init_atoms, 0)
+        visited_states = {frozenset(init_atoms): initial_node}
+        queue = deque([(initial_node, 0)])  # Queue for BFS: [(node, depth)]
+        node_count = 0
+        max_nodes = 100
+        print(f"Building planning graph with max {max_nodes} nodes...")
 
-        current_atoms = init_atoms.copy()
-        current_node = graph.add_node(current_atoms, 0)
+        # Breadth-first search to build the graph
+        while queue and node_count < max_nodes:
+            current_node, depth = queue.popleft()
+            node_count += 1
 
-        # Create nodes and edges for each step in the plan
-        for i, operator in enumerate(task_plan):
-            # Apply operator effects to get new state
-            next_atoms = current_atoms.copy()
-            next_atoms.difference_update(operator.delete_effects)
-            next_atoms.update(operator.add_effects)
+            print(f"\n--- Node {node_count} at depth {depth} ---")
+            print(f"Contains {len(current_node.atoms)} atoms")
 
-            next_node = graph.add_node(next_atoms, i + 1)
-            graph.add_edge(current_node, next_node, operator, cost=1.0)
+            # Check if this is a goal state
+            if self._goal and self._goal.issubset(current_node.atoms):
+                print(f"Found goal state at depth {depth}, not expanding further...")
+                continue
 
-            current_atoms = next_atoms
-            current_node = next_node
+            # Find applicable ground operators using the domain's operators
+            applicable_ops = self._find_applicable_operators(
+                set(current_node.atoms), objects
+            )
+            print(f"  Found {len(applicable_ops)} applicable operators")
 
+            # Apply each applicable operator to generate new states
+            for i, op in enumerate(applicable_ops):
+                print(f"\n  Applying operator {i+1}/{len(applicable_ops)}: {op.name}")
+                print(f"    Parameters: {[p.name for p in op.parameters]}")
+
+                # Apply operator effects to get next state
+                next_atoms = set(current_node.atoms)
+                next_atoms.difference_update(op.delete_effects)
+                next_atoms.update(op.add_effects)
+
+                # Summarize effects
+                if op.delete_effects:
+                    print(f"    Delete effects: {len(op.delete_effects)} atoms")
+                if op.add_effects:
+                    print(f"    Add effects: {len(op.add_effects)} atoms")
+
+                # Check if we've seen this state before
+                next_atoms_frozen = frozenset(next_atoms)
+                if next_atoms_frozen in visited_states:
+                    # Create edge to existing node
+                    next_nodes = visited_states[next_atoms_frozen]
+                    print(
+                        f"State already visited (Node {next_node.index}), creating edge"
+                    )
+                    graph.add_edge(current_node, next_nodes, op, cost=1.0)
+                else:
+                    # Create new node and edge
+                    next_node: PlanningGraphNode = graph.add_node(next_atoms, depth + 1)
+                    print(f"    Created new Node {next_node.index}")
+                    visited_states[next_atoms_frozen] = next_node
+                    graph.add_edge(current_node, next_node, op, cost=1.0)
+                    queue.append((next_node, depth + 1))
+
+        print(
+            f"Planning graph with {len(graph.nodes)} nodes and {len(graph.edges)} edges"
+        )
+
+        # Print detailed graph structure
+        print("\nDetailed Graph Structure:")
+        for node in sorted(graph.nodes, key=lambda n: n.index):
+            print(f"\nNode {node.index}:")
+            print("  Key atoms:")
+            count = 0
+            for atom in node.atoms:
+                print(f"  - {atom}")
+                count += 1
+
+        print("\nGraph Edges:")
+        for edge in graph.edges:
+            op_str = f"{edge.operator.name}" if edge.operator else "SHORTCUT"
+            print(
+                f"  Node {edge.source.index} --[{op_str}]--> Node {edge.target.index}"
+            )
         return graph
+
+    def _find_applicable_operators(
+        self, current_atoms: set[GroundAtom], objects: set[Object]
+    ) -> list[GroundOperator]:
+        """Find all ground operators that are applicable in the current
+        state."""
+        applicable_ops = []
+        domain_operators = self.domain.operators
+        print(
+            f"Find applicable operators for {len(domain_operators)} domain operators..."
+        )
+
+        for lifted_op in domain_operators:
+            # Find valid groundings using parameter types
+            valid_groundings = self._find_valid_groundings(lifted_op, objects)
+            print(
+                f"Operator {lifted_op.name} has {len(valid_groundings)} valid groundings"
+            )
+
+            for grounding in valid_groundings:
+                ground_op = lifted_op.ground(grounding)
+
+                # Check if preconditions are satisfied
+                if ground_op.preconditions.issubset(current_atoms):
+                    applicable_ops.append(ground_op)
+
+        return applicable_ops
+
+    def _find_valid_groundings(
+        self, lifted_op: LiftedOperator, objects: set[Object]
+    ) -> list[tuple[Object, ...]]:
+        """Find all valid groundings for a lifted operator.
+
+        Args:
+            lifted_op: The lifted operator to ground
+            objects: Available objects in the domain
+
+        Returns:
+            List of valid parameter tuples for grounding
+        """
+        # Group objects by type
+        objects_by_type: dict[Any, list[Object]] = {}
+        for obj in objects:
+            if obj.type not in objects_by_type:
+                objects_by_type[obj.type] = []
+            objects_by_type[obj.type].append(obj)
+
+        # Print the parameter requirements for debugging
+        param_types = []
+        for param in lifted_op.parameters:
+            param_types.append(f"{param.name} ({param.type.name})")
+        print(f"    Parameters needed: {', '.join(param_types)}")
+
+        # For each parameter, find objects of the right type
+        param_objects = []
+        for param in lifted_op.parameters:
+            if param.type in objects_by_type:
+                param_objects.append(objects_by_type[param.type])
+                len_avail = len(objects_by_type[param.type])
+                print(f"- For {param.name}: {len_avail} objects available")
+            else:
+                # If no objects of this type, operator can't be grounded
+                print(
+                    f"- For {param.name}: No objects of type {param.type.name} available"
+                )
+                return []
+
+        # Generate all possible groundings
+        groundings = list(itertools.product(*param_objects))
+
+        return groundings
 
     def _try_add_shortcuts(self, graph: PlanningGraph) -> None:
         """Try to add shortcut edges to the graph.

@@ -1,0 +1,115 @@
+"""Visualization test for the planning graph."""
+
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import networkx as nx  # type: ignore
+
+from tamp_improv.approaches.improvisational.base import ImprovisationalTAMPApproach
+from tamp_improv.approaches.improvisational.policies.pushing import PushingPolicy
+from tamp_improv.benchmarks.blocks2d import Blocks2DTAMPSystem
+
+
+def visualize_graph(graph, output_path=None):
+    """Visualize a planning graph."""
+    G = nx.DiGraph()
+
+    for node in graph.nodes:
+        atoms_str = []
+        count = 0
+        for atom in node.atoms:
+            atom_str = str(atom)
+            atoms_str.append(atom_str)
+            count += 1
+
+        label = f"Node {node.index}\n" + "\n".join(atoms_str)
+        G.add_node(node.index, label=label)
+
+    for edge in graph.edges:
+        edge_label = ""
+        if edge.operator:
+            edge_label = edge.operator.name
+            if hasattr(edge.operator, "parameters") and edge.operator.parameters:
+                param_names = [p.name for p in edge.operator.parameters]
+                if len(param_names) <= 2:  # Avoid long labels
+                    edge_label += f"\n({', '.join(param_names)})"
+        else:
+            edge_label = "Shortcut" if edge.is_shortcut else ""
+
+        G.add_edge(edge.source.index, edge.target.index, label=edge_label)
+
+    plt.figure(figsize=(14, 10))
+
+    if len(G.nodes) <= 10:
+        pos = nx.spring_layout(G, seed=42, k=0.5)
+    else:
+        pos = nx.kamada_kawai_layout(G)
+
+    nx.draw_networkx_nodes(G, pos, node_size=2000, node_color="lightblue", alpha=0.8)
+    nx.draw_networkx_edges(G, pos, width=1.5, arrowsize=20, arrowstyle="->", alpha=0.7)
+    nx.draw_networkx_labels(
+        G,
+        pos,
+        labels=nx.get_node_attributes(G, "label"),
+        font_size=9,
+        font_family="sans-serif",
+    )
+
+    edge_labels = {(u, v): d["label"] for u, v, d in G.edges(data=True)}
+    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_size=8)
+
+    plt.title("Planning Graph Visualization", fontsize=16, pad=20)
+    plt.axis("off")
+    plt.tight_layout()
+
+    if output_path:
+        plt.savefig(output_path, dpi=300, bbox_inches="tight")
+        print(f"Graph visualization saved to {output_path}")
+
+    plt.show()
+
+
+def test_planning_graph_visualization():
+    """Test building and visualizing the planning graph."""
+    print("\n=== Testing Planning Graph Visualization ===")
+
+    system = Blocks2DTAMPSystem.create_default(seed=42)
+
+    approach = ImprovisationalTAMPApproach(
+        system=system,
+        policy=PushingPolicy(seed=42),
+        seed=42,
+    )
+
+    # Reset system and approach
+    print("Resetting system and approach...")
+    obs, info = system.reset()
+    objects, init_atoms, goal_atoms = system.perceiver.reset(obs, info)
+
+    # Save initial state information
+    output_dir = Path("results/planning_graph")
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    with open(output_dir / "blocks2d_planning_info.txt", "w", encoding="utf-8") as f:
+        f.write("=== Blocks2D Planning Problem Information ===\n\n")
+
+        f.write("Objects:\n")
+        for obj in objects:
+            f.write(f"  {obj.name} (Type: {obj.type.name})\n")
+
+        f.write("\nInitial Atoms:\n")
+        for atom in init_atoms:
+            f.write(f"  {atom}\n")
+
+        f.write("\nGoal Atoms:\n")
+        for atom in goal_atoms:
+            f.write(f"  {atom}\n")
+
+    graph = approach._create_planning_graph(  # pylint: disable=protected-access
+        objects, init_atoms
+    )
+
+    print("\nVisualizing planning graph...")
+    visualize_graph(graph, output_dir / "blocks2d_planning_graph.png")
+
+    return graph
