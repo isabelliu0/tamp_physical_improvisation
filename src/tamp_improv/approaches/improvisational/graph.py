@@ -31,6 +31,18 @@ class PlanningGraphEdge:
     cost: float = float("inf")
     is_shortcut: bool = False  # Whether this is a learned shortcut
 
+    def __hash__(self) -> int:
+        return hash((self.source, self.target, self.operator))
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, PlanningGraphEdge):
+            return False
+        return (
+            self.source == other.source
+            and self.target == other.target
+            and self.operator == other.operator
+        )
+
 
 class PlanningGraph:
     """Graph representation of a task plan."""
@@ -38,6 +50,12 @@ class PlanningGraph:
     def __init__(self) -> None:
         self.nodes: list[PlanningGraphNode] = []
         self.edges: list[PlanningGraphEdge] = []
+        self.node_to_incoming_edges: dict[
+            PlanningGraphNode, list[PlanningGraphEdge]
+        ] = {}
+        self.node_to_outgoing_edges: dict[
+            PlanningGraphNode, list[PlanningGraphEdge]
+        ] = {}
         self.node_map: dict[frozenset[GroundAtom], PlanningGraphNode] = {}
         self.preimages: dict[PlanningGraphNode, set[GroundAtom]] = {}
 
@@ -49,6 +67,8 @@ class PlanningGraph:
         node = PlanningGraphNode(frozen_atoms, node_id)
         self.nodes.append(node)
         self.node_map[frozen_atoms] = node
+        self.node_to_incoming_edges[node] = []
+        self.node_to_outgoing_edges[node] = []
         return node
 
     def add_edge(
@@ -56,12 +76,14 @@ class PlanningGraph:
         source: PlanningGraphNode,
         target: PlanningGraphNode,
         operator: GroundOperator | None = None,
-        cost: float = 1.0,
+        cost: float = float("inf"),
         is_shortcut: bool = False,
     ) -> PlanningGraphEdge:
         """Add an edge to the graph."""
         edge = PlanningGraphEdge(source, target, operator, cost, is_shortcut)
         self.edges.append(edge)
+        self.node_to_incoming_edges[edge.target].append(edge)
+        self.node_to_outgoing_edges[edge.source].append(edge)
         return edge
 
     def compute_preimages(self, goal: set[GroundAtom]) -> None:
@@ -76,18 +98,12 @@ class PlanningGraph:
         goal_node = goal_nodes[0]
         self.preimages[goal_node] = set(goal)
 
-        node_to_in_edges: dict[PlanningGraphNode, list[PlanningGraphEdge]] = {
-            n: [] for n in self.nodes
-        }
-        for edge in self.edges:
-            node_to_in_edges[edge.target].append(edge)
-
         # Work backwards from the goal in (reverse) breadth-first order
         queue = [goal_node]
         while queue:
             node = queue.pop(0)  # breadth-first
             assert node in self.preimages
-            incoming_edges = node_to_in_edges[node]
+            incoming_edges = self.node_to_incoming_edges[node]
             for edge in incoming_edges:
                 assert edge.operator and not edge.is_shortcut
                 source_preimage = self.preimages[node].copy()

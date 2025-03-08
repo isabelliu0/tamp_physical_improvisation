@@ -26,6 +26,7 @@ from tamp_improv.approaches.base import (
 from tamp_improv.approaches.improvisational.graph import (
     PlanningGraph,
     PlanningGraphEdge,
+    PlanningGraphNode,
 )
 from tamp_improv.approaches.improvisational.policies.base import Policy, PolicyContext
 
@@ -44,11 +45,13 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         policy: Policy[ObsType, ActType],
         seed: int,
         planner_id: str = "pyperplan",
+        max_skill_steps: int = 1_000,
     ) -> None:
         """Initialize approach."""
         super().__init__(system, seed)
         self.policy = policy
         self.planner_id = planner_id
+        self._max_skill_steps = max_skill_steps
 
         # Initialize policy with wrapped environment
         policy.initialize(system.wrapped_env)
@@ -83,16 +86,16 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         )
 
         # Compute preimages
-        if self._planning_graph:
-            self._planning_graph.compute_preimages(goal)
+        self._planning_graph.compute_preimages(goal)
 
-            # Try to add shortcuts (initially just for pushing)
-            self._try_add_shortcuts(self._planning_graph, atoms)
+        # Try to add shortcuts
+        self._try_add_shortcuts(self._planning_graph, atoms)
 
-            # Find shortest path
-            self._current_path = self._planning_graph.find_shortest_path(atoms, goal)
-        else:
-            self._current_path = []
+        # Compute edge costs
+        self._compute_planning_graph_edge_costs(obs, info)
+
+        # Find shortest path
+        self._current_path = self._planning_graph.find_shortest_path(atoms, goal)
 
         # Reset state
         self._current_operator = None
@@ -125,10 +128,11 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             return ApproachStepResult(action=self.policy.get_action(obs))
 
         # Get next edge if needed
+        assert self._planning_graph is not None
         if not self._current_edge and self._current_path:
             self._current_edge = self._current_path.pop(0)
 
-            if self._current_edge.is_shortcut and self._planning_graph:
+            if self._current_edge.is_shortcut:
                 print("Using shortcut edge")
                 self.policy_active = True
 
@@ -275,13 +279,13 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     # Create edge to existing node
                     next_node = visited_states[next_atoms_frozen]
                     print(f"State already visited (Node {next_node.id}), creating edge")
-                    graph.add_edge(current_node, next_node, op, cost=1.0)
+                    graph.add_edge(current_node, next_node, op)
                 else:
                     # Create new node and edge
                     next_node = graph.add_node(next_atoms)
                     print(f"    Created new Node {next_node.id}")
                     visited_states[next_atoms_frozen] = next_node
-                    graph.add_edge(current_node, next_node, op, cost=1.0)
+                    graph.add_edge(current_node, next_node, op)
                     queue.append((next_node, depth + 1))
 
         print(
@@ -450,11 +454,67 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             and block2_on_table_in_target
         ):
             print(f"Adding pushing shortcut: {initial_node.id} to {target_node.id}")
-            cost = 0.0  # will change this in the future
-            graph.add_edge(initial_node, target_node, None, cost, is_shortcut=True)
+            graph.add_edge(
+                initial_node, target_node, None, float("inf"), is_shortcut=True
+            )
 
         else:
             print("No pushing shortcut opportunity detected:")
             print(f"  - Target clear in initial node: {target_clear_in_initial}")
             print(f"  - Target clear in target node: {target_clear_in_target}")
             print(f"  - Block2 on table in target node: {block2_on_table_in_target}")
+
+    def _compute_planning_graph_edge_costs(
+        self, obs: ObsType, info: dict[str, Any]
+    ) -> None:
+        """Add edge costs to the current planning graph."""
+
+        assert self._planning_graph is not None
+
+        _, init_atoms, _ = self.system.perceiver.reset(obs, info)
+        initial_node = self._planning_graph.node_map[frozenset(init_atoms)]
+        node_to_obs_info: dict[PlanningGraphNode, tuple[ObsType, dict]] = {}
+        node_to_obs_info[initial_node] = (obs, info)
+
+        sim = self.system.wrapped_env  # issue #31
+
+        queue = [initial_node]
+        while queue:
+            node = queue.pop()
+            for edge in self._planning_graph.node_to_outgoing_edges[node]:
+                obs, info = node_to_obs_info[node]
+                sim.reset_from_state(obs)  # type: ignore
+                _, init_atoms, _ = self.system.perceiver.reset(obs, info)
+                preimage = self._planning_graph.preimages[edge.target]
+                if edge.is_shortcut:
+                    self.policy.configure_context(
+                        PolicyContext(
+                            preimage=preimage,
+                            current_atoms=init_atoms,
+                        )
+                    )
+                    skill: Policy | Skill = self.policy
+                else:
+                    assert edge.operator is not None
+                    skill = self._get_skill(edge.operator)
+                    skill.reset(edge.operator)
+                num_steps = 0
+                for _ in range(self._max_skill_steps):
+                    act = skill.get_action(obs)
+                    obs, _, _, _, info = sim.step(act)
+                    num_steps += 1
+                    atoms = self.system.perceiver.step(obs)
+                    if preimage.issubset(atoms):
+                        break  # success
+                else:
+                    # Edge expansion failed.
+                    continue
+                assert edge.cost == float("inf")
+                edge.cost = num_steps
+                # NOTE: we are making the strong assumption that it does not
+                # matter which low-level state you are in within the abstract
+                # state, so if there are multiple observations for a node, we
+                # just keep one arbitrarily.
+                if edge.target not in node_to_obs_info:
+                    node_to_obs_info[edge.target] = (obs, info)
+                    queue.append(edge.target)
