@@ -274,11 +274,11 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 next_atoms_frozen = frozenset(next_atoms)
                 if next_atoms_frozen in visited_states:
                     # Create edge to existing node
-                    next_nodes = visited_states[next_atoms_frozen]
+                    next_node = visited_states[next_atoms_frozen]
                     print(
                         f"State already visited (Node {next_node.index}), creating edge"
                     )
-                    graph.add_edge(current_node, next_nodes, op, cost=1.0)
+                    graph.add_edge(current_node, next_node, op, cost=1.0)
                 else:
                     # Create new node and edge
                     next_node: PlanningGraphNode = graph.add_node(next_atoms, depth + 1)
