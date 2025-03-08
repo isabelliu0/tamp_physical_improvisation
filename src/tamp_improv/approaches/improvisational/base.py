@@ -1,7 +1,6 @@
 """Base improvisational TAMP approach."""
 
 import itertools
-import random
 from collections import deque
 from typing import Any
 
@@ -378,12 +377,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
         # Generate all possible groundings
         groundings = list(itertools.product(*param_objects))
-
-        # Limit to a reasonable number if there are too many
-        max_groundings = 50
-        if len(groundings) > max_groundings:
-            random.seed(self._seed)
-            return random.sample(groundings, max_groundings)
 
         return groundings
 
