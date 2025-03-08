@@ -26,7 +26,6 @@ from tamp_improv.approaches.base import (
 from tamp_improv.approaches.improvisational.graph import (
     PlanningGraph,
     PlanningGraphEdge,
-    PlanningGraphNode,
 )
 from tamp_improv.approaches.improvisational.policies.base import Policy, PolicyContext
 
