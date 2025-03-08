@@ -15,8 +15,8 @@ from tamp_improv.benchmarks.number import NumberTAMPSystem
 from tamp_improv.benchmarks.pybullet_clear_and_place import ClearAndPlaceTAMPSystem
 
 
-@pytest.fixture
-def base_config():
+@pytest.fixture(scope="function", name="base_config")
+def _get_base_config():
     """Test configuration."""
     return TrainingConfig(
         seed=42,
@@ -53,7 +53,6 @@ def base_config():
         ),
     ],
 )
-# pylint: disable=redefined-outer-name
 def test_mpc_approach(system_cls, mpc_config, base_config):
     """Test MPC improvisational approach."""
     print(f"\n=== Testing MPC on {system_cls.__name__} ===")
@@ -81,7 +80,6 @@ def test_mpc_approach(system_cls, mpc_config, base_config):
         NumberTAMPSystem,
     ],
 )
-# pylint: disable=redefined-outer-name
 def test_rl_approach(system_cls, base_config):
     """Test RL improvisational approach."""
     policy_dir = Path("trained_policies")
