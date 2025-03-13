@@ -66,11 +66,12 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self._goal: set[GroundAtom] = set()
 
         # Graph-based planning state
-        self._planning_graph: PlanningGraph | None = None
+        self.planning_graph: PlanningGraph | None = None
         self._current_path: list[PlanningGraphEdge] = []
         self._current_edge: PlanningGraphEdge | None = None
         self._current_preimage: set[GroundAtom] = set()
         self.policy_active = False
+        self.observed_states: dict[int, Any] = {}  # Maps node_id -> state
 
     def reset(self, obs: ObsType, info: dict[str, Any]) -> ApproachStepResult[ActType]:
         """Reset approach with initial observation."""
@@ -80,22 +81,25 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         # Create initial plan
         self._current_task_plan = self._create_task_plan(objects, atoms, goal)
 
-        # Create planning graph
-        self._planning_graph = self._create_planning_graph(
+        # Create planning graph and store observed state for initial node
+        self.planning_graph = self._create_planning_graph(
             objects, atoms, self._current_task_plan
         )
+        if self.planning_graph:
+            initial_node = next(iter(self.planning_graph.nodes))
+            self.observed_states[initial_node.id] = obs
 
         # Compute preimages
-        self._planning_graph.compute_preimages(goal)
+        self.planning_graph.compute_preimages(goal)
 
         # Try to add shortcuts
-        self._try_add_shortcuts(self._planning_graph)
+        self._try_add_shortcuts(self.planning_graph)
 
         # Compute edge costs
         self._compute_planning_graph_edge_costs(obs, info)
 
         # Find shortest path
-        self._current_path = self._planning_graph.find_shortest_path(atoms, goal)
+        self._current_path = self.planning_graph.find_shortest_path(atoms, goal)
 
         # Reset state
         self._current_operator = None
@@ -118,7 +122,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         atoms = self.system.perceiver.step(obs)
 
         # Check if policy achieved its goal
-        if self.policy_active and self._planning_graph:
+        if self.policy_active and self.planning_graph:
             current_node = self._current_edge.source if self._current_edge else None
             if current_node and self._current_preimage.issubset(atoms):
                 print("Policy successfully achieved preimage!")
@@ -128,7 +132,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             return ApproachStepResult(action=self.policy.get_action(obs))
 
         # Get next edge if needed
-        assert self._planning_graph is not None
+        assert self.planning_graph is not None
         if not self._current_edge and self._current_path:
             self._current_edge = self._current_path.pop(0)
 
@@ -138,8 +142,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
                 # Get preimage for the target node
                 target_node = self._current_edge.target
-                if target_node in self._planning_graph.preimages:
-                    self._current_preimage = self._planning_graph.preimages[target_node]
+                if target_node in self.planning_graph.preimages:
+                    self._current_preimage = self.planning_graph.preimages[target_node]
                 else:
                     # Fallback to target node atoms if preimage not found
                     print(
@@ -182,6 +186,11 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         # Check if current edge's target state is achieved
         if self._current_edge and set(self._current_edge.target.atoms).issubset(atoms):
             print("Edge target achieved")
+
+            # Store observed state for target node
+            target_node = self._current_edge.target
+            self.observed_states[target_node.id] = obs
+
             self._current_edge = None
             return self.step(obs, reward, terminated, truncated, info)
 
@@ -407,10 +416,10 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
     ) -> None:
         """Add edge costs to the current planning graph."""
 
-        assert self._planning_graph is not None
+        assert self.planning_graph is not None
 
         _, init_atoms, _ = self.system.perceiver.reset(obs, info)
-        initial_node = self._planning_graph.node_map[frozenset(init_atoms)]
+        initial_node = self.planning_graph.node_map[frozenset(init_atoms)]
         node_to_obs_info: dict[PlanningGraphNode, tuple[ObsType, dict]] = {}
         node_to_obs_info[initial_node] = (obs, info)
 
@@ -419,11 +428,11 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         queue = [initial_node]
         while queue:
             node = queue.pop()
-            for edge in self._planning_graph.node_to_outgoing_edges[node]:
+            for edge in self.planning_graph.node_to_outgoing_edges[node]:
                 obs, info = node_to_obs_info[node]
                 sim.reset_from_state(obs)  # type: ignore
                 _, init_atoms, _ = self.system.perceiver.reset(obs, info)
-                preimage = self._planning_graph.preimages[edge.target]
+                preimage = self.planning_graph.preimages[edge.target]
                 if edge.is_shortcut:
                     self.policy.configure_context(
                         PolicyContext(
@@ -456,3 +465,35 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 if edge.target not in node_to_obs_info:
                     node_to_obs_info[edge.target] = (obs, info)
                     queue.append(edge.target)
+
+    def get_shortcut_distance(self, source_node, target_node):
+        """Compute the distance (in regular steps) between two nodes."""
+        # Quick check: if there's a direct edge, distance is 1
+        for edge in self.planning_graph.node_to_outgoing_edges.get(source_node, []):
+            if edge.target == target_node and not edge.is_shortcut:
+                return 1
+
+        # BFS to find shortest path
+        queue = deque([(source_node, 0)])
+        visited = {source_node}
+
+        while queue:
+            current, distance = queue.popleft()
+
+            for edge in self.planning_graph.node_to_outgoing_edges.get(current, []):
+                if edge.is_shortcut:
+                    continue
+
+                next_node = edge.target
+
+                # Found path to target
+                if next_node == target_node:
+                    return distance + 1
+
+                # Add to queue if not visited
+                if next_node not in visited:
+                    visited.add(next_node)
+                    queue.append((next_node, distance + 1))
+
+        # No path found
+        return float("inf")
