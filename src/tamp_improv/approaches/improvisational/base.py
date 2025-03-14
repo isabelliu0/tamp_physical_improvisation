@@ -66,7 +66,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self._goal: set[GroundAtom] = set()
 
         # Graph-based planning state
-        self._planning_graph: PlanningGraph | None = None
+        self.planning_graph: PlanningGraph | None = None
         self._current_path: list[PlanningGraphEdge] = []
         self._current_edge: PlanningGraphEdge | None = None
         self._current_preimage: set[GroundAtom] = set()
@@ -81,21 +81,22 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self._current_task_plan = self._create_task_plan(objects, atoms, goal)
 
         # Create planning graph
-        self._planning_graph = self._create_planning_graph(
+        self.planning_graph = self._create_planning_graph(
             objects, atoms, self._current_task_plan
         )
 
         # Compute preimages
-        self._planning_graph.compute_preimages(goal)
+        self.planning_graph.compute_preimages(goal)
 
         # Try to add shortcuts
-        self._try_add_shortcuts(self._planning_graph)
+        if not self.training_mode:
+            self._try_add_shortcuts(self.planning_graph)
 
         # Compute edge costs
         self._compute_planning_graph_edge_costs(obs, info)
 
         # Find shortest path
-        self._current_path = self._planning_graph.find_shortest_path(atoms, goal)
+        self._current_path = self.planning_graph.find_shortest_path(atoms, goal)
 
         # Reset state
         self._current_operator = None
@@ -118,7 +119,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         atoms = self.system.perceiver.step(obs)
 
         # Check if policy achieved its goal
-        if self.policy_active and self._planning_graph:
+        if self.policy_active and self.planning_graph:
             current_node = self._current_edge.source if self._current_edge else None
             if current_node and self._current_preimage.issubset(atoms):
                 print("Policy successfully achieved preimage!")
@@ -128,7 +129,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             return ApproachStepResult(action=self.policy.get_action(obs))
 
         # Get next edge if needed
-        assert self._planning_graph is not None
+        assert self.planning_graph is not None
         if not self._current_edge and self._current_path:
             self._current_edge = self._current_path.pop(0)
 
@@ -138,8 +139,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
                 # Get preimage for the target node
                 target_node = self._current_edge.target
-                if target_node in self._planning_graph.preimages:
-                    self._current_preimage = self._planning_graph.preimages[target_node]
+                if target_node in self.planning_graph.preimages:
+                    self._current_preimage = self.planning_graph.preimages[target_node]
                 else:
                     # Fallback to target node atoms if preimage not found
                     print(
@@ -243,47 +244,34 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             current_node, depth = queue.popleft()
             node_count += 1
 
-            print(f"\n--- Node {node_count} at depth {depth} ---")
-            print(f"Contains {len(current_node.atoms)} atoms")
+            print(f"\n--- Node {node_count-1} at depth {depth} ---")
+            print(f"Contains {len(current_node.atoms)} atoms: {current_node.atoms}")
 
             # Check if this is a goal state
             if self._goal and self._goal.issubset(current_node.atoms):
-                print(f"Found goal state at depth {depth}, not expanding further...")
                 continue
 
             # Find applicable ground operators using the domain's operators
             applicable_ops = self._find_applicable_operators(
                 set(current_node.atoms), objects
             )
-            print(f"  Found {len(applicable_ops)} applicable operators")
 
             # Apply each applicable operator to generate new states
-            for i, op in enumerate(applicable_ops):
-                print(f"\n  Applying operator {i+1}/{len(applicable_ops)}: {op.name}")
-                print(f"    Parameters: {[p.name for p in op.parameters]}")
-
+            for op in applicable_ops:
                 # Apply operator effects to get next state
                 next_atoms = set(current_node.atoms)
                 next_atoms.difference_update(op.delete_effects)
                 next_atoms.update(op.add_effects)
-
-                # Summarize effects
-                if op.delete_effects:
-                    print(f"    Delete effects: {len(op.delete_effects)} atoms")
-                if op.add_effects:
-                    print(f"    Add effects: {len(op.add_effects)} atoms")
 
                 # Check if we've seen this state before
                 next_atoms_frozen = frozenset(next_atoms)
                 if next_atoms_frozen in visited_states:
                     # Create edge to existing node
                     next_node = visited_states[next_atoms_frozen]
-                    print(f"State already visited (Node {next_node.id}), creating edge")
                     graph.add_edge(current_node, next_node, op)
                 else:
                     # Create new node and edge
                     next_node = graph.add_node(next_atoms)
-                    print(f"    Created new Node {next_node.id}")
                     visited_states[next_atoms_frozen] = next_node
                     graph.add_edge(current_node, next_node, op)
                     queue.append((next_node, depth + 1))
@@ -315,16 +303,10 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         state."""
         applicable_ops = []
         domain_operators = self.domain.operators
-        print(
-            f"Find applicable operators for {len(domain_operators)} domain operators..."
-        )
 
         for lifted_op in domain_operators:
             # Find valid groundings using parameter types
             valid_groundings = self._find_valid_groundings(lifted_op, objects)
-            print(
-                f"Operator {lifted_op.name} has {len(valid_groundings)} valid groundings"
-            )
 
             for grounding in valid_groundings:
                 ground_op = lifted_op.ground(grounding)
@@ -358,20 +340,13 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         param_types = []
         for param in lifted_op.parameters:
             param_types.append(f"{param.name} ({param.type.name})")
-        print(f"    Parameters needed: {', '.join(param_types)}")
 
         # For each parameter, find objects of the right type
         param_objects = []
         for param in lifted_op.parameters:
             if param.type in objects_by_type:
                 param_objects.append(objects_by_type[param.type])
-                len_avail = len(objects_by_type[param.type])
-                print(f"- For {param.name}: {len_avail} objects available")
             else:
-                # If no objects of this type, operator can't be grounded
-                print(
-                    f"- For {param.name}: No objects of type {param.type.name} available"
-                )
                 return []
 
         # Generate all possible groundings
@@ -407,10 +382,10 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
     ) -> None:
         """Add edge costs to the current planning graph."""
 
-        assert self._planning_graph is not None
+        assert self.planning_graph is not None
 
         _, init_atoms, _ = self.system.perceiver.reset(obs, info)
-        initial_node = self._planning_graph.node_map[frozenset(init_atoms)]
+        initial_node = self.planning_graph.node_map[frozenset(init_atoms)]
         node_to_obs_info: dict[PlanningGraphNode, tuple[ObsType, dict]] = {}
         node_to_obs_info[initial_node] = (obs, info)
 
@@ -419,11 +394,11 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         queue = [initial_node]
         while queue:
             node = queue.pop()
-            for edge in self._planning_graph.node_to_outgoing_edges[node]:
+            for edge in self.planning_graph.node_to_outgoing_edges[node]:
                 obs, info = node_to_obs_info[node]
                 sim.reset_from_state(obs)  # type: ignore
                 _, init_atoms, _ = self.system.perceiver.reset(obs, info)
-                preimage = self._planning_graph.preimages[edge.target]
+                preimage = self.planning_graph.preimages[edge.target]
                 if edge.is_shortcut:
                     self.policy.configure_context(
                         PolicyContext(

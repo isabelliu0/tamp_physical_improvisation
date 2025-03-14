@@ -48,11 +48,6 @@ class PushingPolicy(Policy[NDArray[np.float32], NDArray[np.float32]]):
         self._current_atoms = context.current_atoms
         self._target_preimage = context.preimage
 
-        # Print relevant information for debugging
-        print("\nConfiguring hard-coded PushingPolicy with context:")
-        print(f"Current atoms: {self._current_atoms}")
-        print(f"Target preimage: {self._target_preimage}")
-
     def get_action(self, obs: NDArray[np.float32]) -> NDArray[np.float32]:
         """Get action for pushing block 2 out of the way."""
         robot_x, robot_y, robot_width = obs[0:3]
