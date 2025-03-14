@@ -1,5 +1,6 @@
 """Graph-based training data collection for improvisational TAMP."""
 
+import random
 from collections import deque
 from dataclasses import dataclass
 from typing import Any
@@ -26,7 +27,6 @@ class ShortcutCandidate:
     source_atoms: set[GroundAtom]
     target_preimage: set[GroundAtom]
     source_state: Any  # The actual environment state at the source node
-    distance: int  # How many regular steps this shortcut would skip
 
 
 def collect_states_for_all_nodes(
@@ -175,7 +175,6 @@ def collect_graph_based_training_data(
     approach: ImprovisationalTAMPApproach,
     config: dict[str, Any],
     max_shortcuts_per_graph: int = 5,
-    min_shortcut_distance: int = 2,  # Minimum number of regular steps to skip
     target_specific_shortcuts: bool = True,  # Whether to prioritize specific shortcuts
 ) -> TrainingData:
     """Collect training data by exploring the planning graph.
@@ -191,10 +190,6 @@ def collect_graph_based_training_data(
     current_atoms_list = []
     preimages_list = []
     shortcut_info = []
-
-    # For backwards compatibility
-    preconditions_to_maintain = []
-    preconditions_to_achieve = []
 
     # settings from config
     collect_episodes = config.get("collect_episodes", 10)
@@ -225,9 +220,7 @@ def collect_graph_based_training_data(
         print(f"\nIdentifying shortcuts using {len(observed_states)} observed states")
         shortcut_candidates = identify_shortcut_candidates(
             planning_graph,
-            approach,
             observed_states,
-            min_distance=min_shortcut_distance,
         )
 
         print(f"Found {len(shortcut_candidates)} potential shortcut candidates")
@@ -256,11 +249,11 @@ def collect_graph_based_training_data(
                 selected_candidates = target_candidates
             else:
                 print("No target shortcuts found, using regular selection")
-                selected_candidates = select_diverse_shortcuts(
+                selected_candidates = select_random_shortcuts(
                     shortcut_candidates, max_shortcuts_per_graph
                 )
         else:
-            selected_candidates = select_diverse_shortcuts(
+            selected_candidates = select_random_shortcuts(
                 shortcut_candidates, max_shortcuts_per_graph
             )
 
@@ -277,20 +270,14 @@ def collect_graph_based_training_data(
                 {
                     "source_node_id": candidate.source_node.id,
                     "target_node_id": candidate.target_node.id,
-                    "distance": candidate.distance,
                     "source_atoms_count": len(candidate.source_atoms),
                     "target_preimage_count": len(candidate.target_preimage),
                 }
             )
 
-            # For backwards compatibility
-            preconditions_to_maintain.append(candidate.source_atoms)
-            preconditions_to_achieve.append(candidate.target_preimage)
-
             print(
                 f"\nAdded shortcut to training data collection: Node {candidate.source_node.id} -> Node {candidate.target_node.id}"  # pylint: disable=line-too-long
             )
-            print(f"  Distance: {candidate.distance} steps")
             print(f"  Source atoms: {len(candidate.source_atoms)}")
             print(f"  Target preimage: {len(candidate.target_preimage)}")
 
@@ -321,8 +308,6 @@ def collect_graph_based_training_data(
         states=training_states,
         current_atoms=current_atoms_list,
         preimages=preimages_list,
-        preconditions_to_maintain=preconditions_to_maintain,
-        preconditions_to_achieve=preconditions_to_achieve,
         config={
             **config,
             "shortcut_info": shortcut_info,
@@ -332,9 +317,7 @@ def collect_graph_based_training_data(
 
 def identify_shortcut_candidates(
     planning_graph: PlanningGraph,
-    approach: ImprovisationalTAMPApproach,
     observed_states: dict[int, Any],
-    min_distance: int = 2,
 ) -> list[ShortcutCandidate]:
     """Identify potential shortcuts in the planning graph.
 
@@ -364,33 +347,14 @@ def identify_shortcut_candidates(
             if target_node not in planning_graph.preimages:
                 continue
 
-            # Compute the distance between nodes
-            try:
-                if hasattr(approach, "get_shortcut_distance"):
-                    distance = approach.get_shortcut_distance(source_node, target_node)  # type: ignore # pylint: disable=line-too-long
-                else:
-                    print("Using simple distance check")
-                    # Fallback to simple distance check
-                    distance = 0
-                    # Check if there's a direct edge
-                    has_direct_edge = False
-                    for edge in planning_graph.node_to_outgoing_edges.get(
-                        source_node, []
-                    ):
-                        if edge.target == target_node and not edge.is_shortcut:
-                            has_direct_edge = True
-                            break
+            # Check if there's already a direct edge from source to target
+            has_direct_edge = False
+            for edge in planning_graph.node_to_outgoing_edges.get(source_node, []):
+                if edge.target == target_node and not edge.is_shortcut:
+                    has_direct_edge = True
+                    break
 
-                    if has_direct_edge:
-                        distance = 1
-                    else:
-                        distance = min_distance
-            except Exception as e:
-                print(f"Error computing distance: {e}")
-                distance = min_distance  # Assume it's a potential shortcut
-
-            # Skip if shortcut doesn't save enough steps
-            if distance < min_distance:
+            if has_direct_edge:
                 continue
 
             # Check if there's already a direct shortcut edge
@@ -410,7 +374,6 @@ def identify_shortcut_candidates(
                     source_atoms=set(source_node.atoms),
                     target_preimage=planning_graph.preimages.get(target_node, set()),
                     source_state=source_state,
-                    distance=distance,
                 )
             )
 
@@ -420,7 +383,7 @@ def identify_shortcut_candidates(
 def print_shortcut_atoms(candidate: ShortcutCandidate) -> None:
     """Print the atoms involved in a shortcut candidate."""
     print(
-        f"\nShortcut: Node {candidate.source_node.id} -> Node {candidate.target_node.id} (distance: {candidate.distance})"  # pylint: disable=line-too-long
+        f"\nShortcut: Node {candidate.source_node.id} -> Node {candidate.target_node.id}"
     )
     print("Source atoms:")
     for atom in sorted(candidate.source_atoms, key=str):
@@ -542,13 +505,10 @@ def is_target_shortcut_2(candidate: ShortcutCandidate) -> bool:
     )
 
 
-def select_diverse_shortcuts(
+def select_random_shortcuts(
     candidates: list[ShortcutCandidate], max_shortcuts: int
 ) -> list[ShortcutCandidate]:
-    """Select a diverse subset of shortcut candidates."""
+    """Select a random subset of shortcut candidates."""
     if len(candidates) <= max_shortcuts:
         return candidates
-
-    # Sort by distance (prefer longer shortcuts)
-    candidates = sorted(candidates, key=lambda c: c.distance, reverse=True)
-    return candidates[:max_shortcuts]
+    return random.sample(candidates, max_shortcuts)

@@ -431,35 +431,3 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 if edge.target not in node_to_obs_info:
                     node_to_obs_info[edge.target] = (obs, info)
                     queue.append(edge.target)
-
-    def get_shortcut_distance(self, source_node, target_node):
-        """Compute the distance (in regular steps) between two nodes."""
-        # Quick check: if there's a direct edge, distance is 1
-        for edge in self.planning_graph.node_to_outgoing_edges.get(source_node, []):
-            if edge.target == target_node and not edge.is_shortcut:
-                return 1
-
-        # BFS to find shortest path
-        queue = deque([(source_node, 0)])
-        visited = {source_node}
-
-        while queue:
-            current, distance = queue.popleft()
-
-            for edge in self.planning_graph.node_to_outgoing_edges.get(current, []):
-                if edge.is_shortcut:
-                    continue
-
-                next_node = edge.target
-
-                # Found path to target
-                if next_node == target_node:
-                    return distance + 1
-
-                # Add to queue if not visited
-                if next_node not in visited:
-                    visited.add(next_node)
-                    queue.append((next_node, distance + 1))
-
-        # No path found
-        return float("inf")
