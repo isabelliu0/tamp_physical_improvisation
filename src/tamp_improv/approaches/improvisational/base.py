@@ -89,7 +89,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self.planning_graph.compute_preimages(goal)
 
         # Try to add shortcuts
-        self._try_add_shortcuts(self.planning_graph)
+        if not self.training_mode:
+            self._try_add_shortcuts(self.planning_graph)
 
         # Compute edge costs
         self._compute_planning_graph_edge_costs(obs, info)
@@ -372,9 +373,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                         current_atoms=set(source_node.atoms),
                     )
                 )
-                # if self.policy.can_initiate():
-                #     print(f"Adding shortcut: {source_node.id} to {target_node.id}")
-                #     graph.add_edge(source_node, target_node, None, is_shortcut=True)
+                if self.policy.can_initiate():
+                    print(f"Adding shortcut: {source_node.id} to {target_node.id}")
+                    graph.add_edge(source_node, target_node, None, is_shortcut=True)
 
     def _compute_planning_graph_edge_costs(
         self, obs: ObsType, info: dict[str, Any]

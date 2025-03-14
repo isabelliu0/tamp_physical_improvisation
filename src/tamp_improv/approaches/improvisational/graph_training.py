@@ -185,6 +185,7 @@ def collect_graph_based_training_data(
     for these shortcuts.
     """
     print("\n=== Collecting Training Data by Exploring Planning Graphs ===")
+    approach.training_mode = True
 
     training_states = []
     current_atoms_list = []
@@ -313,6 +314,8 @@ def collect_graph_based_training_data(
             print("  - 2: Pushing block2 away from target area with empty gripper")
         if not found_target_shortcuts:
             print("  - No target shortcuts found")
+
+    approach.training_mode = False
 
     return TrainingData(
         states=training_states,
