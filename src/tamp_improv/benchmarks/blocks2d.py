@@ -358,7 +358,7 @@ class Blocks2DPerceiver(Perceiver[NDArray[np.float32]]):
 
         # Calculate remaining free width
         overlap_width = min(block_right, target_right) - max(block_left, target_left)
-        free_width = target_width - overlap_width
+        free_width = target_width - overlap_width + 1e-6
 
         # Block needs at least its width to fit
         return free_width < block_width

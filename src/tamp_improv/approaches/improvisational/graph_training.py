@@ -1,5 +1,6 @@
 """Graph-based training data collection for improvisational TAMP."""
 
+from collections import deque
 from dataclasses import dataclass
 from typing import Any
 
@@ -9,6 +10,7 @@ from relational_structs import GroundAtom
 from tamp_improv.approaches.improvisational.base import ImprovisationalTAMPApproach
 from tamp_improv.approaches.improvisational.graph import (
     PlanningGraph,
+    PlanningGraphEdge,
     PlanningGraphNode,
 )
 from tamp_improv.approaches.improvisational.policies.base import TrainingData
@@ -25,6 +27,147 @@ class ShortcutCandidate:
     target_preimage: set[GroundAtom]
     source_state: Any  # The actual environment state at the source node
     distance: int  # How many regular steps this shortcut would skip
+
+
+def collect_states_for_all_nodes(
+    system, planning_graph: PlanningGraph, max_attempts: int = 10
+) -> dict[int, Any]:
+    """Collect observed states for all nodes in the planning graph.
+
+    This function systematically visits each node in the planning graph by:
+    1. Resetting the environment
+    2. Finding a path to the target node
+    3. Executing the path
+    4. Storing the resulting observation
+    """
+    print("\n=== Collecting States for All Nodes ===")
+
+    observed_states: dict[int, Any] = {}
+
+    initial_node = None
+    if planning_graph.nodes:
+        initial_node = planning_graph.nodes[0]
+    assert initial_node is not None
+
+    # Collect state for initial node
+    obs, info = system.reset()
+    observed_states[initial_node.id] = obs
+    print(f"Collected state for initial node {initial_node.id}")
+
+    # For each other node, try to reach it and collect its state
+    remaining_nodes = [n for n in planning_graph.nodes if n.id != initial_node.id]
+    print(f"Attempting to collect states for {len(remaining_nodes)} additional nodes")
+
+    for target_node in remaining_nodes:
+        print(f"\nTargeting node {target_node.id}...")
+        # Find path from initial node to target node
+        path = find_path_to_node(planning_graph, initial_node, target_node)
+
+        if not path:
+            print(f"No path found to node {target_node.id}, skipping")
+            continue
+
+        print(f"Found path of length {len(path)} to node {target_node.id}")
+
+        # Try to execute the path and collect the state
+        for attempt in range(max_attempts):
+            obs, info = system.reset()
+            _ = system.perceiver.reset(obs, info)
+
+            print(f"Attempt {attempt+1}/{max_attempts} to reach node {target_node.id}")
+
+            # Execute each step in the path
+            success = True
+            for i, edge in enumerate(path):
+                print(f"  Step {i+1}/{len(path)}: {edge.source.id} -> {edge.target.id}")
+
+                # Execute the operator for this edge
+                if not edge.operator:
+                    print("  No operator for this edge, skipping")
+                    success = False
+                    break
+
+                # Get the skill for this operator
+                skill = None
+                for s in system.skills:
+                    if s.can_execute(edge.operator):
+                        skill = s
+                        break
+
+                if not skill:
+                    print(
+                        f"  No skill found for operator {edge.operator.name}, skipping"
+                    )
+                    success = False
+                    break
+
+                # Reset the skill with the operator
+                skill.reset(edge.operator)
+
+                # Execute the skill until complete
+                max_steps = 50
+                for step in range(max_steps):
+                    action = skill.get_action(obs)
+                    obs, _, term, trunc, info = system.env.step(action)
+                    atoms = system.perceiver.step(obs)
+
+                    if set(edge.target.atoms).issubset(atoms):
+                        print(f"  Reached state for node {edge.target.id}")
+                        break
+
+                    if term or trunc:
+                        print("  Episode terminated unexpectedly")
+                        success = False
+                        break
+
+                    if step == max_steps - 1:
+                        success = False
+
+                if not success:
+                    break
+
+            # If we successfully executed the path, store the state
+            if success:
+                observed_states[target_node.id] = obs
+                print(f"Successfully collected state for node {target_node.id}")
+                break
+
+            if attempt == max_attempts - 1:
+                print(f"Failed to collect state for node {target_node.id}")
+
+    print(
+        f"\nFinal collection: {len(observed_states)}/{len(planning_graph.nodes)} nodes"
+    )
+    return observed_states
+
+
+def find_path_to_node(
+    planning_graph: PlanningGraph,
+    start_node: PlanningGraphNode,
+    target_node: PlanningGraphNode,
+) -> list[PlanningGraphEdge]:
+    """Find a path from start_node to target_node in the planning graph."""
+    queue: deque[tuple[PlanningGraphNode, list[PlanningGraphEdge]]]
+    queue = deque([(start_node, [])])
+    visited = {start_node}
+
+    while queue:
+        current, path = queue.popleft()
+
+        if current == target_node:
+            return path
+
+        for edge in planning_graph.node_to_outgoing_edges.get(current, []):
+            if edge.is_shortcut:
+                continue
+
+            next_node = edge.target
+
+            if next_node not in visited:
+                visited.add(next_node)
+                queue.append((next_node, path + [edge]))
+
+    return []
 
 
 def collect_graph_based_training_data(
@@ -72,11 +215,13 @@ def collect_graph_based_training_data(
         )
         planning_graph = approach.planning_graph
 
-        observed_states = {}
-        assert hasattr(approach, "observed_states")
-        observed_states = approach.observed_states
+        # Proactively collect states for all nodes
+        observed_states = collect_states_for_all_nodes(
+            system, planning_graph, max_attempts=3
+        )
 
-        # Find potential shortcuts
+        # Find potential shortcuts using the collected states
+        print(f"\nIdentifying shortcuts using {len(observed_states)} observed states")
         shortcut_candidates = identify_shortcut_candidates(
             planning_graph,
             approach,
@@ -142,11 +287,20 @@ def collect_graph_based_training_data(
             preconditions_to_achieve.append(candidate.target_preimage)
 
             print(
-                f"\nAdded shortcut: Node {candidate.source_node.id} -> Node {candidate.target_node.id}"  # pylint: disable=line-too-long
+                f"\nAdded shortcut to training data collection: Node {candidate.source_node.id} -> Node {candidate.target_node.id}"  # pylint: disable=line-too-long
             )
             print(f"  Distance: {candidate.distance} steps")
             print(f"  Source atoms: {len(candidate.source_atoms)}")
             print(f"  Target preimage: {len(candidate.target_preimage)}")
+
+        # If we've found both target shortcuts, we can stop collecting
+        if (
+            target_specific_shortcuts
+            and 1 in found_target_shortcuts
+            and 2 in found_target_shortcuts
+        ):
+            print("\nFound both target shortcuts, ending collection")
+            break
 
     print("\n=== Training Collection Summary ===")
     print(f"Collected {len(training_states)} examples from {collect_episodes} episodes")
@@ -194,7 +348,6 @@ def identify_shortcut_candidates(
     for source_node in nodes:
         # Skip nodes we don't have an observed state for
         if source_node.id not in observed_states:
-            print(f"Skipping node without observed state: Node {source_node.id}")
             continue
 
         source_state = observed_states[source_node.id]
@@ -202,22 +355,18 @@ def identify_shortcut_candidates(
         for target_node in nodes:
             # Skip self-connections
             if source_node == target_node:
-                print(
-                    f"Skipping self-connection: Node {source_node.id} -> Node {target_node.id}"  # pylint: disable=line-too-long
-                )
                 continue
 
             # Skip if we don't have a preimage for the target
             if target_node not in planning_graph.preimages:
-                print(f"Skipping node without preimage: Node {target_node.id}")
                 continue
 
             # Compute the distance between nodes
             try:
                 if hasattr(approach, "get_shortcut_distance"):
                     distance = approach.get_shortcut_distance(source_node, target_node)  # type: ignore # pylint: disable=line-too-long
-                    print("Using custom distance function")
                 else:
+                    print("Using simple distance check")
                     # Fallback to simple distance check
                     distance = 0
                     # Check if there's a direct edge
@@ -239,9 +388,6 @@ def identify_shortcut_candidates(
 
             # Skip if shortcut doesn't save enough steps
             if distance < min_distance:
-                print(
-                    f"Skipping shortcut {source_node.id} -> {target_node.id}: Distance {distance} < {min_distance}"  # pylint: disable=line-too-long
-                )
                 continue
 
             # Check if there's already a direct shortcut edge
@@ -285,30 +431,52 @@ def is_target_shortcut_1(candidate: ShortcutCandidate) -> bool:
     """Check if candidate matches target shortcut 1:
     Pushing block2 away from target area while holding block1
     """
-    # Convert atoms to strings for easier matching
-    source_atoms = [str(atom) for atom in candidate.source_atoms]
-    target_atoms = [str(atom) for atom in candidate.target_preimage]
+    source_atoms = candidate.source_atoms
+    target_atoms = candidate.target_preimage
 
     # Check if source has the required atoms
-    has_holding_block1 = any("Holding(robot, block1)" in a for a in source_atoms)
-    has_block2_on_target = any("On(block2, target_area)" in a for a in source_atoms)
-    has_clear_table = any("Clear(table)" in a for a in source_atoms)
+    has_holding_block1 = any(
+        atom.predicate.name == "Holding"
+        and len(atom.objects) == 2
+        and atom.objects[0].name == "robot"
+        and atom.objects[1].name == "block1"
+        for atom in source_atoms
+    )
+    has_block2_on_target = any(
+        atom.predicate.name == "On"
+        and len(atom.objects) == 2
+        and atom.objects[0].name == "block2"
+        and atom.objects[1].name == "target_area"
+        for atom in source_atoms
+    )
+    has_clear_table = any(
+        atom.predicate.name == "Clear"
+        and len(atom.objects) == 1
+        and atom.objects[0].name == "table"
+        for atom in source_atoms
+    )
 
     # Check if target has the required atoms
-    has_target_clear_target = any("Clear(target_area)" in a for a in target_atoms)
-    has_target_block2_on_table = any("On(block2, table)" in a for a in target_atoms)
-    has_target_holding_block1 = any("Holding(robot, block1)" in a for a in target_atoms)
-    has_target_clear_table = any("Clear(table)" in a for a in target_atoms)
+    has_target_clear_target = any(
+        atom.predicate.name == "Clear"
+        and len(atom.objects) == 1
+        and atom.objects[0].name == "target_area"
+        for atom in target_atoms
+    )
+    has_target_holding_block1 = any(
+        atom.predicate.name == "Holding"
+        and len(atom.objects) == 2
+        and atom.objects[0].name == "robot"
+        and atom.objects[1].name == "block1"
+        for atom in target_atoms
+    )
 
-    # Check if this matches our target shortcut
     return (
         has_holding_block1
         and has_block2_on_target
         and has_clear_table
         and has_target_clear_target
-        and has_target_block2_on_table
         and has_target_holding_block1
-        and has_target_clear_table
     )
 
 
@@ -316,34 +484,58 @@ def is_target_shortcut_2(candidate: ShortcutCandidate) -> bool:
     """Check if candidate matches target shortcut 2:
     Pushing block2 away from target area with empty gripper
     """
-    # Convert atoms to strings for easier matching
-    source_atoms = [str(atom) for atom in candidate.source_atoms]
-    target_atoms = [str(atom) for atom in candidate.target_preimage]
+    source_atoms = candidate.source_atoms
+    target_atoms = candidate.target_preimage
 
     # Check if source has the required atoms
-    has_block1_on_table = any("On(block1, table)" in a for a in source_atoms)
-    has_block2_on_target = any("On(block2, target_area)" in a for a in source_atoms)
-    has_gripper_empty = any("GripperEmpty(robot)" in a for a in source_atoms)
-    has_clear_table = any("Clear(table)" in a for a in source_atoms)
+    has_block1_on_table = any(
+        atom.predicate.name == "On"
+        and len(atom.objects) == 2
+        and atom.objects[0].name == "block1"
+        and atom.objects[1].name == "table"
+        for atom in source_atoms
+    )
+    has_block2_on_target = any(
+        atom.predicate.name == "On"
+        and len(atom.objects) == 2
+        and atom.objects[0].name == "block2"
+        and atom.objects[1].name == "target_area"
+        for atom in source_atoms
+    )
+    has_gripper_empty = any(
+        atom.predicate.name == "GripperEmpty"
+        and len(atom.objects) == 1
+        and atom.objects[0].name == "robot"
+        for atom in source_atoms
+    )
+    has_clear_table = any(
+        atom.predicate.name == "Clear"
+        and len(atom.objects) == 1
+        and atom.objects[0].name == "table"
+        for atom in source_atoms
+    )
 
     # Check if target has the required atoms
-    has_target_clear_target = any("Clear(target_area)" in a for a in target_atoms)
-    has_target_block2_on_table = any("On(block2, table)" in a for a in target_atoms)
-    has_target_block1_on_table = any("On(block1, table)" in a for a in target_atoms)
-    has_target_gripper_empty = any("GripperEmpty(robot)" in a for a in target_atoms)
-    has_target_clear_table = any("Clear(table)" in a for a in target_atoms)
+    has_target_clear_target = any(
+        atom.predicate.name == "Clear"
+        and len(atom.objects) == 1
+        and atom.objects[0].name == "target_area"
+        for atom in target_atoms
+    )
+    has_target_gripper_empty = any(
+        atom.predicate.name == "GripperEmpty"
+        and len(atom.objects) == 1
+        and atom.objects[0].name == "robot"
+        for atom in target_atoms
+    )
 
-    # Check if this matches our target shortcut
     return (
         has_block1_on_table
         and has_block2_on_target
         and has_gripper_empty
         and has_clear_table
         and has_target_clear_target
-        and has_target_block2_on_table
-        and has_target_block1_on_table
         and has_target_gripper_empty
-        and has_target_clear_table
     )
 
 

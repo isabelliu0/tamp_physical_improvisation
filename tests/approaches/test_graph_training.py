@@ -18,7 +18,7 @@ def test_graph_training_collection(force_collect=True, render=True):
         "seed": 42,
         "num_episodes": 3,
         "max_steps": 50,
-        "collect_episodes": 5,
+        "collect_episodes": 1,
         "force_collect": force_collect,
         "training_data_dir": "training_data/graph_training_data",
     }
