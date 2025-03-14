@@ -1,11 +1,14 @@
 """RL-based policy implementation."""
 
+import json
+import os
 from dataclasses import dataclass
-from typing import cast
+from typing import Any, cast
 
 import gymnasium as gym
 import numpy as np
 import torch
+from relational_structs import GroundAtom
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
 
@@ -29,6 +32,10 @@ class RLConfig:
     gamma: float = 0.99
     ent_coef: float = 0.01
     device: str = "cuda"
+    success_threshold: float = (
+        0.7  # # Success rate threshold for a shortcut to be considered "verified"
+    )
+    eval_episodes: int = 5  # Number of episodes to run when evaluating a shortcut
 
 
 class TrainingProgressCallback(BaseCallback):
@@ -124,6 +131,10 @@ class RLPolicy(Policy[ObsType, ActType]):
         self.model: PPO | None = None
         self._current_context: PolicyContext | None = None
 
+        # Verification results where we store by context hash
+        self.verified_shortcuts = {}  # hash(context) -> bool
+        self.shortcut_success_rates = {}  # hash(context) -> float
+
     @property
     def requires_training(self) -> bool:
         """Whether this policy requires training data and training."""
@@ -148,9 +159,22 @@ class RLPolicy(Policy[ObsType, ActType]):
 
     def can_initiate(self):
         """Check if the policy can be executed given the current context."""
-        if not self._current_context:
+        if not self._current_context or self.model is None:
             return False
-        return self.model is not None  # check if we have a trained policy
+
+        # Check if we have verification for this specific context
+        context_hash = self._hash_context(self._current_context)
+        if context_hash in self.verified_shortcuts:
+            return self.verified_shortcuts[context_hash]
+
+        # If not verified yet, be conservative
+        return False
+
+    def _hash_context(self, context: PolicyContext) -> int:
+        """Create a hash of a context based on its atoms."""
+        source_atoms = sorted(str(atom) for atom in context.current_atoms)
+        target_atoms = sorted(str(atom) for atom in context.preimage)
+        return f"{';'.join(source_atoms)}||{';'.join(target_atoms)}"
 
     def configure_context(self, context: PolicyContext[ObsType, ActType]) -> None:
         """Configure policy with context information."""
@@ -234,12 +258,116 @@ class RLPolicy(Policy[ObsType, ActType]):
             return cast(ActType, int(action[0]))
         return cast(ActType, action)
 
+    def verify_shortcuts(
+        self, env: gym.Env, contexts: list[tuple[set[GroundAtom], set[GroundAtom], Any]]
+    ) -> dict[str, bool]:
+        """Verify which shortcuts this policy can successfully execute."""
+        if self.model is None:
+            raise ValueError("Policy must be trained before verifying shortcuts")
+
+        print("\nVerifying shortcut capabilities...")
+
+        results = {}
+
+        for i, (source_atoms, target_preimage, source_state) in enumerate(contexts):
+            print(f"\nVerifying shortcut {i+1}/{len(contexts)}")
+
+            context = PolicyContext(
+                current_atoms=source_atoms,
+                preimage=target_preimage,
+            )
+            context_hash = self._hash_context(context)
+
+            success_count = 0
+            episode_lengths = []
+
+            # Run evaluation episodes
+            for episode in range(self.config.eval_episodes):
+                print(f"  Episode {episode+1}/{self.config.eval_episodes}")
+
+                # Reset environment to source state
+                obs = env.reset_from_state(source_state)[0]  # type: ignore
+
+                self.configure_context(context)
+
+                success = False
+                steps = 0
+                max_steps = 100
+
+                for step in range(max_steps):
+                    action = self.get_action(obs)
+                    obs, _, terminated, truncated, _ = env.step(action)
+                    steps += 1
+
+                    # Check if target preimage is achieved
+                    atoms = env.perceiver.step(obs)
+                    if target_preimage.issubset(atoms):
+                        success = True
+                        episode_lengths.append(steps)
+                        break
+
+                    if terminated or truncated:
+                        break
+
+                if success:
+                    success_count += 1
+                    print(f"  Success! Completed in {steps} steps")
+                else:
+                    print("  Failed!")
+
+            # Calculate success rate
+            success_rate = success_count / self.config.eval_episodes
+            avg_length = np.mean(episode_lengths) if episode_lengths else float("inf")
+
+            print(f"Shortcut {i+1} success rate: {success_rate:.2%}")
+            if episode_lengths:
+                print(f"Average completion steps: {avg_length:.1f}")
+
+            # Store verification results
+            is_verified = success_rate >= self.config.success_threshold
+            self.verified_contexts[context_hash] = is_verified
+            self.context_success_rates[context_hash] = success_rate
+            results[context_hash] = is_verified
+
+            if is_verified:
+                print(f"Shortcut {i+1} VERIFIED (success rate meets threshold)")
+            else:
+                print(f"Shortcut {i+1} NOT VERIFIED (success rate below threshold)")
+
+        print("\nVerification Results:")
+        verified_count = sum(1 for v in results.values() if v)
+        print(f"Verified {verified_count} out of {len(results)} shortcuts")
+
+        return results
+
     def save(self, path: str) -> None:
         """Save policy."""
         if self.model is None:
             raise ValueError("No model to save")
         self.model.save(path)
 
+        verification_path = f"{path}_verification.json"
+        with open(verification_path, "w") as f:
+            # Convert sets to lists for JSON serialization
+            serializable_verified_contexts = {}
+            for context_hash, is_verified in self.verified_contexts.items():
+                serializable_verified_contexts[context_hash] = is_verified
+
+            verification_data = {
+                "verified_contexts": serializable_verified_contexts,
+                "context_success_rates": self.context_success_rates,
+            }
+            json.dump(verification_data, f)
+
     def load(self, path: str) -> None:
         """Load policy."""
         self.model = PPO.load(path)
+
+        verification_path = f"{path}_verification.json"
+        if os.path.exists(verification_path):
+            with open(verification_path, "r") as f:
+                verification_data = json.load(f)
+                self.verified_contexts = verification_data.get("verified_contexts", {})
+                self.context_success_rates = verification_data.get(
+                    "context_success_rates", {}
+                )

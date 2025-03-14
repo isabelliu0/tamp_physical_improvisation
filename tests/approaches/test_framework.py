@@ -107,6 +107,7 @@ def test_framework_integration(
     approach = ImprovisationalTAMPApproach(system, policy, seed=config.seed)
 
     # Step 1: Collect training data
+    approach.training_mode = True
     print("\n=== Step 1: Collecting Training Data ===")
     training_data = collect_graph_based_training_data(
         system=system,

@@ -98,8 +98,12 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         # Compute preimages
         self.planning_graph.compute_preimages(goal)
 
-        # Try to add shortcuts
-        self._try_add_shortcuts(self.planning_graph)
+        # Only add verified shortcuts in execution mode (not training)
+        if not self.training_mode:
+            self._add_verified_shortcuts()
+
+        # # Try to add shortcuts
+        # self._try_add_shortcuts(self.planning_graph)
 
         # Compute edge costs
         self._compute_planning_graph_edge_costs(obs, info)
@@ -407,6 +411,63 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     shortcuts_added += 1
 
         print(f"Added {shortcuts_added} shortcuts")
+
+    def _add_verified_shortcuts(self) -> None:
+        """Add verified shortcuts to the planning graph."""
+        print("\nAdding verified shortcuts to planning graph...")
+
+        # Skip if policy doesn't have verification method
+        if (
+            not hasattr(self.policy, "verified_contexts")
+            or not self.policy.verified_contexts
+        ):
+            print("No verified shortcuts available")
+            return
+
+        # For each pair of nodes, check if they could form a verified shortcut
+        shortcuts_added = 0
+
+        for source_node in self.planning_graph.nodes:
+            for target_node in self.planning_graph.nodes:
+                # Skip obvious invalid cases
+                if source_node == target_node:
+                    continue
+
+                # Skip if there's already an edge
+                if (
+                    target_node
+                    in self.planning_graph.node_to_outgoing_edges[source_node]
+                ):
+                    continue
+
+                # Check if this forms a valid shortcut
+                if target_node in self.planning_graph.preimages:
+                    # Create a context from this pair of nodes
+                    source_atoms = set(source_node.atoms)
+                    target_preimage = self.planning_graph.preimages[target_node]
+
+                    context = PolicyContext(
+                        current_atoms=source_atoms,
+                        preimage=target_preimage,
+                    )
+
+                    # Check if this context has been verified
+                    context_hash = self.policy._hash_context(context)
+                    if (
+                        context_hash in self.policy.verified_contexts
+                        and self.policy.verified_contexts[context_hash]
+                    ):
+                        # Add the shortcut edge
+                        self.planning_graph.add_edge(
+                            source_node, target_node, None, is_shortcut=True
+                        )
+                        shortcuts_added += 1
+
+                        print(
+                            f"Added verified shortcut: {source_node.id} -> {target_node.id}"
+                        )
+
+        print(f"Added {shortcuts_added} verified shortcuts to planning graph")
 
     def _compute_planning_graph_edge_costs(
         self, obs: ObsType, info: dict[str, Any]
