@@ -24,6 +24,7 @@ dependencies = [
    "moviepy",
    "stable_baselines3>=2.5.0",
    "types-tabulate",
+   "random",
 ]
 
 [project.optional-dependencies]
