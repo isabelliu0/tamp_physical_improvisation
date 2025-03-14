@@ -7,7 +7,11 @@ from typing import Any
 import numpy as np
 from relational_structs import GroundAtom
 
-from tamp_improv.approaches.improvisational.base import ImprovisationalTAMPApproach
+from tamp_improv.approaches.improvisational.base import (
+    ImprovisationalTAMPApproach,
+    is_target_shortcut_1,
+    is_target_shortcut_2,
+)
 from tamp_improv.approaches.improvisational.graph import (
     PlanningGraph,
     PlanningGraphEdge,
@@ -239,12 +243,20 @@ def collect_graph_based_training_data(
                 print_shortcut_atoms(candidate)
 
                 # Check if this is one of our target shortcuts
-                if is_target_shortcut_1(candidate) and 1 not in found_target_shortcuts:
+                if (
+                    is_target_shortcut_1(
+                        candidate.source_atoms, candidate.target_preimage
+                    )
+                    and 1 not in found_target_shortcuts
+                ):
                     print("Found TARGET SHORTCUT 1!")
                     target_candidates.append(candidate)
                     found_target_shortcuts.append(1)
                 elif (
-                    is_target_shortcut_2(candidate) and 2 not in found_target_shortcuts
+                    is_target_shortcut_2(
+                        candidate.source_atoms, candidate.target_preimage
+                    )
+                    and 2 not in found_target_shortcuts
                 ):
                     print("Found TARGET SHORTCUT 2!")
                     target_candidates.append(candidate)
@@ -425,118 +437,6 @@ def print_shortcut_atoms(candidate: ShortcutCandidate) -> None:
     print("Target preimage:")
     for atom in sorted(candidate.target_preimage, key=str):
         print(f"  - {atom}")
-
-
-def is_target_shortcut_1(candidate: ShortcutCandidate) -> bool:
-    """Check if candidate matches target shortcut 1:
-    Pushing block2 away from target area while holding block1
-    """
-    source_atoms = candidate.source_atoms
-    target_atoms = candidate.target_preimage
-
-    # Check if source has the required atoms
-    has_holding_block1 = any(
-        atom.predicate.name == "Holding"
-        and len(atom.objects) == 2
-        and atom.objects[0].name == "robot"
-        and atom.objects[1].name == "block1"
-        for atom in source_atoms
-    )
-    has_block2_on_target = any(
-        atom.predicate.name == "On"
-        and len(atom.objects) == 2
-        and atom.objects[0].name == "block2"
-        and atom.objects[1].name == "target_area"
-        for atom in source_atoms
-    )
-    has_clear_table = any(
-        atom.predicate.name == "Clear"
-        and len(atom.objects) == 1
-        and atom.objects[0].name == "table"
-        for atom in source_atoms
-    )
-
-    # Check if target has the required atoms
-    has_target_clear_target = any(
-        atom.predicate.name == "Clear"
-        and len(atom.objects) == 1
-        and atom.objects[0].name == "target_area"
-        for atom in target_atoms
-    )
-    has_target_holding_block1 = any(
-        atom.predicate.name == "Holding"
-        and len(atom.objects) == 2
-        and atom.objects[0].name == "robot"
-        and atom.objects[1].name == "block1"
-        for atom in target_atoms
-    )
-
-    return (
-        has_holding_block1
-        and has_block2_on_target
-        and has_clear_table
-        and has_target_clear_target
-        and has_target_holding_block1
-    )
-
-
-def is_target_shortcut_2(candidate: ShortcutCandidate) -> bool:
-    """Check if candidate matches target shortcut 2:
-    Pushing block2 away from target area with empty gripper
-    """
-    source_atoms = candidate.source_atoms
-    target_atoms = candidate.target_preimage
-
-    # Check if source has the required atoms
-    has_block1_on_table = any(
-        atom.predicate.name == "On"
-        and len(atom.objects) == 2
-        and atom.objects[0].name == "block1"
-        and atom.objects[1].name == "table"
-        for atom in source_atoms
-    )
-    has_block2_on_target = any(
-        atom.predicate.name == "On"
-        and len(atom.objects) == 2
-        and atom.objects[0].name == "block2"
-        and atom.objects[1].name == "target_area"
-        for atom in source_atoms
-    )
-    has_gripper_empty = any(
-        atom.predicate.name == "GripperEmpty"
-        and len(atom.objects) == 1
-        and atom.objects[0].name == "robot"
-        for atom in source_atoms
-    )
-    has_clear_table = any(
-        atom.predicate.name == "Clear"
-        and len(atom.objects) == 1
-        and atom.objects[0].name == "table"
-        for atom in source_atoms
-    )
-
-    # Check if target has the required atoms
-    has_target_clear_target = any(
-        atom.predicate.name == "Clear"
-        and len(atom.objects) == 1
-        and atom.objects[0].name == "target_area"
-        for atom in target_atoms
-    )
-    has_target_gripper_empty = any(
-        atom.predicate.name == "GripperEmpty"
-        and len(atom.objects) == 1
-        and atom.objects[0].name == "robot"
-        for atom in target_atoms
-    )
-
-    return (
-        has_block1_on_table
-        and has_block2_on_target
-        and has_gripper_empty
-        and has_clear_table
-        and has_target_clear_target
-        and has_target_gripper_empty
-    )
 
 
 def select_diverse_shortcuts(

@@ -70,12 +70,22 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self._current_path: list[PlanningGraphEdge] = []
         self._current_edge: PlanningGraphEdge | None = None
         self._current_preimage: set[GroundAtom] = set()
+
+        # Tracking state for shortcuts
         self.policy_active = False
+        self.shortcuts_used = 0
+        self.shortcut_success_count = 0
+        self.shortcut_failure_count = 0
 
     def reset(self, obs: ObsType, info: dict[str, Any]) -> ApproachStepResult[ActType]:
         """Reset approach with initial observation."""
         objects, atoms, goal = self.system.perceiver.reset(obs, info)
         self._goal = goal
+
+        # Reset tracking state for shortcuts
+        self.shortcuts_used = 0
+        self.shortcut_success_count = 0
+        self.shortcut_failure_count = 0
 
         # Create initial plan
         self._current_task_plan = self._create_task_plan(objects, atoms, goal)
@@ -124,6 +134,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 print("Policy successfully achieved preimage!")
                 self.policy_active = False
                 self._current_preimage = set()
+                self.shortcut_success_count += 1
                 return self.step(obs, reward, terminated, truncated, info)
             return ApproachStepResult(action=self.policy.get_action(obs))
 
@@ -135,6 +146,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             if self._current_edge.is_shortcut:
                 print("Using shortcut edge")
                 self.policy_active = True
+                self.shortcuts_used += 1
 
                 # Get preimage for the target node
                 target_node = self._current_edge.target
@@ -157,6 +169,16 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
                 # If in training mode, collect this state and terminate
                 if self.training_mode:
+                    # Check what kind of shortcut we're dealing with
+                    is_shortcut_1 = is_target_shortcut_1(atoms, self._current_preimage)
+                    is_shortcut_2 = is_target_shortcut_2(atoms, self._current_preimage)
+
+                    shortcut_type = "unknown"
+                    if is_shortcut_1:
+                        shortcut_type = "push_block_holding"
+                    elif is_shortcut_2:
+                        shortcut_type = "push_block_empty"
+
                     return ApproachStepResult(
                         action=self.policy.get_action(obs),
                         terminate=True,
@@ -164,6 +186,12 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                             "training_state": obs,
                             "current_atoms": atoms,
                             "preimage": self._current_preimage,
+                            "source_node_id": self._current_edge.source.id,
+                            "target_node_id": self._current_edge.target.id,
+                            "distance": self._current_edge.cost,
+                            "is_target_shortcut_1": is_shortcut_1,
+                            "is_target_shortcut_2": is_shortcut_2,
+                            "shortcut_type": shortcut_type,
                         },
                     )
 
@@ -358,6 +386,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
         # Consider all pairs of initial nodes and preimages and check if the
         # policy can be initiated given that context.
+        shortcuts_added = 0
         for source_node in graph.nodes:
             for target_node in graph.nodes:
                 if source_node == target_node:
@@ -372,9 +401,12 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                         current_atoms=set(source_node.atoms),
                     )
                 )
-                # if self.policy.can_initiate():
-                #     print(f"Adding shortcut: {source_node.id} to {target_node.id}")
-                #     graph.add_edge(source_node, target_node, None, is_shortcut=True)
+                if self.policy.can_initiate():
+                    print(f"Adding shortcut: {source_node.id} to {target_node.id}")
+                    graph.add_edge(source_node, target_node, None, is_shortcut=True)
+                    shortcuts_added += 1
+
+        print(f"Added {shortcuts_added} shortcuts")
 
     def _compute_planning_graph_edge_costs(
         self, obs: ObsType, info: dict[str, Any]
@@ -391,13 +423,18 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         sim = self.system.wrapped_env  # issue #31
 
         queue = [initial_node]
+        edges_evaluated = 0
+        edges_successful = 0
+
         while queue:
             node = queue.pop()
             for edge in self.planning_graph.node_to_outgoing_edges[node]:
+                edges_evaluated += 1
                 obs, info = node_to_obs_info[node]
                 sim.reset_from_state(obs)  # type: ignore
                 _, init_atoms, _ = self.system.perceiver.reset(obs, info)
                 preimage = self.planning_graph.preimages[edge.target]
+
                 if edge.is_shortcut:
                     self.policy.configure_context(
                         PolicyContext(
@@ -410,6 +447,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     assert edge.operator is not None
                     skill = self._get_skill(edge.operator)
                     skill.reset(edge.operator)
+
                 num_steps = 0
                 for _ in range(self._max_skill_steps):
                     act = skill.get_action(obs)
@@ -417,10 +455,12 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     num_steps += 1
                     atoms = self.system.perceiver.step(obs)
                     if preimage.issubset(atoms):
+                        edges_successful += 1
                         break  # success
                 else:
                     # Edge expansion failed.
                     continue
+
                 assert edge.cost == float("inf")
                 edge.cost = num_steps
                 # NOTE: we are making the strong assumption that it does not
@@ -430,6 +470,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 if edge.target not in node_to_obs_info:
                     node_to_obs_info[edge.target] = (obs, info)
                     queue.append(edge.target)
+
+        print(f"Evaluated {edges_evaluated} edges, {edges_successful} successful")
 
     def get_shortcut_distance(self, source_node, target_node):
         """Compute the distance (in regular steps) between two nodes."""
@@ -462,3 +504,126 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
         # No path found
         return float("inf")
+
+    def get_shortcut_stats(self) -> dict[str, Any]:
+        """Get statistics about shortcut usage during execution."""
+        return {
+            "shortcuts_used": self.shortcuts_used,
+            "shortcut_success_count": self.shortcut_success_count,
+            "shortcut_failure_count": self.shortcut_failure_count,
+            "shortcut_success_rate": (
+                self.shortcut_success_count / self.shortcuts_used
+                if self.shortcuts_used > 0
+                else 0.0
+            ),
+        }
+
+
+def is_target_shortcut_1(
+    source_atoms: set[GroundAtom], target_preimage: set[GroundAtom]
+) -> bool:
+    """Check if candidate matches target shortcut 1:
+    Pushing block2 away from target area while holding block1
+    """
+    # Check if source has the required atoms
+    has_holding_block1 = any(
+        atom.predicate.name == "Holding"
+        and len(atom.objects) == 2
+        and atom.objects[0].name == "robot"
+        and atom.objects[1].name == "block1"
+        for atom in source_atoms
+    )
+    has_block2_on_target = any(
+        atom.predicate.name == "On"
+        and len(atom.objects) == 2
+        and atom.objects[0].name == "block2"
+        and atom.objects[1].name == "target_area"
+        for atom in source_atoms
+    )
+    has_clear_table = any(
+        atom.predicate.name == "Clear"
+        and len(atom.objects) == 1
+        and atom.objects[0].name == "table"
+        for atom in source_atoms
+    )
+
+    # Check if target has the required atoms
+    has_target_clear_target = any(
+        atom.predicate.name == "Clear"
+        and len(atom.objects) == 1
+        and atom.objects[0].name == "target_area"
+        for atom in target_preimage
+    )
+    has_target_holding_block1 = any(
+        atom.predicate.name == "Holding"
+        and len(atom.objects) == 2
+        and atom.objects[0].name == "robot"
+        and atom.objects[1].name == "block1"
+        for atom in target_preimage
+    )
+
+    return (
+        has_holding_block1
+        and has_block2_on_target
+        and has_clear_table
+        and has_target_clear_target
+        and has_target_holding_block1
+    )
+
+
+def is_target_shortcut_2(
+    source_atoms: set[GroundAtom], target_preimage: set[GroundAtom]
+) -> bool:
+    """Check if candidate matches target shortcut 2:
+    Pushing block2 away from target area with empty gripper
+    """
+    # Check if source has the required atoms
+    has_block1_on_table = any(
+        atom.predicate.name == "On"
+        and len(atom.objects) == 2
+        and atom.objects[0].name == "block1"
+        and atom.objects[1].name == "table"
+        for atom in source_atoms
+    )
+    has_block2_on_target = any(
+        atom.predicate.name == "On"
+        and len(atom.objects) == 2
+        and atom.objects[0].name == "block2"
+        and atom.objects[1].name == "target_area"
+        for atom in source_atoms
+    )
+    has_gripper_empty = any(
+        atom.predicate.name == "GripperEmpty"
+        and len(atom.objects) == 1
+        and atom.objects[0].name == "robot"
+        for atom in source_atoms
+    )
+    has_clear_table = any(
+        atom.predicate.name == "Clear"
+        and len(atom.objects) == 1
+        and atom.objects[0].name == "table"
+        for atom in source_atoms
+    )
+
+    # Check if target has the required atoms
+    has_target_clear_target = any(
+        atom.predicate.name == "Clear"
+        and len(atom.objects) == 1
+        and atom.objects[0].name == "target_area"
+        for atom in target_preimage
+    )
+    has_target_gripper_empty = any(
+        atom.predicate.name == "GripperEmpty"
+        and len(atom.objects) == 1
+        and atom.objects[0].name == "robot"
+        for atom in target_preimage
+    )
+
+    return (
+        has_block1_on_table
+        and has_block2_on_target
+        and has_gripper_empty
+        and has_clear_table
+        and has_target_clear_target
+        and has_target_gripper_empty
+    )

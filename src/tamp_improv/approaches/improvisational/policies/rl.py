@@ -13,6 +13,7 @@ from tamp_improv.approaches.improvisational.policies.base import (
     ActType,
     ObsType,
     Policy,
+    PolicyContext,
     TrainingData,
 )
 from tamp_improv.utils.gpu_utils import DeviceContext
@@ -121,6 +122,7 @@ class RLPolicy(Policy[ObsType, ActType]):
         self._torch_generator.manual_seed(seed)
 
         self.model: PPO | None = None
+        self._current_context: PolicyContext | None = None
 
     @property
     def requires_training(self) -> bool:
@@ -145,7 +147,14 @@ class RLPolicy(Policy[ObsType, ActType]):
             )
 
     def can_initiate(self):
-        return True
+        """Check if the policy can be executed given the current context."""
+        if not self._current_context:
+            return False
+        return self.model is not None  # check if we have a trained policy
+
+    def configure_context(self, context: PolicyContext[ObsType, ActType]) -> None:
+        """Configure policy with context information."""
+        self._current_context = context
 
     def train(
         self,
