@@ -1,6 +1,5 @@
 """Graph-based training data collection for improvisational TAMP."""
 
-import random
 from collections import deque
 from dataclasses import dataclass
 from typing import Any
@@ -511,4 +510,6 @@ def select_random_shortcuts(
     """Select a random subset of shortcut candidates."""
     if len(candidates) <= max_shortcuts:
         return candidates
-    return random.sample(candidates, max_shortcuts)
+    indices = np.arange(len(candidates))
+    selected_indices = np.random.choice(indices, size=max_shortcuts, replace=False)
+    return [candidates[i] for i in selected_indices]
