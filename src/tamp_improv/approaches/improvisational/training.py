@@ -11,6 +11,9 @@ import torch
 from gymnasium.wrappers import RecordVideo
 
 from tamp_improv.approaches.improvisational.base import ImprovisationalTAMPApproach
+from tamp_improv.approaches.improvisational.graph_training import (
+    collect_graph_based_training_data,
+)
 from tamp_improv.approaches.improvisational.policies.base import Policy, TrainingData
 from tamp_improv.benchmarks.base import ImprovisationalTAMPSystem
 from tamp_improv.utils.gpu_utils import set_torch_seed
@@ -94,7 +97,7 @@ def get_or_collect_training_data(
             print("Collecting new data instead...")
 
     # Collect new data
-    train_data = collect_training_data(system, approach, config)
+    train_data = collect_graph_based_training_data(system, approach, config.__dict__)
 
     # Save the collected data
     print(f"\nSaving training data to {data_path}")

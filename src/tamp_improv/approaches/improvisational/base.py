@@ -374,7 +374,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     )
                 )
                 if self.policy.can_initiate():
-                    print(f"Adding shortcut: {source_node.id} to {target_node.id}")
+                    print(
+                        f"Trying to add shortcut: {source_node.id} to {target_node.id}"
+                    )
                     graph.add_edge(source_node, target_node, None, is_shortcut=True)
 
     def _compute_planning_graph_edge_costs(
@@ -418,9 +420,15 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     num_steps += 1
                     atoms = self.system.perceiver.step(obs)
                     if preimage.issubset(atoms):
+                        print(
+                            f"Edge {edge.source.id} -> {edge.target.id} cost: {num_steps}. Is shortcut? {edge.is_shortcut}"  # pylint: disable=line-too-long
+                        )
                         break  # success
                 else:
                     # Edge expansion failed.
+                    print(
+                        f"Edge {edge.source.id} -> {edge.target.id} expansion failed. Is shortcut? {edge.is_shortcut}"  # pylint: disable=line-too-long
+                    )
                     continue
                 assert edge.cost == float("inf")
                 edge.cost = num_steps
