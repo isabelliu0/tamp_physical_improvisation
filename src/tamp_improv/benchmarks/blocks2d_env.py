@@ -298,13 +298,16 @@ class Blocks2DEnv(gym.Env):
             gripper_status=new_gripper_status,
         )
 
+        # Check for collisions - revert to previous state if collision
+        if self._check_collisions():
+            self.state = prev_state
+            obs = self._get_obs()
+            info = self._get_info()
+            return obs, -0.1, False, False, info
+
         # Get observation
         obs = self._get_obs()
         info = self._get_info()
-
-        # Check for collisions
-        if self._check_collisions():
-            return obs, -0.1, False, False, info
 
         # Check if the robot has reached the goal
         goal_reached = is_block_in_target_area(
