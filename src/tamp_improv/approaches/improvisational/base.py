@@ -1,5 +1,7 @@
 """Base improvisational TAMP approach."""
 
+from __future__ import annotations
+
 import itertools
 from collections import deque
 from dataclasses import dataclass
@@ -44,7 +46,10 @@ class ShortcutSignature:
     target_types: set[str]
 
     @classmethod
-    def from_context(cls, source_atoms, target_preimage):
+    def from_context(
+        cls, source_atoms: set[GroundAtom], target_preimage: set[GroundAtom]
+    ) -> ShortcutSignature:
+        """Create signature from context."""
         source_preds = {atom.predicate.name for atom in source_atoms}
         target_preds = {atom.predicate.name for atom in target_preimage}
 
@@ -60,7 +65,7 @@ class ShortcutSignature:
 
         return cls(source_preds, target_preds, source_types, target_types)
 
-    def similarity(self, other):
+    def similarity(self, other: ShortcutSignature) -> float:
         """Calculate similarity score between signatures."""
         # Predicate similarity (Jaccard)
         source_pred_sim = len(self.source_predicates & other.source_predicates) / max(
@@ -136,7 +141,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self.policy_active = False
 
         # Shortcut signatures for similarity matching
-        self.trained_signatures = []
+        self.trained_signatures: list[ShortcutSignature] = []
 
     def reset(self, obs: ObsType, info: dict[str, Any]) -> ApproachStepResult[ActType]:
         """Reset approach with initial observation."""
@@ -193,7 +198,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 self._current_preimage = set()
                 return self.step(obs, reward, terminated, truncated, info)
             self.context_env.set_context(atoms, self._current_preimage)
-            aug_obs = self.context_env._augment_observation(obs)
+            aug_obs = self.context_env.augment_observation(obs)
             return ApproachStepResult(action=self.policy.get_action(aug_obs))
 
         # Get next edge if needed
@@ -227,13 +232,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
                 # If in training mode, collect this state and terminate
                 if self.training_mode:
-                    sig = ShortcutSignature.from_context(atoms, self._current_preimage)
-                    if sig not in self.trained_signatures:
-                        self.trained_signatures.append(sig)
-                        print(
-                            f"Recording new shortcut signature with {len(sig.target_predicates)} target predicates"
-                        )
-                    aug_obs = self.context_env._augment_observation(obs)
+                    aug_obs = self.context_env.augment_observation(obs)
                     return ApproachStepResult(
                         action=self.policy.get_action(aug_obs),
                         terminate=True,
@@ -244,7 +243,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                         },
                     )
 
-                aug_obs = self.context_env._augment_observation(obs)
+                aug_obs = self.context_env.augment_observation(obs)
                 return ApproachStepResult(action=self.policy.get_action(aug_obs))
 
             # Regular edge - use operator skill
@@ -451,7 +450,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
                 # Check if this is similar to a trained shortcut
                 if self.trained_signatures:
-                    print("Trained signatures found, checking for similar shortcuts...")
                     current_sig = ShortcutSignature.from_context(
                         source_atoms, target_preimage
                     )
@@ -504,7 +502,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 raw_env.reset_from_state(raw_obs)  # type: ignore
                 _, init_atoms, _ = self.system.perceiver.reset(raw_obs, info)
                 preimage = self.planning_graph.preimages[edge.target]
-
                 if edge.is_shortcut:
                     self.policy.configure_context(
                         PolicyContext(
@@ -513,7 +510,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                         )
                     )
                     self.context_env.set_context(init_atoms, preimage)
-                    aug_obs = self.context_env._augment_observation(raw_obs)
+                    aug_obs = self.context_env.augment_observation(raw_obs)
                     skill: Policy | Skill = self.policy
                 else:
                     assert edge.operator is not None
@@ -531,7 +528,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     atoms = self.system.perceiver.step(curr_raw_obs)
                     if edge.is_shortcut:
                         self.context_env.set_context(atoms, preimage)
-                        curr_aug_obs = self.context_env._augment_observation(
+                        curr_aug_obs = self.context_env.augment_observation(
                             curr_raw_obs
                         )
                     else:

@@ -275,7 +275,7 @@ def collect_graph_based_training_data(
             if signature not in approach.trained_signatures:
                 approach.trained_signatures.append(signature)
                 print(
-                    f"Recorded shortcut signature with predicates: {signature.source_predicates} -> {signature.target_predicates}"
+                    f"Recorded shortcut signature with predicates: {signature.source_predicates} -> {signature.target_predicates}"  # pylint: disable=line-too-long
                 )
 
             # Store shortcut info
@@ -323,7 +323,7 @@ def collect_graph_based_training_data(
         preimages=preimages_list,
         config={
             **config,
-            "shortcut_info": shortcut_info,  # TODO: check if this is needed
+            "shortcut_info": shortcut_info,
         },
     )
 

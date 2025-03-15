@@ -1,25 +1,28 @@
 """Context-aware environment wrapper for improvisational TAMP."""
 
+from typing import Any, cast
+
 import gymnasium as gym
 import numpy as np
 from relational_structs import GroundAtom
+from task_then_motion_planning.structs import Perceiver
+
+from tamp_improv.approaches.improvisational.policies.base import TrainingData
+from tamp_improv.benchmarks.wrappers import ActType, ObsType
 
 
 class ContextAwareWrapper(gym.Wrapper):
     """Wrapper that augments observations with context information."""
 
-    def __init__(self, env, perceiver) -> None:
+    def __init__(self, env: gym.Env, perceiver: Perceiver[ObsType]) -> None:
         super().__init__(env)
-        self.perceiver = perceiver
-        self.current_preimage = set()
-        self.current_atoms = set()
+        self.perceiver: Perceiver[ObsType] = perceiver
+        self.current_preimage: set[GroundAtom] = set()
+        self.current_atoms: set[GroundAtom] = set()
 
         # Add context features to observation space
         if isinstance(env.observation_space, gym.spaces.Box):
-            old_shape = env.observation_space.shape
-            # Add generic context features
             self.num_context_features = 4
-            new_shape = (old_shape[0] + self.num_context_features,)
             self.observation_space = gym.spaces.Box(
                 low=np.append(
                     env.observation_space.low, np.zeros(self.num_context_features)
@@ -27,35 +30,41 @@ class ContextAwareWrapper(gym.Wrapper):
                 high=np.append(
                     env.observation_space.high, np.ones(self.num_context_features)
                 ),
-                dtype=env.observation_space.dtype,
+                dtype=np.float32,
             )
 
-    def reset(self, **kwargs):
+    def reset(self, **kwargs: Any) -> tuple[ObsType, dict[str, Any]]:
         """Reset environment and augment observation."""
         obs, info = self.env.reset(**kwargs)
-        # Get current atoms
         self.current_atoms = self.perceiver.step(obs)
-        return self._augment_observation(obs), info
+        return self.augment_observation(obs), info
 
-    def step(self, action):
+    def step(
+        self, action: ActType
+    ) -> tuple[ObsType, float, bool, bool, dict[str, Any]]:
         """Take a step and augment observation."""
         obs, reward, terminated, truncated, info = self.env.step(action)
-        # Update current atoms
         self.current_atoms = self.perceiver.step(obs)
-        return self._augment_observation(obs), reward, terminated, truncated, info
+        return (
+            self.augment_observation(obs),
+            float(reward),
+            terminated,
+            truncated,
+            info,
+        )
 
-    def reset_from_state(self, state, **kwargs):
+    def reset_from_state(
+        self, state: ObsType, **kwargs: Any
+    ) -> tuple[ObsType, dict[str, Any]]:
         """Reset from state with context augmentation."""
         if hasattr(self.env, "reset_from_state"):
             obs, info = self.env.reset_from_state(state, **kwargs)
-            # Update current atoms from observation
             self.current_atoms = self.perceiver.step(obs)
-            return self._augment_observation(obs), info
+            return self.augment_observation(obs), info
         raise AttributeError("Wrapped environment doesn't have reset_from_state")
 
-    def _augment_observation(self, obs):
+    def augment_observation(self, obs: ObsType) -> ObsType:
         """Augment observation with domain-agnostic context features."""
-        # Create context features
         features = np.zeros(self.num_context_features, dtype=np.float32)
 
         # Feature 1: Overlap ratio between current atoms and preimage
@@ -84,37 +93,41 @@ class ContextAwareWrapper(gym.Wrapper):
         features[3] = common_types / max(all_types, 1)
 
         # Concatenate original observation with features
-        return np.concatenate([obs, features])
+        return cast(ObsType, np.concatenate([obs, features]))
 
-    def set_context(self, current_atoms, preimage):
+    def set_context(
+        self, current_atoms: set[GroundAtom], preimage: set[GroundAtom]
+    ) -> None:
         """Set current context for augmentation."""
         self.current_atoms = current_atoms
         self.current_preimage = preimage
 
-    def configure_training(self, train_data):
+    def configure_training(self, train_data: TrainingData) -> None:
         """Configure environment for training with data."""
-        # First, pass the configuration to the wrapped environment
         if hasattr(self.env, "configure_training"):
             self.env.configure_training(train_data)
 
-    # Helper methods for computing context features
-    def _atoms_intersection(self, atoms1, atoms2):
+    def _atoms_intersection(
+        self, atoms1: set[GroundAtom], atoms2: set[GroundAtom]
+    ) -> set[str]:
         """Find atoms that are present in both sets (approximate)."""
         atoms1_str = {str(atom) for atom in atoms1}
         atoms2_str = {str(atom) for atom in atoms2}
         return atoms1_str.intersection(atoms2_str)
 
-    def _atoms_union(self, atoms1, atoms2):
+    def _atoms_union(
+        self, atoms1: set[GroundAtom], atoms2: set[GroundAtom]
+    ) -> set[str]:
         """Union of two atom sets (approximate)."""
         atoms1_str = {str(atom) for atom in atoms1}
         atoms2_str = {str(atom) for atom in atoms2}
         return atoms1_str.union(atoms2_str)
 
-    def _get_predicate_names(self, atoms):
+    def _get_predicate_names(self, atoms: set[GroundAtom]) -> set[str]:
         """Get set of predicate names from atoms."""
         return {atom.predicate.name for atom in atoms}
 
-    def _get_object_types(self, atoms):
+    def _get_object_types(self, atoms: set[GroundAtom]) -> set[str]:
         """Get set of object types from atoms."""
         types = set()
         for atom in atoms:

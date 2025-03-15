@@ -10,10 +10,7 @@ import numpy as np
 import torch
 from gymnasium.wrappers import RecordVideo
 
-from tamp_improv.approaches.improvisational.base import (
-    ImprovisationalTAMPApproach,
-    ShortcutSignature,
-)
+from tamp_improv.approaches.improvisational.base import ImprovisationalTAMPApproach
 from tamp_improv.approaches.improvisational.graph_training import (
     collect_graph_based_training_data,
 )
@@ -293,18 +290,6 @@ def train_and_evaluate(
     # Load or collect training data for new policy
     if policy.requires_training and "_Loaded" not in policy_name:
         train_data = get_or_collect_training_data(system, approach, config)
-
-        # Record shortcut signatures after collecting data
-        if hasattr(approach, "_trained_signatures") and train_data.states:
-            print(f"Recording {len(train_data.states)} shortcut signatures")
-            approach.trained_signatures = []
-            for i in range(len(train_data.states)):
-                signature = ShortcutSignature.from_context(
-                    train_data.current_atoms[i], train_data.preimages[i]
-                )
-                if signature not in approach.trained_signatures:
-                    approach.trained_signatures.append(signature)
-                    print(f"Recorded signature {len(approach.trained_signatures)}")
 
         if train_data.states:
             print("\nTraining policy...")
