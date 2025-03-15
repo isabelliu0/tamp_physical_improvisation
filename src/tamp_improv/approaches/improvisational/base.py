@@ -2,6 +2,7 @@
 
 import itertools
 from collections import deque
+from dataclasses import dataclass
 from typing import Any
 
 import gymnasium as gym
@@ -30,6 +31,60 @@ from tamp_improv.approaches.improvisational.graph import (
     PlanningGraphNode,
 )
 from tamp_improv.approaches.improvisational.policies.base import Policy, PolicyContext
+from tamp_improv.benchmarks.context_wrapper import ContextAwareWrapper
+
+
+@dataclass
+class ShortcutSignature:
+    """Domain-agnostic signature of a shortcut for matching purposes."""
+
+    source_predicates: set[str]
+    target_predicates: set[str]
+    source_types: set[str]
+    target_types: set[str]
+
+    @classmethod
+    def from_context(cls, source_atoms, target_preimage):
+        source_preds = {atom.predicate.name for atom in source_atoms}
+        target_preds = {atom.predicate.name for atom in target_preimage}
+
+        source_types = set()
+        for atom in source_atoms:
+            for obj in atom.objects:
+                source_types.add(obj.type.name)
+
+        target_types = set()
+        for atom in target_preimage:
+            for obj in atom.objects:
+                target_types.add(obj.type.name)
+
+        return cls(source_preds, target_preds, source_types, target_types)
+
+    def similarity(self, other):
+        """Calculate similarity score between signatures."""
+        # Predicate similarity (Jaccard)
+        source_pred_sim = len(self.source_predicates & other.source_predicates) / max(
+            len(self.source_predicates | other.source_predicates), 1
+        )
+        target_pred_sim = len(self.target_predicates & other.target_predicates) / max(
+            len(self.target_predicates | other.target_predicates), 1
+        )
+
+        # Object type similarity (Jaccard)
+        source_type_sim = len(self.source_types & other.source_types) / max(
+            len(self.source_types | other.source_types), 1
+        )
+        target_type_sim = len(self.target_types & other.target_types) / max(
+            len(self.target_types | other.target_types), 1
+        )
+
+        # Overall similarity - weighted average
+        return (
+            0.3 * source_pred_sim
+            + 0.3 * target_pred_sim
+            + 0.2 * source_type_sim
+            + 0.2 * target_type_sim
+        )
 
 
 class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
@@ -54,8 +109,15 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self.planner_id = planner_id
         self._max_skill_steps = max_skill_steps
 
-        # Initialize policy with wrapped environment
-        policy.initialize(system.wrapped_env)
+        # Create context-aware wrapper
+        if not isinstance(system.wrapped_env, ContextAwareWrapper):
+            self.context_env = ContextAwareWrapper(system.wrapped_env, system.perceiver)
+            system.wrapped_env = self.context_env
+        else:
+            self.context_env = system.wrapped_env
+
+        # Initialize policy with (context-aware) wrapped environment
+        policy.initialize(self.context_env)
 
         # Get domain
         self.domain = system.get_domain()
@@ -72,6 +134,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self._current_edge: PlanningGraphEdge | None = None
         self._current_preimage: set[GroundAtom] = set()
         self.policy_active = False
+
+        # Shortcut signatures for similarity matching
+        self.trained_signatures = []
 
     def reset(self, obs: ObsType, info: dict[str, Any]) -> ApproachStepResult[ActType]:
         """Reset approach with initial observation."""
@@ -127,7 +192,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 self.policy_active = False
                 self._current_preimage = set()
                 return self.step(obs, reward, terminated, truncated, info)
-            return ApproachStepResult(action=self.policy.get_action(obs))
+            self.context_env.set_context(atoms, self._current_preimage)
+            aug_obs = self.context_env._augment_observation(obs)
+            return ApproachStepResult(action=self.policy.get_action(aug_obs))
 
         # Get next edge if needed
         assert self.planning_graph is not None
@@ -149,7 +216,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     )
                     self._current_preimage = set(target_node.atoms)
 
-                # Configure policy with new context
+                # Configure policy and context wrapper
+                self.context_env.set_context(atoms, self._current_preimage)
                 self.policy.configure_context(
                     PolicyContext(
                         preimage=self._current_preimage,
@@ -159,8 +227,15 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
                 # If in training mode, collect this state and terminate
                 if self.training_mode:
+                    sig = ShortcutSignature.from_context(atoms, self._current_preimage)
+                    if sig not in self.trained_signatures:
+                        self.trained_signatures.append(sig)
+                        print(
+                            f"Recording new shortcut signature with {len(sig.target_predicates)} target predicates"
+                        )
+                    aug_obs = self.context_env._augment_observation(obs)
                     return ApproachStepResult(
-                        action=self.policy.get_action(obs),
+                        action=self.policy.get_action(aug_obs),
                         terminate=True,
                         info={
                             "training_state": obs,
@@ -169,7 +244,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                         },
                     )
 
-                return ApproachStepResult(action=self.policy.get_action(obs))
+                aug_obs = self.context_env._augment_observation(obs)
+                return ApproachStepResult(action=self.policy.get_action(aug_obs))
 
             # Regular edge - use operator skill
             self._current_operator = self._current_edge.operator
@@ -357,24 +433,48 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
     def _try_add_shortcuts(self, graph: PlanningGraph) -> None:
         """Try to add shortcut edges to the graph."""
-
-        # Consider all pairs of initial nodes and preimages and check if the
-        # policy can be initiated given that context.
         for source_node in graph.nodes:
             for target_node in graph.nodes:
+                # Skip same node and existing edges
                 if source_node == target_node:
                     continue
-                # Don't bother trying to take a shortcut if we already have an
-                # operator for source -> target.
                 if any(
                     edge.target == target_node
                     for edge in graph.node_to_outgoing_edges.get(source_node, [])
                 ):
                     continue
+
+                source_atoms = set(source_node.atoms)
+                target_preimage = graph.preimages.get(target_node, set())
+                if not target_preimage:
+                    continue
+
+                # Check if this is similar to a trained shortcut
+                if self.trained_signatures:
+                    print("Trained signatures found, checking for similar shortcuts...")
+                    current_sig = ShortcutSignature.from_context(
+                        source_atoms, target_preimage
+                    )
+                    can_handle = False
+                    best_similarity = 0.0
+
+                    for trained_sig in self.trained_signatures:
+                        similarity = current_sig.similarity(trained_sig)
+                        if similarity > 0.7:  # Threshold to be tuned
+                            can_handle = True
+                            best_similarity = max(best_similarity, similarity)
+
+                    if not can_handle:
+                        continue
+
+                    print(f"Found similar shortcut with similarity {best_similarity}")
+
+                # Configure context for environment and policy
+                self.context_env.set_context(source_atoms, target_preimage)
                 self.policy.configure_context(
                     PolicyContext(
-                        preimage=graph.preimages[target_node],
-                        current_atoms=set(source_node.atoms),
+                        preimage=target_preimage,
+                        current_atoms=source_atoms,
                     )
                 )
                 if self.policy.can_initiate():
@@ -387,7 +487,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self, obs: ObsType, info: dict[str, Any]
     ) -> None:
         """Add edge costs to the current planning graph."""
-
         assert self.planning_graph is not None
 
         _, init_atoms, _ = self.system.perceiver.reset(obs, info)
@@ -395,16 +494,17 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         node_to_obs_info: dict[PlanningGraphNode, tuple[ObsType, dict]] = {}
         node_to_obs_info[initial_node] = (obs, info)
 
-        sim = self._get_base_env(self.system.wrapped_env)  # issue #31
+        raw_env = self._get_base_env(self.system.wrapped_env)
 
         queue = [initial_node]
         while queue:
             node = queue.pop()
             for edge in self.planning_graph.node_to_outgoing_edges[node]:
-                obs, info = node_to_obs_info[node]
-                sim.reset_from_state(obs)  # type: ignore
-                _, init_atoms, _ = self.system.perceiver.reset(obs, info)
+                raw_obs, info = node_to_obs_info[node]
+                raw_env.reset_from_state(raw_obs)  # type: ignore
+                _, init_atoms, _ = self.system.perceiver.reset(raw_obs, info)
                 preimage = self.planning_graph.preimages[edge.target]
+
                 if edge.is_shortcut:
                     self.policy.configure_context(
                         PolicyContext(
@@ -412,41 +512,60 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                             current_atoms=init_atoms,
                         )
                     )
+                    self.context_env.set_context(init_atoms, preimage)
+                    aug_obs = self.context_env._augment_observation(raw_obs)
                     skill: Policy | Skill = self.policy
                 else:
                     assert edge.operator is not None
                     skill = self._get_skill(edge.operator)
                     skill.reset(edge.operator)
+                    aug_obs = raw_obs
+
                 num_steps = 0
+                curr_raw_obs = raw_obs
+                curr_aug_obs = aug_obs
                 for _ in range(self._max_skill_steps):
-                    act = skill.get_action(obs)
-                    obs, _, _, _, info = sim.step(act)
+                    act = skill.get_action(curr_aug_obs)
+                    next_raw_obs, _, _, _, info = raw_env.step(act)
+                    curr_raw_obs = next_raw_obs
+                    atoms = self.system.perceiver.step(curr_raw_obs)
+                    if edge.is_shortcut:
+                        self.context_env.set_context(atoms, preimage)
+                        curr_aug_obs = self.context_env._augment_observation(
+                            curr_raw_obs
+                        )
+                    else:
+                        curr_aug_obs = curr_raw_obs
+
                     num_steps += 1
-                    atoms = self.system.perceiver.step(obs)
+
                     if preimage.issubset(atoms):
-                        if edge.is_shortcut:
-                            print(
-                                f"Added shortcut edge {edge.source.id} -> {edge.target.id} cost: {num_steps}."  # pylint: disable=line-too-long
-                            )
+                        print(
+                            f"Added shortcut edge {edge.source.id} -> {edge.target.id} cost: {num_steps}. Is shortcut? {edge.is_shortcut}"  # pylint: disable=line-too-long
+                        )
                         break  # success
                 else:
                     # Edge expansion failed.
                     continue
+
                 assert edge.cost == float("inf")
                 edge.cost = num_steps
+
                 # NOTE: we are making the strong assumption that it does not
                 # matter which low-level state you are in within the abstract
                 # state, so if there are multiple observations for a node, we
                 # just keep one arbitrarily.
                 if edge.target not in node_to_obs_info:
-                    node_to_obs_info[edge.target] = (obs, info)
+                    node_to_obs_info[edge.target] = (curr_raw_obs, info)
                     queue.append(edge.target)
 
     def _get_base_env(self, env: gym.Env) -> gym.Env:
         """Get the base environment by unwrapping wrappers if needed."""
-        # Check if this is a wrapper with 'env' attribute
         current_env = env
         while hasattr(current_env, "env"):
+            if isinstance(current_env, ContextAwareWrapper):
+                current_env = current_env.env
+                continue
             if hasattr(current_env, "reset_from_state"):
                 return current_env
             current_env = current_env.env

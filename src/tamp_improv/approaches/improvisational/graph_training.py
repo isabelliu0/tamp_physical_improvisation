@@ -7,7 +7,10 @@ from typing import Any
 import numpy as np
 from relational_structs import GroundAtom
 
-from tamp_improv.approaches.improvisational.base import ImprovisationalTAMPApproach
+from tamp_improv.approaches.improvisational.base import (
+    ImprovisationalTAMPApproach,
+    ShortcutSignature,
+)
 from tamp_improv.approaches.improvisational.graph import (
     PlanningGraph,
     PlanningGraphEdge,
@@ -264,6 +267,17 @@ def collect_graph_based_training_data(
             current_atoms_list.append(candidate.source_atoms)
             preimages_list.append(candidate.target_preimage)
 
+            # Record shortcut signature in the approach
+            signature = ShortcutSignature.from_context(
+                candidate.source_atoms,
+                candidate.target_preimage,
+            )
+            if signature not in approach.trained_signatures:
+                approach.trained_signatures.append(signature)
+                print(
+                    f"Recorded shortcut signature with predicates: {signature.source_predicates} -> {signature.target_predicates}"
+                )
+
             # Store shortcut info
             shortcut_info.append(
                 {
@@ -309,7 +323,7 @@ def collect_graph_based_training_data(
         preimages=preimages_list,
         config={
             **config,
-            "shortcut_info": shortcut_info,
+            "shortcut_info": shortcut_info,  # TODO: check if this is needed
         },
     )
 
