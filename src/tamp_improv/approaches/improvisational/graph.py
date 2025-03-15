@@ -163,6 +163,6 @@ class PlanningGraph:
             prev_node, edge = prev_entry
             path.append(edge)
             current = prev_node
-
         path.reverse()
+        print(f"Shortest path: {path}. Cost: {distances[goal_node]}")
         return path

@@ -4,6 +4,7 @@ import itertools
 from collections import deque
 from typing import Any
 
+import gymnasium as gym
 from relational_structs import (
     GroundAtom,
     GroundOperator,
@@ -365,7 +366,10 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     continue
                 # Don't bother trying to take a shortcut if we already have an
                 # operator for source -> target.
-                if target_node in graph.node_to_outgoing_edges[source_node]:
+                if any(
+                    edge.target == target_node
+                    for edge in graph.node_to_outgoing_edges.get(source_node, [])
+                ):
                     continue
                 self.policy.configure_context(
                     PolicyContext(
@@ -374,7 +378,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     )
                 )
                 if self.policy.can_initiate():
-                    print(f"Adding shortcut: {source_node.id} to {target_node.id}")
+                    print(
+                        f"Trying to add shortcut: {source_node.id} to {target_node.id}"
+                    )
                     graph.add_edge(source_node, target_node, None, is_shortcut=True)
 
     def _compute_planning_graph_edge_costs(
@@ -389,7 +395,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         node_to_obs_info: dict[PlanningGraphNode, tuple[ObsType, dict]] = {}
         node_to_obs_info[initial_node] = (obs, info)
 
-        sim = self.system.wrapped_env  # issue #31
+        sim = self._get_base_env(self.system.wrapped_env)  # issue #31
 
         queue = [initial_node]
         while queue:
@@ -418,6 +424,10 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     num_steps += 1
                     atoms = self.system.perceiver.step(obs)
                     if preimage.issubset(atoms):
+                        if edge.is_shortcut:
+                            print(
+                                f"Added shortcut edge {edge.source.id} -> {edge.target.id} cost: {num_steps}."  # pylint: disable=line-too-long
+                            )
                         break  # success
                 else:
                     # Edge expansion failed.
@@ -431,3 +441,17 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 if edge.target not in node_to_obs_info:
                     node_to_obs_info[edge.target] = (obs, info)
                     queue.append(edge.target)
+
+    def _get_base_env(self, env: gym.Env) -> gym.Env:
+        """Get the base environment by unwrapping wrappers if needed."""
+        # Check if this is a wrapper with 'env' attribute
+        current_env = env
+        while hasattr(current_env, "env"):
+            if hasattr(current_env, "reset_from_state"):
+                return current_env
+            current_env = current_env.env
+
+        if hasattr(current_env, "reset_from_state"):
+            return current_env
+
+        raise AttributeError("Could not find environment with reset_from_state method")
