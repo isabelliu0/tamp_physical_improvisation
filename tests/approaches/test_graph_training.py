@@ -8,6 +8,7 @@ from tamp_improv.approaches.improvisational.base import ImprovisationalTAMPAppro
 from tamp_improv.approaches.improvisational.graph_training import (
     collect_graph_based_training_data,
 )
+from tamp_improv.approaches.improvisational.policies.mpc import MPCConfig, MPCPolicy
 from tamp_improv.approaches.improvisational.policies.pushing import PushingPolicy
 from tamp_improv.approaches.improvisational.policies.rl import RLConfig, RLPolicy
 from tamp_improv.approaches.improvisational.training import (
@@ -125,5 +126,55 @@ def test_graph_rl_pipeline(force_collect=False, render=True):
     print(f"Average Reward: {metrics.avg_reward:.2f}")
     print(f"Training Time: {metrics.training_time:.2f} seconds")
     print(f"Total Time: {metrics.total_time:.2f} seconds")
+
+    return metrics
+
+
+def test_graph_mpc_pipeline():
+    """Test MPC policy with specific target shortcuts."""
+    print("\n=== Testing MPC Policy with Specific Target Shortcuts ===")
+
+    # Create config
+    config = TrainingConfig(
+        seed=42,
+        num_episodes=1,
+        max_steps=50,
+        render=True,
+    )
+
+    # Create system
+    system = Blocks2DTAMPSystem.create_default(
+        seed=config.seed, render_mode="rgb_array" if config.render else None
+    )
+
+    # Configure MPC policy with specific shortcuts
+    target_shortcuts = [(0, 3), (1, 4)]
+
+    def policy_factory(seed: int) -> MPCPolicy:
+        policy: MPCPolicy = MPCPolicy(
+            seed=seed,
+            config=MPCConfig(
+                num_rollouts=50,
+                horizon=20,
+                num_control_points=10,
+                noise_scale=0.25,
+            ),
+        )
+
+        # Add target shortcuts
+        for source_id, target_id in target_shortcuts:
+            policy.add_target_shortcut(source_id, target_id)
+
+        return policy
+
+    # Run evaluation
+    print("\nRunning evaluation with target shortcuts...")
+    metrics = train_and_evaluate(system, policy_factory, config, policy_name="GraphMPC")
+
+    # Print results
+    print("\nEvaluation Results:")
+    print(f"Success Rate: {metrics.success_rate:.2%}")
+    print(f"Average Episode Length: {metrics.avg_episode_length:.2f}")
+    print(f"Average Reward: {metrics.avg_reward:.2f}")
 
     return metrics
