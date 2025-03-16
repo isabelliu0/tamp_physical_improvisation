@@ -11,6 +11,10 @@ from tamp_improv.approaches.improvisational.graph_training import (
 from tamp_improv.approaches.improvisational.policies.mpc import MPCConfig, MPCPolicy
 from tamp_improv.approaches.improvisational.policies.pushing import PushingPolicy
 from tamp_improv.approaches.improvisational.policies.rl import RLConfig, RLPolicy
+from tamp_improv.approaches.improvisational.policies.rl2mpc import (
+    RL2MPCConfig,
+    RL2MPCPolicy,
+)
 from tamp_improv.approaches.improvisational.training import (
     TrainingConfig,
     train_and_evaluate,
@@ -170,6 +174,67 @@ def test_graph_mpc_pipeline():
     # Run evaluation
     print("\nRunning evaluation with target shortcuts...")
     metrics = train_and_evaluate(system, policy_factory, config, policy_name="GraphMPC")
+
+    # Print results
+    print("\nEvaluation Results:")
+    print(f"Success Rate: {metrics.success_rate:.2%}")
+    print(f"Average Episode Length: {metrics.avg_episode_length:.2f}")
+    print(f"Average Reward: {metrics.avg_reward:.2f}")
+
+    return metrics
+
+
+def test_graph_rl2mpc_pipeline():
+    """Test RL2MPC policy with the training and evaluation pipeline."""
+    print("\n=== Testing RL2MPC with Training Pipeline ===")
+
+    # Create training config
+    config = TrainingConfig(
+        seed=42,
+        num_episodes=1,
+        max_steps=50,
+        render=True,
+        collect_episodes=2,
+        episodes_per_scenario=100,
+        force_collect=True,
+        record_training=False,
+        training_record_interval=25,
+        training_data_dir="training_data/graph_rl",
+        save_dir="trained_policies/graph_rl",
+        batch_size=32,
+    )
+
+    # Create system
+    system = Blocks2DTAMPSystem.create_default(
+        seed=config.seed, render_mode="rgb_array" if config.render else None
+    )
+
+    # Create RL2MPC policy
+    def policy_factory(seed: int) -> RL2MPCPolicy:
+        return RL2MPCPolicy(
+            seed=seed,
+            config=RL2MPCConfig(
+                rl_config=RLConfig(
+                    learning_rate=3e-4,
+                    batch_size=32,
+                    n_epochs=10,
+                    gamma=0.99,
+                ),
+                mpc_config=MPCConfig(
+                    num_rollouts=50,
+                    horizon=20,
+                    num_control_points=10,
+                    noise_scale=0.05,
+                ),
+                reward_threshold=-15.0,
+                window_size=10,
+            ),
+        )
+
+    # Run train_and_evaluate
+    metrics = train_and_evaluate(
+        system, policy_factory, config, policy_name="GraphRL2MPC"
+    )
 
     # Print results
     print("\nEvaluation Results:")
