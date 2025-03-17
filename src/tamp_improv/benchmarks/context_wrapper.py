@@ -96,31 +96,3 @@ class ContextAwareWrapper(gym.Wrapper):
         """Configure environment for training with data."""
         if hasattr(self.env, "configure_training"):
             self.env.configure_training(train_data)
-
-    def _atoms_intersection(
-        self, atoms1: set[GroundAtom], atoms2: set[GroundAtom]
-    ) -> set[str]:
-        """Find atoms that are present in both sets (approximate)."""
-        atoms1_str = {str(atom) for atom in atoms1}
-        atoms2_str = {str(atom) for atom in atoms2}
-        return atoms1_str.intersection(atoms2_str)
-
-    def _atoms_union(
-        self, atoms1: set[GroundAtom], atoms2: set[GroundAtom]
-    ) -> set[str]:
-        """Union of two atom sets (approximate)."""
-        atoms1_str = {str(atom) for atom in atoms1}
-        atoms2_str = {str(atom) for atom in atoms2}
-        return atoms1_str.union(atoms2_str)
-
-    def _get_predicate_names(self, atoms: set[GroundAtom]) -> set[str]:
-        """Get set of predicate names from atoms."""
-        return {atom.predicate.name for atom in atoms}
-
-    def _get_object_types(self, atoms: set[GroundAtom]) -> set[str]:
-        """Get set of object types from atoms."""
-        types = set()
-        for atom in atoms:
-            for obj in atom.objects:
-                types.add(obj.type.name)
-        return types
