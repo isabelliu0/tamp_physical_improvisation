@@ -58,6 +58,17 @@ class TrainingData:
         with open(config_path, "w", encoding="utf-8") as f:
             json.dump(self.config, f)
 
+        # Create a serializable copy of config and handle shortcut_info
+        serializable_config = dict(self.config)
+        if "shortcut_info" in serializable_config:
+            shortcut_file = path / "shortcut_info.pkl"
+            with open(shortcut_file, "wb") as f:
+                pickle.dump(serializable_config["shortcut_info"], f)
+            serializable_config["shortcut_info_saved"] = True
+            del serializable_config["shortcut_info"]
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(serializable_config, f)
+
     @classmethod
     def load(cls, path: Path) -> TrainingData:
         """Load training data from disk."""
@@ -86,6 +97,13 @@ class TrainingData:
         config_path = path / "config.json"
         with open(config_path, "r", encoding="utf-8") as f:
             config = json.load(f)
+
+        # Check for shortcut_info
+        if config.get("shortcut_info_saved", False):
+            shortcut_file = path / "shortcut_info.pkl"
+            with open(shortcut_file, "rb") as f:
+                config["shortcut_info"] = pickle.load(f)
+            del config["shortcut_info_saved"]
 
         return cls(
             states=states,
