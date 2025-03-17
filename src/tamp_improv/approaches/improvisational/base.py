@@ -458,7 +458,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
                     for trained_sig in self.trained_signatures:
                         similarity = current_sig.similarity(trained_sig)
-                        if similarity > 0.7:  # Threshold to be tuned
+                        if similarity > 0.9:  # Threshold to be tuned
                             can_handle = True
                             best_similarity = max(best_similarity, similarity)
 

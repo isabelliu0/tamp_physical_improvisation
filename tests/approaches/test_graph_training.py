@@ -80,7 +80,7 @@ def test_graph_rl_pipeline(force_collect=False, render=True):
         num_episodes=3,
         max_steps=50,
         collect_episodes=2,
-        episodes_per_scenario=50,
+        episodes_per_scenario=100,
         force_collect=force_collect,
         render=render,
         record_training=True,

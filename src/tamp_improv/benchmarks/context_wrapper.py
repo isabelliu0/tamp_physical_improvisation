@@ -14,15 +14,17 @@ from tamp_improv.benchmarks.wrappers import ActType, ObsType
 class ContextAwareWrapper(gym.Wrapper):
     """Wrapper that augments observations with context information."""
 
-    def __init__(self, env: gym.Env, perceiver: Perceiver[ObsType]) -> None:
+    def __init__(
+        self, env: gym.Env, perceiver: Perceiver[ObsType], max_preimage_size: int = 10
+    ) -> None:
         super().__init__(env)
         self.perceiver: Perceiver[ObsType] = perceiver
         self.current_preimage: set[GroundAtom] = set()
         self.current_atoms: set[GroundAtom] = set()
 
+        self.num_context_features = max_preimage_size
         # Add context features to observation space
         if isinstance(env.observation_space, gym.spaces.Box):
-            self.num_context_features = 4
             self.observation_space = gym.spaces.Box(
                 low=np.append(
                     env.observation_space.low, np.zeros(self.num_context_features)
@@ -31,6 +33,9 @@ class ContextAwareWrapper(gym.Wrapper):
                     env.observation_space.high, np.ones(self.num_context_features)
                 ),
                 dtype=np.float32,
+            )
+            print(
+                f"Initialized context wrapper with {self.num_context_features} features"
             )
 
     def reset(self, **kwargs: Any) -> tuple[ObsType, dict[str, Any]]:
@@ -64,35 +69,17 @@ class ContextAwareWrapper(gym.Wrapper):
         raise AttributeError("Wrapped environment doesn't have reset_from_state")
 
     def augment_observation(self, obs: ObsType) -> ObsType:
-        """Augment observation with domain-agnostic context features."""
+        """Augment observation with 1-hot vector for preimage atoms."""
         features = np.zeros(self.num_context_features, dtype=np.float32)
+        if not self.current_preimage:
+            return cast(ObsType, np.concatenate([obs, features]))
 
-        # Feature 1: Overlap ratio between current atoms and preimage
-        overlap_size = len(
-            self._atoms_intersection(self.current_atoms, self.current_preimage)
-        )
-        union_size = len(self._atoms_union(self.current_atoms, self.current_preimage))
-        features[0] = overlap_size / max(union_size, 1)
+        preimage_atoms = list(self.current_preimage)
+        current_atoms_str = {str(atom) for atom in self.current_atoms}
+        for i, atom in enumerate(preimage_atoms):
+            if str(atom) in current_atoms_str:
+                features[i] = 1.0
 
-        # Feature 2: Relative size - how many atoms remain to be achieved
-        preimage_size = len(self.current_preimage)
-        features[1] = (preimage_size - overlap_size) / max(preimage_size, 1)
-
-        # Feature 3: Predicates in common percentage
-        current_preds = self._get_predicate_names(self.current_atoms)
-        preimage_preds = self._get_predicate_names(self.current_preimage)
-        common_preds = len(current_preds.intersection(preimage_preds))
-        all_preds = len(current_preds.union(preimage_preds))
-        features[2] = common_preds / max(all_preds, 1)
-
-        # Feature 4: Object types in common percentage
-        current_types = self._get_object_types(self.current_atoms)
-        preimage_types = self._get_object_types(self.current_preimage)
-        common_types = len(current_types.intersection(preimage_types))
-        all_types = len(current_types.union(preimage_types))
-        features[3] = common_types / max(all_types, 1)
-
-        # Concatenate original observation with features
         return cast(ObsType, np.concatenate([obs, features]))
 
     def set_context(
@@ -101,6 +88,9 @@ class ContextAwareWrapper(gym.Wrapper):
         """Set current context for augmentation."""
         self.current_atoms = current_atoms
         self.current_preimage = preimage
+        assert (
+            len(preimage) <= self.num_context_features
+        ), "Preimage bigger than context size"
 
     def configure_training(self, train_data: TrainingData) -> None:
         """Configure environment for training with data."""
