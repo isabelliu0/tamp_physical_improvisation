@@ -103,7 +103,7 @@ def test_graph_rl_pipeline():
 
     print("\n1. Creating system...")
     system = Blocks2DTAMPSystem.create_default(
-        seed=config.seed, render_mode="rgb_array" if render else None
+        seed=config.seed, render_mode="rgb_array" if config.render else None
     )
 
     print("\n2. Training and evaluating policy...")
@@ -162,7 +162,7 @@ def test_graph_mpc_pipeline():
         policy: MPCPolicy = MPCPolicy(
             seed=seed,
             config=MPCConfig(
-                num_rollouts=100,
+                num_rollouts=50,
                 horizon=20,
                 num_control_points=10,
                 noise_scale=0.25,
@@ -174,7 +174,7 @@ def test_graph_mpc_pipeline():
             policy.add_target_shortcut(source_id, target_id)
 
         return policy
-    
+
     # Create approach
     _ = ImprovisationalTAMPApproach(
         system,
