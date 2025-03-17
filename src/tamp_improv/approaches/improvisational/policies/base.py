@@ -26,10 +26,6 @@ class TrainingData:
     preimages: list[set[GroundAtom]]
     config: dict[str, Any]
 
-    # For compatibility (will be removed later)
-    preconditions_to_maintain: list[set[GroundAtom]] = field(default_factory=list)
-    preconditions_to_achieve: list[set[GroundAtom]] = field(default_factory=list)
-
     def __len__(self) -> int:
         return len(self.states)
 
@@ -41,12 +37,10 @@ class TrainingData:
         states_path = path / "states.npy"
         np.save(states_path, np.array(self.states))
 
-        # Save atoms and preimages as pickle (since they contain custom objects)
+        # Save atoms and preimages as pickle
         data_paths = {
             "current_atoms": self.current_atoms,
             "preimages": self.preimages,
-            "preconditions_to_maintain": self.preconditions_to_maintain,
-            "preconditions_to_achieve": self.preconditions_to_achieve,
         }
         for name, obj in data_paths.items():
             file_path = path / f"{name}.pkl"
@@ -54,20 +48,10 @@ class TrainingData:
                 pickle.dump(obj, f)
 
         # Save config as JSON
+        serializable_config = dict(self.config)
         config_path = path / "config.json"
         with open(config_path, "w", encoding="utf-8") as f:
-            json.dump(self.config, f)
-
-        # Create a serializable copy of config and handle shortcut_info
-        serializable_config = dict(self.config)
-        if "shortcut_info" in serializable_config:
-            shortcut_file = path / "shortcut_info.pkl"
-            with open(shortcut_file, "wb") as f:
-                pickle.dump(serializable_config["shortcut_info"], f)
-            serializable_config["shortcut_info_saved"] = True
-            del serializable_config["shortcut_info"]
-        with open(config_path, "w", encoding="utf-8") as f:
-            json.dump(serializable_config, f)
+            json.dump(serializable_config, f, indent=2)
 
     @classmethod
     def load(cls, path: Path) -> TrainingData:
@@ -81,12 +65,10 @@ class TrainingData:
         data_names = [
             "current_atoms",
             "preimages",
-            "preconditions_to_maintain",
-            "preconditions_to_achieve",
         ]
         for name in data_names:
             file_path = path / f"{name}.pkl"
-            if file_path.exists():  # For compatibility
+            if file_path.exists():
                 with open(file_path, "rb") as f:
                     data[name] = pickle.load(f)
             else:
@@ -98,19 +80,10 @@ class TrainingData:
         with open(config_path, "r", encoding="utf-8") as f:
             config = json.load(f)
 
-        # Check for shortcut_info
-        if config.get("shortcut_info_saved", False):
-            shortcut_file = path / "shortcut_info.pkl"
-            with open(shortcut_file, "rb") as f:
-                config["shortcut_info"] = pickle.load(f)
-            del config["shortcut_info_saved"]
-
         return cls(
             states=states,
             current_atoms=data["current_atoms"],
             preimages=data["preimages"],
-            preconditions_to_maintain=data.get("preconditions_to_maintain", []),
-            preconditions_to_achieve=data.get("preconditions_to_achieve", []),
             config=config,
         )
 
@@ -122,10 +95,6 @@ class PolicyContext(Generic[ObsType, ActType]):
     preimage: set[GroundAtom]
     current_atoms: set[GroundAtom]
     info: dict[str, Any] = field(default_factory=dict)
-
-    # For compatibility (will be removed later)
-    preconditions_to_maintain: set[GroundAtom] = field(default_factory=set)
-    preconditions_to_achieve: set[GroundAtom] = field(default_factory=set)
 
 
 class Policy(Generic[ObsType, ActType], ABC):
@@ -160,7 +129,7 @@ class Policy(Generic[ObsType, ActType], ABC):
         """Train the policy if needed.
 
         Default implementation just initializes the policy and updates
-        preconditions. Policies that need training should override this.
+        context. Policies that need training should override this.
         """
         self.initialize(env)
         if hasattr(env, "configure_training"):

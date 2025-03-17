@@ -32,22 +32,10 @@ class PlanningComponents(Generic[ObsType]):
     predicate_container: PredicateContainer
     skills: set[Skill]
     perceiver: Perceiver[ObsType]
-
+    operators: set[LiftedOperator]
     shortcut_policies: dict[tuple[frozenset[str], frozenset[str]], Policy] = field(
         default_factory=dict
     )
-
-    # For compatibility (will be removed later)
-    base_operators: set[LiftedOperator] = field(default_factory=set)
-    full_operators: set[LiftedOperator] = field(default_factory=set)
-    full_operators_active: bool = False
-
-    @property
-    def operators(self) -> set[LiftedOperator]:
-        """Get the currently active operator set."""
-        return (
-            self.full_operators if self.full_operators_active else self.base_operators
-        )
 
 
 class BaseTAMPSystem(Generic[ObsType, ActType], ABC):
@@ -86,16 +74,6 @@ class BaseTAMPSystem(Generic[ObsType, ActType], ABC):
     def predicates(self) -> set[Predicate]:
         """Get PDDL predicates."""
         return self.components.predicate_container.as_set()
-
-    @property
-    def base_operators(self) -> set[LiftedOperator]:
-        """Get PDDL operators without extra preconditions."""
-        return self.components.base_operators
-
-    @property
-    def full_operators(self) -> set[LiftedOperator]:
-        """Get PDDL operators with extra preconditions."""
-        return self.components.full_operators
 
     @property
     def operators(self) -> set[LiftedOperator]:

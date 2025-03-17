@@ -23,7 +23,7 @@ def test_number_tamp_system():
         types=tamp_system.types,
         predicates=tamp_system.predicates,
         perceiver=tamp_system.components.perceiver,
-        operators=tamp_system.base_operators,
+        operators=tamp_system.operators,
         skills=tamp_system.skills,
         planner_id="pyperplan",
     )

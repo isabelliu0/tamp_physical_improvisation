@@ -166,14 +166,16 @@ class RL2MPCPolicy(Policy[ObsType, ActType]):
         self.rl_policy.train(env, train_data, callback=callback)
 
         # Extract shortcut information from training data
-        if "shortcut_info" in train_data.config:
-            for info in train_data.config["shortcut_info"]:
-                source_id = info.get("source_node_id")
-                target_id = info.get("target_node_id")
-                self._valid_shortcuts.add((source_id, target_id))
-            print(
-                f"RL2MPC extracted {len(self._valid_shortcuts)} valid shortcuts from training data: {self._valid_shortcuts}"  # pylint: disable=line-too-long
-            )
+        assert (
+            "shortcut_info" in train_data.config and train_data.config["shortcut_info"]
+        ), "Training data missing shortcuts"
+        for info in train_data.config["shortcut_info"]:
+            source_id = info.get("source_node_id")
+            target_id = info.get("target_node_id")
+            self._valid_shortcuts.add((source_id, target_id))
+        print(
+            f"RL2MPC extracted {len(self._valid_shortcuts)} valid shortcuts from training data: {self._valid_shortcuts}"  # pylint: disable=line-too-long
+        )
 
         # Record if threshold was reached during training
         # Note: We don't switch to MPC yet - that happens at execution time

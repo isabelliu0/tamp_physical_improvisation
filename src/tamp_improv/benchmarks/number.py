@@ -169,7 +169,7 @@ class BaseNumberTAMPSystem(BaseTAMPSystem[NDArray[np.int32], NDArray[np.int32]])
     @staticmethod
     def create_default(
         seed: int | None = None,
-        switch_off_improvisational_models: bool = False,
+        _switch_off_improvisational_models: bool = False,
         render_mode: str | None = None,
     ) -> NumberTAMPSystem:
         """Factory method for creating system with default components."""
@@ -211,7 +211,7 @@ class BaseNumberTAMPSystem(BaseTAMPSystem[NDArray[np.int32], NDArray[np.int32]])
         }
 
         # Create full operators (with transition preconditions)
-        full_operators = {
+        _ = {
             LiftedOperator(
                 "ZeroToOne",
                 [state],
@@ -236,9 +236,7 @@ class BaseNumberTAMPSystem(BaseTAMPSystem[NDArray[np.int32], NDArray[np.int32]])
             PlanningComponents(
                 types=types,
                 predicate_container=predicates,
-                base_operators=base_operators,
-                full_operators=full_operators,
-                full_operators_active=switch_off_improvisational_models,
+                operators=base_operators,
                 skills=set(),
                 perceiver=perceiver,
             ),
