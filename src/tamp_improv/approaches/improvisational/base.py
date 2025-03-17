@@ -232,6 +232,10 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     PolicyContext(
                         preimage=self._current_preimage,
                         current_atoms=atoms,
+                        info={
+                            "source_node_id": self._current_edge.source.id,
+                            "target_node_id": target_node.id,
+                        },
                     )
                 )
 
@@ -478,6 +482,10 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     PolicyContext(
                         preimage=target_preimage,
                         current_atoms=source_atoms,
+                        info={
+                            "source_node_id": source_node.id,
+                            "target_node_id": target_node.id,
+                        },
                     )
                 )
                 if self.policy.can_initiate():
@@ -512,6 +520,10 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                         PolicyContext(
                             preimage=preimage,
                             current_atoms=init_atoms,
+                            info={
+                                "source_node_id": node.id,
+                                "target_node_id": edge.target.id,
+                            },
                         )
                     )
                     self.context_env.set_context(init_atoms, preimage)

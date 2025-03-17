@@ -44,6 +44,10 @@ class MPCPolicy(Policy[ObsType, ActType]):
         self._torch_generator = torch.Generator(device=self.device_ctx.device)
         self._torch_generator.manual_seed(seed)
 
+        # Context tracking
+        self._current_context: PolicyContext[ObsType, ActType] | None = None
+        self._target_shortcuts: set[tuple[int, int]] = set()
+
         # Space type flags
         self.is_discrete = False
         self.is_multidiscrete = False
@@ -95,8 +99,24 @@ class MPCPolicy(Policy[ObsType, ActType]):
         # Initialize last solution
         self.last_solution = self._create_empty_trajectory()
 
-    def can_initiate(self):
+    def can_initiate(self) -> bool:
+        """Check if policy can handle specific shortcuts."""
+        if self._current_context is None:
+            return False
+
+        # If target shortcuts specified, check if this is one of them
+        if self._target_shortcuts:
+            source_id = self._current_context.info.get("source_node_id")
+            target_id = self._current_context.info.get("target_node_id")
+            return (source_id, target_id) in self._target_shortcuts
+
+        # Otherwise, handle any shortcut
         return True
+
+    def add_target_shortcut(self, source_id: int, target_id: int) -> None:
+        """Add a specific shortcut to the target."""
+        self._target_shortcuts.add((source_id, target_id))
+        print(f"MPC policy added target shortcut: {source_id} -> {target_id}")
 
     def _create_empty_trajectory(self) -> torch.Tensor:
         """Create empty trajectory array with proper shape and type."""
@@ -147,19 +167,18 @@ class MPCPolicy(Policy[ObsType, ActType]):
         self._first_solve = True
 
     def configure_context(self, context: PolicyContext[ObsType, ActType]) -> None:
-        """Configure MPC with new context/preconditions."""
+        """Configure MPC with new context."""
         if self.env is None:
             raise ValueError("Policy not initialized")
-
-        # Update environment with current preconditions
+        self._current_context = context
+        if hasattr(self.env, "set_context"):
+            self.env.set_context(context.current_atoms, context.preimage)
         if hasattr(self.env, "configure_training"):
             self.env.configure_training(
                 TrainingData(
                     states=[],  # MPC doesn't need example states
-                    current_atoms=[],
-                    preimages=[],
-                    preconditions_to_maintain=[context.preconditions_to_maintain],
-                    preconditions_to_achieve=[context.preconditions_to_achieve],
+                    current_atoms=[context.current_atoms],
+                    preimages=[context.preimage],
                     config={"max_steps": self.config.horizon},
                 )
             )
@@ -433,11 +452,20 @@ class MPCPolicy(Policy[ObsType, ActType]):
         """Score trajectory by simulation."""
         assert self.env is not None
 
+        # Extract raw observation if context features are present
+        raw_obs_size = init_obs.shape[0]
+        if hasattr(self.env, "num_context_features"):
+            raw_obs_size -= self.env.num_context_features
+        if len(init_obs.shape) > 0 and init_obs.shape[0] > raw_obs_size:
+            raw_init_obs = init_obs[:raw_obs_size]
+        else:
+            raw_init_obs = init_obs
+
         # Convert tensors to numpy for environment interaction
         trajectory_np = self.device_ctx.numpy(trajectory)
-        init_obs_np = self.device_ctx.numpy(init_obs)
+        raw_init_obs_np = self.device_ctx.numpy(raw_init_obs)
 
-        _ = self.env.reset_from_state(init_obs_np)  # type: ignore[attr-defined]
+        _ = self.env.reset_from_state(raw_init_obs_np)  # type: ignore[attr-defined]
         total_reward = 0.0
 
         for action in trajectory_np:
