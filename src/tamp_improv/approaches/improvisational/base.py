@@ -107,6 +107,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         seed: int,
         planner_id: str = "pyperplan",
         max_skill_steps: int = 1_000,
+        max_preimage_size: int = 10,
     ) -> None:
         """Initialize approach."""
         super().__init__(system, seed)
@@ -116,7 +117,11 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
         # Create context-aware wrapper
         if not isinstance(system.wrapped_env, ContextAwareWrapper):
-            self.context_env = ContextAwareWrapper(system.wrapped_env, system.perceiver)
+            self.context_env = ContextAwareWrapper(
+                system.wrapped_env,
+                system.perceiver,
+                max_preimage_size=max_preimage_size,
+            )
             system.wrapped_env = self.context_env
         else:
             self.context_env = system.wrapped_env
