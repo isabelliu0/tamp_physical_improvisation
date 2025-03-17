@@ -10,11 +10,7 @@ from tamp_improv.benchmarks.pybullet_clear_and_place import ClearAndPlaceTAMPSys
 def test_pybullet():
     """Test base TAMP functionality of pybullet environment."""
     # Create system
-    system = ClearAndPlaceTAMPSystem.create_default(
-        seed=124,
-        include_improvisational_models=False,
-        render_mode=None,
-    )
+    system = ClearAndPlaceTAMPSystem.create_default(seed=124, render_mode=None)
 
     # Create planner
     planner = TaskThenMotionPlanner(

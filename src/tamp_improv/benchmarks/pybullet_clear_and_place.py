@@ -86,7 +86,6 @@ class BaseClearAndPlaceTAMPSystem(
     @staticmethod
     def create_default(
         seed: int | None = None,
-        _include_improvisational_models: bool = False,
         render_mode: str | None = None,
     ) -> ClearAndPlaceTAMPSystem:
         """Factory method for creating system with default components."""

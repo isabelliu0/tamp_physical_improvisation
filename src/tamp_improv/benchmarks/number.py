@@ -169,7 +169,6 @@ class BaseNumberTAMPSystem(BaseTAMPSystem[NDArray[np.int32], NDArray[np.int32]])
     @staticmethod
     def create_default(
         seed: int | None = None,
-        _switch_off_improvisational_models: bool = False,
         render_mode: str | None = None,
     ) -> NumberTAMPSystem:
         """Factory method for creating system with default components."""
