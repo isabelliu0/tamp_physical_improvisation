@@ -75,7 +75,7 @@ def test_graph_training_collection(force_collect=True, render=True):
     return train_data
 
 
-def test_graph_rl_pipeline(force_collect=False, render=True):
+def test_graph_rl_pipeline():
     """Test the full graph-based RL training and evaluation pipeline."""
     print("\n=== Testing Graph-Based RL Pipeline ===")
 
@@ -85,10 +85,10 @@ def test_graph_rl_pipeline(force_collect=False, render=True):
         num_episodes=3,
         max_steps=50,
         collect_episodes=2,
-        episodes_per_scenario=50,
-        force_collect=force_collect,
-        render=render,
-        record_training=True,
+        episodes_per_scenario=100,
+        force_collect=False,
+        render=True,
+        record_training=False,
         training_record_interval=25,
         training_data_dir="training_data/graph_rl",
         save_dir="trained_policies/graph_rl",
@@ -107,7 +107,7 @@ def test_graph_rl_pipeline(force_collect=False, render=True):
 
     print("\n1. Creating system...")
     system = Blocks2DTAMPSystem.create_default(
-        seed=config.seed, render_mode="rgb_array" if render else None
+        seed=config.seed, render_mode="rgb_array" if config.render else None
     )
 
     print("\n2. Training and evaluating policy...")
@@ -115,6 +115,14 @@ def test_graph_rl_pipeline(force_collect=False, render=True):
     # Define policy factory
     def policy_factory(seed: int) -> RLPolicy:
         return RLPolicy(seed=seed, config=rl_config)
+
+    # Create approach
+    _ = ImprovisationalTAMPApproach(
+        system,
+        policy_factory(config.seed),
+        seed=config.seed,
+        max_preimage_size=10,
+    )
 
     # Train and evaluate with graph-based collection
     metrics = train_and_evaluate(
@@ -170,6 +178,14 @@ def test_graph_mpc_pipeline():
             policy.add_target_shortcut(source_id, target_id)
 
         return policy
+
+    # Create approach
+    _ = ImprovisationalTAMPApproach(
+        system,
+        policy_factory(config.seed),
+        seed=config.seed,
+        max_preimage_size=10,
+    )
 
     # Run evaluation
     print("\nRunning evaluation with target shortcuts...")
