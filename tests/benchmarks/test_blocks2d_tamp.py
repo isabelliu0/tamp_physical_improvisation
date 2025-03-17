@@ -25,7 +25,7 @@ def test_blocks2d_tamp_system():
         types=tamp_system.types,
         predicates=tamp_system.predicates,
         perceiver=tamp_system.perceiver,
-        operators=tamp_system.full_operators,
+        operators=tamp_system.operators,
         skills=tamp_system.skills,
         planner_id="pyperplan",
     )

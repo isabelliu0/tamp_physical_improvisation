@@ -86,7 +86,6 @@ class BaseClearAndPlaceTAMPSystem(
     @staticmethod
     def create_default(
         seed: int | None = None,
-        include_improvisational_models: bool = False,
         render_mode: str | None = None,
     ) -> ClearAndPlaceTAMPSystem:
         """Factory method for creating system with default components."""
@@ -108,9 +107,7 @@ class BaseClearAndPlaceTAMPSystem(
         base_operators, skill_types = get_active_operators_and_skills(
             include_improvisational_models=False
         )
-        full_operators, _ = get_active_operators_and_skills(
-            include_improvisational_models=True
-        )
+        _ = get_active_operators_and_skills(include_improvisational_models=True)
         pybullet_skills = {s(sim, max_motion_planning_time=0.1) for s in skill_types}
         skills: set[Skill[NDArray[np.float32], NDArray[np.float32]]] = cast(
             set[Skill[NDArray[np.float32], NDArray[np.float32]]], pybullet_skills
@@ -127,9 +124,7 @@ class BaseClearAndPlaceTAMPSystem(
             PlanningComponents(
                 types=set(TYPES),
                 predicate_container=predicates,
-                base_operators=base_operators,
-                full_operators=full_operators,
-                full_operators_active=include_improvisational_models,
+                operators=base_operators,
                 skills=skills,
                 perceiver=perceiver,
             ),
@@ -155,6 +150,5 @@ class ClearAndPlaceTAMPSystem(
             base_env=self.env,
             perceiver=components.perceiver,
             step_penalty=-1.0,
-            precondition_violation_penalty=-0.5,
             achievement_bonus=100.0,
         )

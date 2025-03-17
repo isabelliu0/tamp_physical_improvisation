@@ -15,7 +15,7 @@ ActType = TypeVar("ActType")
 class ImprovWrapper(gym.Env):
     """General wrapper for training improvisational policies.
 
-    Handles precondition maintenance and achievement during training.
+    Handles preimage achievement during training.
     """
 
     def __init__(
@@ -25,7 +25,6 @@ class ImprovWrapper(gym.Env):
         max_episode_steps: int = 100,
         *,
         step_penalty: float = -0.1,
-        precondition_violation_penalty: float = -1.0,
         achievement_bonus: float = 1.0,
     ) -> None:
         """Initialize wrapper with environment and perceiver."""
@@ -38,7 +37,6 @@ class ImprovWrapper(gym.Env):
 
         # Reward parameters
         self.step_penalty = step_penalty
-        self.precondition_violation_penalty = precondition_violation_penalty
         self.achievement_bonus = achievement_bonus
 
         # Training state tracking
@@ -48,12 +46,6 @@ class ImprovWrapper(gym.Env):
         self.current_atom_set: set[GroundAtom] = set()
         self.current_preimage: set[GroundAtom] = set()
         self.current_training_idx: int = 0
-
-        # For compatibility (will be removed later)
-        self.preconditions_to_maintain: list[set[GroundAtom]] = []
-        self.preconditions_to_achieve: list[set[GroundAtom]] = []
-        self.current_precondition_to_maintain: set[GroundAtom] = set()
-        self.current_precondition_to_achieve: set[GroundAtom] = set()
 
         self.render_mode = base_env.render_mode
 
@@ -72,21 +64,6 @@ class ImprovWrapper(gym.Env):
             self.current_atoms_list[0] if self.current_atoms_list else set()
         )
         self.current_preimage = self.preimages_list[0] if self.preimages_list else set()
-
-        # For compatibility (will be removed later)
-        if hasattr(training_data, "preconditions_to_maintain"):
-            self.preconditions_to_maintain = training_data.preconditions_to_maintain
-            self.preconditions_to_achieve = training_data.preconditions_to_achieve
-            self.current_precondition_to_maintain = (
-                self.preconditions_to_maintain[0]
-                if self.preconditions_to_maintain
-                else set()
-            )
-            self.current_precondition_to_achieve = (
-                self.preconditions_to_achieve[0]
-                if self.preconditions_to_achieve
-                else set()
-            )
 
         self.current_training_idx = 0
         self.max_episode_steps = training_data.config.get(
@@ -119,21 +96,6 @@ class ImprovWrapper(gym.Env):
             print(f"Training episode {self.current_training_idx + 1}")
             print(f"Current atoms: {self.current_atom_set}")
             print(f"Preimage to achieve: {self.current_preimage}")
-
-            # For compatibility (will be removed later)
-            if self.preconditions_to_maintain:
-                self.current_precondition_to_maintain = self.preconditions_to_maintain[
-                    self.current_training_idx
-                ]
-                self.current_precondition_to_achieve = self.preconditions_to_achieve[
-                    self.current_training_idx
-                ]
-                print(
-                    f"Maintaining preconditions: {self.current_precondition_to_maintain}"
-                )
-                print(
-                    f"Preconditions to achieve: {self.current_precondition_to_achieve}"
-                )
 
             # Reset with current state
             if hasattr(self.env, "reset_from_state"):
@@ -170,13 +132,7 @@ class ImprovWrapper(gym.Env):
         self,
         action: ActType,
     ) -> tuple[ObsType, float, bool, bool, dict[str, Any]]:
-        """Step environment.
-
-        Reward:
-            Base step penalty
-            Precondition violation penalty
-            Achievement bonus
-        """
+        """Step environment."""
         obs, _, _, truncated, info = self.env.step(action)
         self.steps += 1
         current_atoms = self.perceiver.step(obs)

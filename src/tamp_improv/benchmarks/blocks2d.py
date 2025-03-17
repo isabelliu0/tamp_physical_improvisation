@@ -495,9 +495,7 @@ class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.floa
             PlanningComponents(
                 types=types_set,
                 predicate_container=predicates,
-                base_operators=operators,
-                full_operators=operators,
-                full_operators_active=False,
+                operators=operators,
                 skills=set(),
                 perceiver=perceiver,
             ),
@@ -534,6 +532,5 @@ class Blocks2DTAMPSystem(
             base_env=self.env,
             perceiver=components.perceiver,
             step_penalty=-0.5,
-            precondition_violation_penalty=-0.5,
             achievement_bonus=10.0,
         )

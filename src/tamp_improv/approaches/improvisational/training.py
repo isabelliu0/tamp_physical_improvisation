@@ -2,9 +2,9 @@
 
 import time
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, TypeVar, Union, cast
+from typing import Any, Callable, TypeVar, cast
 
 import numpy as np
 import torch
@@ -52,6 +52,9 @@ class TrainingConfig:
     # Policy-specific settings
     policy_config: dict[str, Any] | None = None
 
+    # Shortcut information
+    shortcut_info: list[dict[str, Any]] = field(default_factory=list)
+
     def get_training_data_path(self, system_name: str) -> Path:
         """Get path for training data for specific system."""
         return Path(self.training_data_dir) / system_name
@@ -81,7 +84,7 @@ def get_or_collect_training_data(
         print(f"\nLoading existing training data from {data_path}")
         try:
             train_data = TrainingData.load(data_path)
-
+            config.shortcut_info = train_data.config.get("shortcut_info", [])
             # Verify config matches
             if (
                 train_data.config.get("seed") == config.seed
@@ -89,7 +92,7 @@ def get_or_collect_training_data(
                 and train_data.config.get("max_steps") == config.max_steps
             ):
                 print(f"Loaded {len(train_data)} training scenarios")
-                train_data.config = config.__dict__
+                train_data.config.update(config.__dict__)
                 return train_data
             print("Existing data has different config, collecting new data...")
         except Exception as e:
@@ -104,90 +107,6 @@ def get_or_collect_training_data(
     train_data.save(data_path)
 
     return train_data
-
-
-def collect_training_data(
-    system: ImprovisationalTAMPSystem[ObsType, ActType],
-    approach: ImprovisationalTAMPApproach[ObsType, ActType],
-    config: TrainingConfig,
-) -> TrainingData:
-    """Collect training data from TAMP execution."""
-    training_states: list[Union[int, ObsType]] = []
-    current_atoms_list = []
-    preimages_list = []
-
-    # For compatibility (will be removed later)
-    preconditions_to_maintain = []
-    preconditions_to_achieve = []
-
-    print("\nCollecting training data...")
-    approach.training_mode = True
-
-    # Run episodes to collect states for shortcut learning
-    for episode in range(config.collect_episodes):
-        print(f"\nCollection episode {episode + 1}/{config.collect_episodes}")
-
-        obs, info = system.reset()
-        step_result = approach.reset(obs, info)
-
-        # Check first step from reset
-        if step_result.terminate and step_result.info:
-            training_states.append(step_result.info["training_state"])
-            current_atoms_list.append(step_result.info["current_atoms"])
-            preimages_list.append(step_result.info["preimage"])
-
-            # For compatibility (will be removed later)
-            if "preconditions_to_maintain" in step_result.info:
-                preconditions_to_maintain.append(
-                    step_result.info["preconditions_to_maintain"]
-                )
-                preconditions_to_achieve.append(
-                    step_result.info["preconditions_to_achieve"]
-                )
-                continue
-
-        obs, _, term, trunc, info = system.env.step(step_result.action)
-        if term or trunc:
-            continue
-
-        # Rest of episode
-        for _ in range(1, config.max_steps):
-            step_result = approach.step(obs, 0, False, False, info)
-
-            # When shortcut needed, collect training data
-            if step_result.terminate and step_result.info:
-                training_states.append(step_result.info["training_state"])
-
-                current_atoms_list.append(step_result.info["current_atoms"])
-                preimages_list.append(step_result.info["preimage"])
-
-                # For compatibility (will be removed later)
-                if "preconditions_to_maintain" in step_result.info:
-                    preconditions_to_maintain.append(
-                        step_result.info["preconditions_to_maintain"]
-                    )
-                    preconditions_to_achieve.append(
-                        step_result.info["preconditions_to_achieve"]
-                    )
-
-                break
-
-            obs, _, term, trunc, info = system.env.step(step_result.action)
-            if term or trunc:
-                break
-
-    approach.training_mode = False
-
-    print(f"\nCollected {len(training_states)} training scenarios")
-
-    return TrainingData(
-        states=training_states,
-        current_atoms=current_atoms_list,
-        preimages=preimages_list,
-        preconditions_to_maintain=preconditions_to_maintain,
-        preconditions_to_achieve=preconditions_to_achieve,
-        config=config.__dict__,
-    )
 
 
 def run_evaluation_episode(

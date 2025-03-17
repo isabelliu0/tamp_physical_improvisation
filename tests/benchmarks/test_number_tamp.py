@@ -10,9 +10,7 @@ from tamp_improv.benchmarks.number_env import NumberEnv
 def test_number_tamp_system():
     """Test Number environment with TAMP planner."""
     # Create TAMP system
-    tamp_system = BaseNumberTAMPSystem.create_default(
-        switch_off_improvisational_models=False
-    )
+    tamp_system = BaseNumberTAMPSystem.create_default()
 
     # Create environment with time limit
     env = NumberEnv()
@@ -23,7 +21,7 @@ def test_number_tamp_system():
         types=tamp_system.types,
         predicates=tamp_system.predicates,
         perceiver=tamp_system.components.perceiver,
-        operators=tamp_system.base_operators,
+        operators=tamp_system.operators,
         skills=tamp_system.skills,
         planner_id="pyperplan",
     )

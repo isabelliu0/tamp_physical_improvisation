@@ -133,7 +133,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self.domain = system.get_domain()
 
         # Initialize planning state
-        self._current_task_plan: list[GroundOperator] = []
         self._current_operator: GroundOperator | None = None
         self._current_skill: Skill | None = None
         self._goal: set[GroundAtom] = set()
@@ -153,13 +152,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         objects, atoms, goal = self.system.perceiver.reset(obs, info)
         self._goal = goal
 
-        # Create initial plan
-        self._current_task_plan = self._create_task_plan(objects, atoms, goal)
-
         # Create planning graph
-        self.planning_graph = self._create_planning_graph(
-            objects, atoms, self._current_task_plan
-        )
+        self.planning_graph = self._create_planning_graph(objects, atoms)
 
         # Compute preimages
         self.planning_graph.compute_preimages(goal)
@@ -307,7 +301,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self,
         objects: set[Object],
         init_atoms: set[GroundAtom],
-        _task_plan: list[GroundOperator] | None = None,  # For compatibility
     ) -> PlanningGraph:
         """Create a tree-based planning graph by exploring possible action
         sequences.

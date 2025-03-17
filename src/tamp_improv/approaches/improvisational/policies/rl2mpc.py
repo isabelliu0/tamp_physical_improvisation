@@ -96,6 +96,8 @@ class RL2MPCPolicy(Policy[ObsType, ActType]):
         self._env: gym.Env | None = None
         self._traj_env: gym.Env | None = None
         self._cached_trajectory: list[ActType] | None = None
+        self._current_context: PolicyContext[ObsType, ActType] | None = None
+        self._valid_shortcuts: set[tuple[int, int]] = set()
 
     @property
     def requires_training(self) -> bool:
@@ -110,25 +112,42 @@ class RL2MPCPolicy(Policy[ObsType, ActType]):
         self._traj_env = deepcopy(env)
 
     def can_initiate(self):
-        return True
+        """Check if the policy can be executed given the current context."""
+        if self._current_context is None:
+            return False
+        source_id = self._current_context.info.get("source_node_id")
+        target_id = self._current_context.info.get("target_node_id")
+        return (source_id, target_id) in self._valid_shortcuts
 
     def configure_context(self, context: PolicyContext) -> None:
         """Configure policy context."""
+        # Store previous context info
+        prev_source_id = None
+        prev_target_id = None
+        if self._current_context is not None:
+            prev_source_id = self._current_context.info.get("source_node_id")
+            prev_target_id = self._current_context.info.get("target_node_id")
+
+        # Update current context
+        self._current_context = context
         self.mpc_policy.configure_context(context)
+        new_source_id = context.info.get("source_node_id")
+        new_target_id = context.info.get("target_node_id")
+        if new_source_id != prev_source_id or new_target_id != prev_target_id:
+            self._start_state = None  # Will be set in next get_action call
+            self._cached_trajectory = None  # Clear cached trajectory
 
         # Restore cached trajectory if available
         if self._cached_trajectory is not None:
             self.mpc_policy.set_nominal_trajectory(self._cached_trajectory)
 
         # Configure trajectory environment
-        if hasattr(self._traj_env, "configure_training"):
-            self._traj_env.configure_training(  # type: ignore[union-attr]
+        if self._traj_env is not None and hasattr(self._traj_env, "configure_training"):
+            self._traj_env.configure_training(
                 TrainingData(
                     states=[],
-                    current_atoms=[],
-                    preimages=[],
-                    preconditions_to_maintain=[context.preconditions_to_maintain],
-                    preconditions_to_achieve=[context.preconditions_to_achieve],
+                    current_atoms=[self._current_context.current_atoms],
+                    preimages=[self._current_context.preimage],
                     config={"max_steps": self.mpc_policy.config.horizon},
                 )
             )
@@ -146,6 +165,18 @@ class RL2MPCPolicy(Policy[ObsType, ActType]):
         print("\nTraining RL component until reward threshold...")
         self.rl_policy.train(env, train_data, callback=callback)
 
+        # Extract shortcut information from training data
+        assert (
+            "shortcut_info" in train_data.config and train_data.config["shortcut_info"]
+        ), "Training data missing shortcuts"
+        for info in train_data.config["shortcut_info"]:
+            source_id = info.get("source_node_id")
+            target_id = info.get("target_node_id")
+            self._valid_shortcuts.add((source_id, target_id))
+        print(
+            f"RL2MPC extracted {len(self._valid_shortcuts)} valid shortcuts from training data: {self._valid_shortcuts}"  # pylint: disable=line-too-long
+        )
+
         # Record if threshold was reached during training
         # Note: We don't switch to MPC yet - that happens at execution time
         self._threshold_reached = callback.threshold_reached
@@ -160,27 +191,65 @@ class RL2MPCPolicy(Policy[ObsType, ActType]):
         if self.mpc_policy.env is None:
             raise ValueError("MPC environment not initialized")
 
-        # Generate trajectory from start state using RL
-        current_obs = self._start_state
-        self._traj_env.reset_from_state(current_obs)  # type: ignore
-        trajectory = []
+        # Extract raw observation (without context features)
+        # Add an assert to ensure _start_state is of an expected type
+        assert hasattr(self._start_state, "shape") and hasattr(
+            self._start_state, "__getitem__"
+        ), "_start_state must be an iterable with 'shape' attribute (numpy array or torch tensor)."  # pylint: disable=line-too-long
+        raw_obs_size = self._start_state.shape[0]
+        if hasattr(self._traj_env, "num_context_features"):
+            raw_obs_size -= self._traj_env.num_context_features
+        if (
+            len(self._start_state.shape) > 0
+            and self._start_state.shape[0] > raw_obs_size
+        ):
+            raw_start_state = self._start_state[:raw_obs_size]
+        else:
+            raw_start_state = self._start_state
 
+        # Get the base environment (unwrapped from context wrapper)
+        base_env = self._traj_env
+        context_env = None
+        while hasattr(base_env, "env"):
+            if hasattr(base_env, "augment_observation"):
+                context_env = base_env
+                base_env = base_env.env
+            else:
+                base_env = base_env.env
+
+        # Generate trajectory from start state using RL
+        base_env.reset_from_state(raw_start_state)  # type: ignore
+
+        # Set context for trajectory environment
+        if context_env is not None and self._current_context is not None:
+            context_env.set_context(  # type: ignore
+                self._current_context.current_atoms, self._current_context.preimage
+            )
+
+        # Generate trajectory
+        print(f"Generating MPC trajectory from RL starting at: {raw_start_state}")
+        current_raw_obs = raw_start_state
+        trajectory = []
         for step in range(self.mpc_policy.config.horizon):
-            action = self.rl_policy.get_action(current_obs)
+            if context_env is not None:
+                aug_obs = context_env.augment_observation(current_raw_obs)
+                action = self.rl_policy.get_action(aug_obs)
+            else:
+                action = self.rl_policy.get_action(current_raw_obs)
+
             trajectory.append(action)
 
             # Step environment to get next observation
-            next_obs, _, terminated, truncated, _ = self._traj_env.step(action)
-
+            next_raw_obs, _, terminated, truncated, _ = base_env.step(action)
             if terminated or truncated:
+                print(f"RL trajectory terminated at step {step + 1}")
                 # If episode ended early, use zero action for remaining steps
                 remaining_steps = self.mpc_policy.config.horizon - (step + 1)
                 zero_action = cast(ActType, np.zeros_like(action))
                 for _ in range(remaining_steps):
                     trajectory.append(zero_action)
                 break
-
-            current_obs = next_obs
+            current_raw_obs = next_raw_obs
 
         print(f"Generated MPC trajectory from RL: {trajectory}")
         self._cached_trajectory = trajectory
@@ -190,7 +259,9 @@ class RL2MPCPolicy(Policy[ObsType, ActType]):
 
     def get_action(self, obs: ObsType) -> ActType:
         """Get action using either RL or MPC."""
-        if self._threshold_reached and not self._using_mpc:
+        if self._threshold_reached and (
+            not self._using_mpc or self._start_state is None
+        ):
             print("\nSwitching to MPC with RL initialization")
             self._start_state = obs
             self._initialize_mpc_from_start_state()
