@@ -88,8 +88,8 @@ def test_graph_rl_pipeline():
         episodes_per_scenario=100,
         force_collect=False,
         render=True,
-        record_training=False,
-        training_record_interval=25,
+        record_training=True,
+        training_record_interval=75,
         training_data_dir="training_data/graph_rl",
         save_dir="trained_policies/graph_rl",
         batch_size=32,
@@ -121,7 +121,7 @@ def test_graph_rl_pipeline():
         system,
         policy_factory(config.seed),
         seed=config.seed,
-        max_preimage_size=10,
+        max_preimage_size=11,
     )
 
     # Train and evaluate with graph-based collection
@@ -184,7 +184,7 @@ def test_graph_mpc_pipeline():
         system,
         policy_factory(config.seed),
         seed=config.seed,
-        max_preimage_size=10,
+        max_preimage_size=11,
     )
 
     # Run evaluation
@@ -252,7 +252,7 @@ def test_graph_rl2mpc_pipeline():
         system,
         policy_factory(config.seed),
         seed=config.seed,
-        max_preimage_size=10,
+        max_preimage_size=11,
     )
 
     # Run train_and_evaluate

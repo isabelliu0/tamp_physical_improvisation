@@ -176,8 +176,8 @@ def collect_graph_based_training_data(
     system: ImprovisationalTAMPSystem,
     approach: ImprovisationalTAMPApproach,
     config: dict[str, Any],
-    max_shortcuts_per_graph: int = 5,
-    target_specific_shortcuts: bool = True,  # Whether to prioritize specific shortcuts
+    max_shortcuts_per_graph: int = 100,
+    target_specific_shortcuts: bool = False,  # Whether to prioritize specific shortcuts
 ) -> TrainingData:
     """Collect training data by exploring the planning graph.
 
@@ -232,8 +232,6 @@ def collect_graph_based_training_data(
             target_candidates = []
 
             for candidate in shortcut_candidates:
-                print_shortcut_atoms(candidate)
-
                 # Check if this is one of our target shortcuts
                 if is_target_shortcut_1(candidate) and 1 not in found_target_shortcuts:
                     print("Found TARGET SHORTCUT 1!")
@@ -391,19 +389,6 @@ def identify_shortcut_candidates(
             )
 
     return shortcut_candidates
-
-
-def print_shortcut_atoms(candidate: ShortcutCandidate) -> None:
-    """Print the atoms involved in a shortcut candidate."""
-    print(
-        f"\nShortcut: Node {candidate.source_node.id} -> Node {candidate.target_node.id}"
-    )
-    print("Source atoms:")
-    for atom in sorted(candidate.source_atoms, key=str):
-        print(f"  - {atom}")
-    print("Target preimage:")
-    for atom in sorted(candidate.target_preimage, key=str):
-        print(f"  - {atom}")
 
 
 def is_target_shortcut_1(candidate: ShortcutCandidate) -> bool:
