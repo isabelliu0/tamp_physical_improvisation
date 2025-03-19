@@ -46,6 +46,8 @@ class ContextAwareWrapper(gym.Wrapper):
         """Reset environment and augment observation."""
         obs, info = self.env.reset(**kwargs)
         self.current_atoms = self.perceiver.step(obs)
+        if hasattr(self.env, "current_preimage"):
+            self.current_preimage = self.env.current_preimage
         return self.augment_observation(obs), info
 
     def step(
@@ -54,6 +56,8 @@ class ContextAwareWrapper(gym.Wrapper):
         """Take a step and augment observation."""
         obs, reward, terminated, truncated, info = self.env.step(action)
         self.current_atoms = self.perceiver.step(obs)
+        if hasattr(self.env, "current_preimage"):
+            self.current_preimage = self.env.current_preimage
         return (
             self.augment_observation(obs),
             float(reward),
@@ -112,6 +116,8 @@ class ContextAwareWrapper(gym.Wrapper):
         for atom_str in unique_atoms:
             self._get_atom_index(atom_str)
         print(f"Registered {len(self._atom_to_index)} unique atoms with fixed indices")
+        for atom_str, idx in self._atom_to_index.items():
+            print(f"Atom {atom_str} -> index {idx}")
 
     def _get_atom_index(self, atom_str: str) -> int:
         """Get a unique index for this atom."""
