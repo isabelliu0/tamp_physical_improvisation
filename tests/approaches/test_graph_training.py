@@ -82,14 +82,14 @@ def test_graph_rl_pipeline():
     # Configuration
     config = TrainingConfig(
         seed=42,
-        num_episodes=3,
+        num_episodes=1,
         max_steps=50,
         collect_episodes=2,
         episodes_per_scenario=100,
-        force_collect=False,
+        force_collect=True,
         render=True,
         record_training=True,
-        training_record_interval=75,
+        training_record_interval=25,
         training_data_dir="training_data/graph_rl",
         save_dir="trained_policies/graph_rl",
         batch_size=32,
@@ -115,14 +115,6 @@ def test_graph_rl_pipeline():
     # Define policy factory
     def policy_factory(seed: int) -> RLPolicy:
         return RLPolicy(seed=seed, config=rl_config)
-
-    # Create approach
-    _ = ImprovisationalTAMPApproach(
-        system,
-        policy_factory(config.seed),
-        seed=config.seed,
-        max_preimage_size=11,
-    )
 
     # Train and evaluate with graph-based collection
     metrics = train_and_evaluate(
@@ -178,14 +170,6 @@ def test_graph_mpc_pipeline():
             policy.add_target_shortcut(source_id, target_id)
 
         return policy
-
-    # Create approach
-    _ = ImprovisationalTAMPApproach(
-        system,
-        policy_factory(config.seed),
-        seed=config.seed,
-        max_preimage_size=11,
-    )
 
     # Run evaluation
     print("\nRunning evaluation with target shortcuts...")
@@ -246,14 +230,6 @@ def test_graph_rl2mpc_pipeline():
                 window_size=10,
             ),
         )
-
-    # Create approach
-    _ = ImprovisationalTAMPApproach(
-        system,
-        policy_factory(config.seed),
-        seed=config.seed,
-        max_preimage_size=11,
-    )
 
     # Run train_and_evaluate
     metrics = train_and_evaluate(

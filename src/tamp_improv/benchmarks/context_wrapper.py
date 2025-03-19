@@ -73,7 +73,7 @@ class ContextAwareWrapper(gym.Wrapper):
         raise AttributeError("Wrapped environment doesn't have reset_from_state")
 
     def augment_observation(self, obs: ObsType) -> ObsType:
-        """Augment observation with 1-hot vector for preimage atoms."""
+        """Augment observation with multi-hot vector for preimage atoms."""
         context = np.zeros(self.num_context_features, dtype=np.float32)
         if not self.current_preimage:
             return cast(ObsType, np.concatenate([obs, context]))

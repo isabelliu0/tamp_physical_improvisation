@@ -177,7 +177,7 @@ def collect_graph_based_training_data(
     approach: ImprovisationalTAMPApproach,
     config: dict[str, Any],
     max_shortcuts_per_graph: int = 100,
-    target_specific_shortcuts: bool = False,  # Whether to prioritize specific shortcuts
+    target_specific_shortcuts: bool = True,  # Whether to prioritize specific shortcuts
 ) -> TrainingData:
     """Collect training data by exploring the planning graph.
 
@@ -212,6 +212,7 @@ def collect_graph_based_training_data(
             hasattr(approach, "planning_graph") and approach.planning_graph is not None
         )
         planning_graph = approach.planning_graph
+        context_env = approach.context_env
 
         # Proactively collect states for all nodes
         observed_states = collect_states_for_all_nodes(
@@ -259,9 +260,11 @@ def collect_graph_based_training_data(
 
         print(f"Selected {len(selected_candidates)} shortcuts for training")
 
-        # Collect data for each selected shortcut
+        # Collect data (with augmented observations) for each selected shortcut
         for candidate in selected_candidates:
-            training_states.append(candidate.source_state)
+            context_env.set_context(candidate.source_atoms, candidate.target_preimage)
+            augmented_obs = context_env.augment_observation(candidate.source_state)
+            training_states.append(augmented_obs)
             current_atoms_list.append(candidate.source_atoms)
             preimages_list.append(candidate.target_preimage)
 
