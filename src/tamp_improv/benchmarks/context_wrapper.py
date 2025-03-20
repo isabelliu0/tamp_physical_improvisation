@@ -15,7 +15,7 @@ class ContextAwareWrapper(gym.Wrapper):
     """Wrapper that augments observations with context information."""
 
     def __init__(
-        self, env: gym.Env, perceiver: Perceiver[ObsType], max_preimage_size: int = 11
+        self, env: gym.Env, perceiver: Perceiver[ObsType], max_preimage_size: int = 12
     ) -> None:
         super().__init__(env)
         self.perceiver: Perceiver[ObsType] = perceiver

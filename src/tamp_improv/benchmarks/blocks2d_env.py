@@ -299,7 +299,16 @@ class Blocks2DEnv(gym.Env):
         )
 
         # Check for collisions - revert to previous state if collision
-        if self._check_collisions():
+        if check_collisions(
+            self.robot_position,
+            self.block_1_position,
+            self.block_2_position,
+            self.gripper_status,
+            self._robot_width,
+            self._robot_height,
+            self._block_width,
+            self._block_height,
+        ):
             self.state = prev_state
             obs = self._get_obs()
             info = self._get_info()
@@ -325,46 +334,6 @@ class Blocks2DEnv(gym.Env):
         terminated = goal_reached
 
         return obs, reward, terminated, False, info
-
-    def _check_collisions(self) -> bool:
-        """Check for collisions between objects."""
-        # Robot-Block1 collision with empty gripper
-        if self._check_collision_between(
-            self.robot_position, self.block_1_position
-        ) and np.isclose(self.gripper_status, 0.0, atol=1e-3):
-            return True
-
-        # Robot-Block2 collision with empty gripper
-        if self._check_collision_between(
-            self.robot_position, self.block_2_position
-        ) and np.isclose(self.gripper_status, 0.0, atol=1e-3):
-            return True
-
-        # Block1-Block2 collision
-        if self._check_collision_between(self.block_1_position, self.block_2_position):
-            return True
-
-        return False
-
-    def _check_collision_between(
-        self,
-        pos1: NDArray[np.float32],
-        pos2: NDArray[np.float32],
-    ) -> bool:
-        """Check collision between two positions."""
-        dx = abs(pos1[0] - pos2[0])
-        dy = abs(pos1[1] - pos2[1])
-
-        width_sum = self._block_width - 1e-3
-        height_sum = self._block_height - 1e-3
-
-        if np.array_equal(pos1, self.robot_position) or np.array_equal(
-            pos2, self.robot_position
-        ):
-            width_sum = (self._robot_width + self._block_width) / 2 - 1e-3
-            height_sum = (self._robot_height + self._block_height) / 2 - 1e-3
-
-        return dx < width_sum and dy < height_sum
 
     def _is_adjacent(
         self,
@@ -432,3 +401,66 @@ class Blocks2DEnv(gym.Env):
         img = fig2data(fig)
         plt.close(fig)
         return img
+
+
+def check_collisions(
+    robot_position: NDArray[np.float32],
+    block_1_position: NDArray[np.float32],
+    block_2_position: NDArray[np.float32],
+    gripper_status: float,
+    robot_width: float = 0.2,
+    robot_height: float = 0.2,
+    block_width: float = 0.2,
+    block_height: float = 0.2,
+) -> bool:
+    """Check for collisions between objects."""
+    # Robot-Block1 collision with empty gripper
+    if check_collision_between(
+        robot_position,
+        block_1_position,
+        robot_width,
+        robot_height,
+        block_width,
+        block_height,
+    ) and np.isclose(gripper_status, 0.0, atol=1e-3):
+        return True
+
+    # Robot-Block2 collision with empty gripper
+    if check_collision_between(
+        robot_position,
+        block_2_position,
+        robot_width,
+        robot_height,
+        block_width,
+        block_height,
+    ) and np.isclose(gripper_status, 0.0, atol=1e-3):
+        return True
+
+    # Block1-Block2 collision
+    if check_collision_between(
+        block_1_position,
+        block_2_position,
+        block_width,
+        block_height,
+        block_width,
+        block_height,
+    ):
+        return True
+
+    return False
+
+
+def check_collision_between(
+    pos1: NDArray[np.float32],
+    pos2: NDArray[np.float32],
+    width1: float = 0.2,
+    height1: float = 0.2,
+    width2: float = 0.2,
+    height2: float = 0.2,
+) -> bool:
+    """Check collision between two positions."""
+    dx = abs(pos1[0] - pos2[0])
+    dy = abs(pos1[1] - pos2[1])
+    width_sum = (width1 + width2) / 2 - 1e-3
+    height_sum = (height1 + height2) / 2 - 1e-3
+    return dx < width_sum and dy < height_sum

@@ -88,7 +88,7 @@ def test_graph_rl_pipeline():
         episodes_per_scenario=100,
         force_collect=True,
         render=True,
-        record_training=True,
+        record_training=False,
         training_record_interval=25,
         training_data_dir="training_data/graph_rl",
         save_dir="trained_policies/graph_rl",
