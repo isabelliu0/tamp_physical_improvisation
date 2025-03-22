@@ -1,5 +1,6 @@
 """Training utilities for improvisational approaches."""
 
+import pickle
 import time
 from copy import deepcopy
 from dataclasses import dataclass, field
@@ -82,22 +83,38 @@ def get_or_collect_training_data(
     """Get existing or collect new training data."""
     # Check if saved data exists
     data_path = config.get_training_data_path(system.name)
+    signatures_path = data_path / "trained_signatures.pkl"
 
     if not config.force_collect and data_path.exists():
         print(f"\nLoading existing training data from {data_path}")
         try:
             train_data = TrainingData.load(data_path)
             config.shortcut_info = train_data.config.get("shortcut_info", [])
+
+            if signatures_path.exists():
+                with open(signatures_path, "rb") as f:
+                    approach.trained_signatures = pickle.load(f)
+                print(f"Loaded {len(approach.trained_signatures)} trained signatures")
+
             # Verify config matches
             if (
                 train_data.config.get("seed") == config.seed
                 and train_data.config.get("collect_episodes") == config.collect_episodes
                 and train_data.config.get("max_steps") == config.max_steps
+                and train_data.config.get("using_context_wrapper", True)
+                == approach.use_context_wrapper
             ):
                 print(f"Loaded {len(train_data)} training scenarios")
                 train_data.config.update(config.__dict__)
                 return train_data
-            print("Existing data has different config, collecting new data...")
+
+            if (
+                train_data.config.get("using_context_wrapper", True)
+                != approach.use_context_wrapper
+            ):
+                print("Context wrapper setting has changed, collecting new data...")
+            else:
+                print("Existing data has different config, collecting new data...")
         except Exception as e:
             print(f"Error loading training data: {e}")
             print("Collecting new data instead...")
@@ -108,6 +125,12 @@ def get_or_collect_training_data(
     # Save the collected data
     print(f"\nSaving training data to {data_path}")
     train_data.save(data_path)
+
+    # Save trained signatures separately
+    if approach.trained_signatures:
+        print(f"Saving {len(approach.trained_signatures)} trained signatures")
+        with open(signatures_path, "wb") as f:
+            pickle.dump(approach.trained_signatures, f)
 
     return train_data
 
@@ -178,6 +201,7 @@ def train_and_evaluate(
     policy_factory: Callable[[int], Policy[ObsType, ActType]],
     config: TrainingConfig,
     policy_name: str,
+    use_context_wrapper: bool = True,
 ) -> Metrics:
     """Train and evaluate a policy on a system."""
     print(f"\nInitializing training for {system.name}...")
@@ -208,7 +232,11 @@ def train_and_evaluate(
 
     # Create approach with properly initialized policy
     approach = ImprovisationalTAMPApproach(
-        system, policy, seed=config.seed, max_preimage_size=config.max_preimage_size
+        system,
+        policy,
+        seed=config.seed,
+        max_preimage_size=config.max_preimage_size,
+        use_context_wrapper=use_context_wrapper,
     )
 
     # Load or collect training data for new policy

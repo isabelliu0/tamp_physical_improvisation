@@ -22,7 +22,7 @@ from tamp_improv.approaches.improvisational.training import (
 from tamp_improv.benchmarks.blocks2d import Blocks2DTAMPSystem
 
 
-def test_graph_training_collection(force_collect=True, render=True):
+def test_graph_training_collection():
     """Test collecting graph-based training data."""
     print("\n=== Testing Graph-Based Training Data Collection ===")
 
@@ -30,14 +30,15 @@ def test_graph_training_collection(force_collect=True, render=True):
         "seed": 42,
         "num_episodes": 3,
         "max_steps": 50,
+        "render": True,
         "collect_episodes": 1,
-        "force_collect": force_collect,
+        "force_collect": True,
         "training_data_dir": "training_data/graph_training_data",
     }
 
     print("\n1. Creating system...")
     system = Blocks2DTAMPSystem.create_default(
-        seed=config["seed"], render_mode="rgb_array" if render else None
+        seed=config["seed"], render_mode="rgb_array" if config["render"] else None
     )
 
     print("\n2. Creating approach...")
@@ -75,7 +76,7 @@ def test_graph_training_collection(force_collect=True, render=True):
     return train_data
 
 
-def test_graph_rl_pipeline():
+def test_graph_rl_pipeline(use_context_wrapper=False):
     """Test the full graph-based RL training and evaluation pipeline."""
     print("\n=== Testing Graph-Based RL Pipeline ===")
 
@@ -90,8 +91,8 @@ def test_graph_rl_pipeline():
         render=True,
         record_training=False,
         training_record_interval=25,
-        training_data_dir="training_data/graph_rl",
-        save_dir="trained_policies/graph_rl",
+        training_data_dir=f"training_data/graph_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
+        save_dir=f"trained_policies/graph_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
         batch_size=32,
         max_preimage_size=12,
     )
@@ -122,7 +123,8 @@ def test_graph_rl_pipeline():
         system,
         policy_factory,
         config,
-        policy_name="GraphRL",
+        policy_name=f"GraphRL{'_Context' if use_context_wrapper else ''}",
+        use_context_wrapper=use_context_wrapper,
     )
 
     print("\n=== Results ===")
@@ -135,7 +137,7 @@ def test_graph_rl_pipeline():
     return metrics
 
 
-def test_graph_mpc_pipeline():
+def test_graph_mpc_pipeline(use_context_wrapper=True):
     """Test MPC policy with specific target shortcuts."""
     print("\n=== Testing MPC Policy with Specific Target Shortcuts ===")
 
@@ -174,7 +176,13 @@ def test_graph_mpc_pipeline():
 
     # Run evaluation
     print("\nRunning evaluation with target shortcuts...")
-    metrics = train_and_evaluate(system, policy_factory, config, policy_name="GraphMPC")
+    metrics = train_and_evaluate(
+        system,
+        policy_factory,
+        config,
+        policy_name=f"GraphMPC{'_Context' if use_context_wrapper else ''}",
+        use_context_wrapper=use_context_wrapper,
+    )
 
     # Print results
     print("\nEvaluation Results:")
@@ -185,7 +193,7 @@ def test_graph_mpc_pipeline():
     return metrics
 
 
-def test_graph_rl2mpc_pipeline():
+def test_graph_rl2mpc_pipeline(use_context_wrapper=True):
     """Test RL2MPC policy with the training and evaluation pipeline."""
     print("\n=== Testing RL2MPC with Training Pipeline ===")
 
@@ -200,8 +208,8 @@ def test_graph_rl2mpc_pipeline():
         force_collect=False,
         record_training=False,
         training_record_interval=25,
-        training_data_dir="training_data/graph_rl",
-        save_dir="trained_policies/graph_rl",
+        training_data_dir=f"training_data/graph_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
+        save_dir=f"trained_policies/graph_rl{'_context' if use_context_wrapper else ''}",
         batch_size=32,
     )
 
@@ -234,7 +242,11 @@ def test_graph_rl2mpc_pipeline():
 
     # Run train_and_evaluate
     metrics = train_and_evaluate(
-        system, policy_factory, config, policy_name="GraphRL2MPC"
+        system,
+        policy_factory,
+        config,
+        policy_name=f"GraphRL2MPC{'_Context' if use_context_wrapper else ''}",
+        use_context_wrapper=use_context_wrapper,
     )
 
     # Print results
