@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import itertools
+import os
 from collections import deque
 from dataclasses import dataclass
 from typing import Any
 
 import gymnasium as gym
+import imageio.v2 as iio
 from relational_structs import (
     GroundAtom,
     GroundOperator,
@@ -106,8 +108,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         policy: Policy[ObsType, ActType],
         seed: int,
         planner_id: str = "pyperplan",
-        max_skill_steps: int = 1_000,
-        max_preimage_size: int = 10,
+        max_skill_steps: int = 200,
+        max_preimage_size: int = 12,
     ) -> None:
         """Initialize approach."""
         super().__init__(system, seed)
@@ -232,20 +234,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                         },
                     )
                 )
-
-                # If in training mode, collect this state and terminate
-                if self.training_mode:
-                    aug_obs = self.context_env.augment_observation(obs)
-                    return ApproachStepResult(
-                        action=self.policy.get_action(aug_obs),
-                        terminate=True,
-                        info={
-                            "training_state": obs,
-                            "current_atoms": atoms,
-                            "preimage": self._current_preimage,
-                        },
-                    )
-
                 aug_obs = self.context_env.augment_observation(obs)
                 return ApproachStepResult(action=self.policy.get_action(aug_obs))
 
@@ -444,6 +432,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     for edge in graph.node_to_outgoing_edges.get(source_node, [])
                 ):
                     continue
+                if target_node.id <= source_node.id:
+                    continue
 
                 source_atoms = set(source_node.atoms)
                 target_preimage = graph.preimages.get(target_node, set())
@@ -460,7 +450,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
                     for trained_sig in self.trained_signatures:
                         similarity = current_sig.similarity(trained_sig)
-                        if similarity > 0.9:  # Threshold to be tuned
+                        if similarity > 0.99:  # Threshold to be tuned
                             can_handle = True
                             best_similarity = max(best_similarity, similarity)
 
@@ -488,10 +478,17 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     graph.add_edge(source_node, target_node, None, is_shortcut=True)
 
     def _compute_planning_graph_edge_costs(
-        self, obs: ObsType, info: dict[str, Any]
+        self,
+        obs: ObsType,
+        info: dict[str, Any],
+        debug: bool = False,
     ) -> None:
         """Add edge costs to the current planning graph."""
         assert self.planning_graph is not None
+
+        if debug:
+            edge_videos_dir = "videos/edge_computation_videos"
+            os.makedirs(edge_videos_dir, exist_ok=True)
 
         _, init_atoms, _ = self.system.perceiver.reset(obs, info)
         initial_node = self.planning_graph.node_map[frozenset(init_atoms)]
@@ -504,10 +501,25 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         while queue:
             node = queue.pop()
             for edge in self.planning_graph.node_to_outgoing_edges[node]:
+                frames: list[Any] = []
+                video_filename = ""
+                if debug:
+                    edge_type = "shortcut" if edge.is_shortcut else "regular"
+                    video_filename = f"{edge_videos_dir}/edge_{edge.source.id}_to_{edge.target.id}_{edge_type}.mp4"  # pylint: disable=line-too-long
+
                 raw_obs, info = node_to_obs_info[node]
                 raw_env.reset_from_state(raw_obs)  # type: ignore
+
+                if debug:
+                    if hasattr(raw_env, "render") and self.training_mode is False:
+                        try:
+                            frames.append(raw_env.render())
+                        except Exception as e:
+                            print(f"Error rendering initial frame: {e}")
+
                 _, init_atoms, _ = self.system.perceiver.reset(raw_obs, info)
                 preimage = self.planning_graph.preimages[edge.target]
+
                 if edge.is_shortcut:
                     self.policy.configure_context(
                         PolicyContext(
@@ -536,6 +548,11 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     next_raw_obs, _, _, _, info = raw_env.step(act)
                     curr_raw_obs = next_raw_obs
                     atoms = self.system.perceiver.step(curr_raw_obs)
+
+                    if debug:
+                        if hasattr(raw_env, "render") and self.training_mode is False:
+                            frames.append(raw_env.render())
+
                     if edge.is_shortcut:
                         self.context_env.set_context(atoms, preimage)
                         curr_aug_obs = self.context_env.augment_observation(
@@ -548,11 +565,19 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
                     if preimage.issubset(atoms):
                         print(
-                            f"Added shortcut edge {edge.source.id} -> {edge.target.id} cost: {num_steps}. Is shortcut? {edge.is_shortcut}"  # pylint: disable=line-too-long
+                            f"Added edge {edge.source.id} -> {edge.target.id} cost: {num_steps}. Is shortcut? {edge.is_shortcut}"  # pylint: disable=line-too-long
                         )
+                        if debug and frames:
+                            iio.mimsave(
+                                video_filename.replace(".mp4", "_success.mp4"),
+                                frames,
+                                fps=5,
+                            )
                         break  # success
                 else:
                     # Edge expansion failed.
+                    if debug and frames:
+                        iio.mimsave(video_filename, frames, fps=5)
                     continue
 
                 assert edge.cost == float("inf")

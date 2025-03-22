@@ -49,6 +49,14 @@ class TrainingData:
 
         # Save config as JSON
         serializable_config = dict(self.config)
+
+        if "atom_to_index" in serializable_config:
+            # Convert keys to strings if they aren't already
+            atom_to_index = {
+                str(k): v for k, v in serializable_config["atom_to_index"].items()
+            }
+            serializable_config["atom_to_index"] = atom_to_index
+
         config_path = path / "config.json"
         with open(config_path, "w", encoding="utf-8") as f:
             json.dump(serializable_config, f, indent=2)
@@ -79,6 +87,12 @@ class TrainingData:
         config_path = path / "config.json"
         with open(config_path, "r", encoding="utf-8") as f:
             config = json.load(f)
+
+        if "atom_to_index" in config:
+            config["atom_to_index"] = {
+                k: int(v) if isinstance(v, str) else v
+                for k, v in config["atom_to_index"].items()
+            }
 
         return cls(
             states=states,

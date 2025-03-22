@@ -63,3 +63,7 @@ def main():
     log_path = Path(sys.argv[1])
     save_path = Path(sys.argv[2]) if len(sys.argv) > 2 else None
     create_training_plots(log_path, save_path)
+
+
+if __name__ == "__main__":
+    main()

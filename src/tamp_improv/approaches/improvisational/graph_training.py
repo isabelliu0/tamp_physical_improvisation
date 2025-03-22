@@ -176,7 +176,7 @@ def collect_graph_based_training_data(
     system: ImprovisationalTAMPSystem,
     approach: ImprovisationalTAMPApproach,
     config: dict[str, Any],
-    max_shortcuts_per_graph: int = 5,
+    max_shortcuts_per_graph: int = 100,
     target_specific_shortcuts: bool = True,  # Whether to prioritize specific shortcuts
 ) -> TrainingData:
     """Collect training data by exploring the planning graph.
@@ -212,6 +212,7 @@ def collect_graph_based_training_data(
             hasattr(approach, "planning_graph") and approach.planning_graph is not None
         )
         planning_graph = approach.planning_graph
+        context_env = approach.context_env
 
         # Proactively collect states for all nodes
         observed_states = collect_states_for_all_nodes(
@@ -232,8 +233,6 @@ def collect_graph_based_training_data(
             target_candidates = []
 
             for candidate in shortcut_candidates:
-                print_shortcut_atoms(candidate)
-
                 # Check if this is one of our target shortcuts
                 if is_target_shortcut_1(candidate) and 1 not in found_target_shortcuts:
                     print("Found TARGET SHORTCUT 1!")
@@ -261,9 +260,11 @@ def collect_graph_based_training_data(
 
         print(f"Selected {len(selected_candidates)} shortcuts for training")
 
-        # Collect data for each selected shortcut
+        # Collect data (with augmented observations) for each selected shortcut
         for candidate in selected_candidates:
-            training_states.append(candidate.source_state)
+            context_env.set_context(candidate.source_atoms, candidate.target_preimage)
+            augmented_obs = context_env.augment_observation(candidate.source_state)
+            training_states.append(augmented_obs)
             current_atoms_list.append(candidate.source_atoms)
             preimages_list.append(candidate.target_preimage)
 
@@ -317,6 +318,11 @@ def collect_graph_based_training_data(
 
     approach.training_mode = False
 
+    # Get the atom-to-index mapping from the context environment
+    atom_to_index = {}
+    if hasattr(context_env, "get_atom_index_mapping"):
+        atom_to_index = context_env.get_atom_index_mapping()
+
     return TrainingData(
         states=training_states,
         current_atoms=current_atoms_list,
@@ -324,6 +330,7 @@ def collect_graph_based_training_data(
         config={
             **config,
             "shortcut_info": shortcut_info,
+            "atom_to_index": atom_to_index,
         },
     )
 
@@ -352,12 +359,11 @@ def identify_shortcut_candidates(
         source_state = observed_states[source_node.id]
 
         for target_node in nodes:
-            # Skip self-connections
             if source_node == target_node:
                 continue
-
-            # Skip if we don't have a preimage for the target
             if target_node not in planning_graph.preimages:
+                continue
+            if target_node.id <= source_node.id:
                 continue
 
             # Check if there's already a direct edge from source to target
@@ -391,19 +397,6 @@ def identify_shortcut_candidates(
             )
 
     return shortcut_candidates
-
-
-def print_shortcut_atoms(candidate: ShortcutCandidate) -> None:
-    """Print the atoms involved in a shortcut candidate."""
-    print(
-        f"\nShortcut: Node {candidate.source_node.id} -> Node {candidate.target_node.id}"
-    )
-    print("Source atoms:")
-    for atom in sorted(candidate.source_atoms, key=str):
-        print(f"  - {atom}")
-    print("Target preimage:")
-    for atom in sorted(candidate.target_preimage, key=str):
-        print(f"  - {atom}")
 
 
 def is_target_shortcut_1(candidate: ShortcutCandidate) -> bool:
