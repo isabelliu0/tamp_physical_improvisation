@@ -103,19 +103,28 @@ class ContextAwareWrapper(gym.Wrapper):
         if hasattr(self.env, "configure_training"):
             self.env.configure_training(train_data)
 
-        # Collect all unique atoms from training data
-        unique_atoms = set()
-        for atoms_set in train_data.current_atoms:
-            for atom in atoms_set:
-                unique_atoms.add(str(atom))
-        for preimage in train_data.preimages:
-            for atom in preimage:
-                unique_atoms.add(str(atom))
+        # Load existing atom-to-index mapping if available
+        if "atom_to_index" in train_data.config and train_data.config["atom_to_index"]:
+            self._atom_to_index = train_data.config["atom_to_index"]
+            self._next_index = (
+                max(self._atom_to_index.values()) + 1 if self._atom_to_index else 0
+            )
+            print(f"Loaded {len(self._atom_to_index)} atoms with fixed indices")
+        else:
+            # Collect all unique atoms from training data
+            unique_atoms = set()
+            for atoms_set in train_data.current_atoms:
+                for atom in atoms_set:
+                    unique_atoms.add(str(atom))
+            for preimage in train_data.preimages:
+                for atom in preimage:
+                    unique_atoms.add(str(atom))
 
-        # Pre-register all atoms
-        for atom_str in unique_atoms:
-            self._get_atom_index(atom_str)
-        print(f"Registered {len(self._atom_to_index)} unique atoms with fixed indices")
+            for atom_str in unique_atoms:
+                self._get_atom_index(atom_str)
+
+            print(f"New atom-to-index mapping with {len(self._atom_to_index)} entries")
+
         for atom_str, idx in self._atom_to_index.items():
             print(f"Atom {atom_str} -> index {idx}")
 
@@ -130,3 +139,7 @@ class ContextAwareWrapper(gym.Wrapper):
         self._atom_to_index[atom_str] = idx
         self._next_index += 1
         return idx
+
+    def get_atom_index_mapping(self) -> dict[str, int]:
+        """Get the current atom to index mapping."""
+        return self._atom_to_index.copy()

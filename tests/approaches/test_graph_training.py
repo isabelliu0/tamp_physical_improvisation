@@ -93,6 +93,7 @@ def test_graph_rl_pipeline():
         training_data_dir="training_data/graph_rl",
         save_dir="trained_policies/graph_rl",
         batch_size=32,
+        max_preimage_size=12,
     )
 
     # RL configuration

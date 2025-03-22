@@ -318,6 +318,11 @@ def collect_graph_based_training_data(
 
     approach.training_mode = False
 
+    # Get the atom-to-index mapping from the context environment
+    atom_to_index = {}
+    if hasattr(context_env, "get_atom_index_mapping"):
+        atom_to_index = context_env.get_atom_index_mapping()
+
     return TrainingData(
         states=training_states,
         current_atoms=current_atoms_list,
@@ -325,6 +330,7 @@ def collect_graph_based_training_data(
         config={
             **config,
             "shortcut_info": shortcut_info,
+            "atom_to_index": atom_to_index,
         },
     )
 
@@ -353,12 +359,11 @@ def identify_shortcut_candidates(
         source_state = observed_states[source_node.id]
 
         for target_node in nodes:
-            # Skip self-connections
             if source_node == target_node:
                 continue
-
-            # Skip if we don't have a preimage for the target
             if target_node not in planning_graph.preimages:
+                continue
+            if target_node.id <= source_node.id:
                 continue
 
             # Check if there's already a direct edge from source to target

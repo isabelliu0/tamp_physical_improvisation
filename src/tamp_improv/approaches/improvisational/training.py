@@ -55,6 +55,9 @@ class TrainingConfig:
     # Shortcut information
     shortcut_info: list[dict[str, Any]] = field(default_factory=list)
 
+    # Context size for augmenting observations
+    max_preimage_size: int = 12
+
     def get_training_data_path(self, system_name: str) -> Path:
         """Get path for training data for specific system."""
         return Path(self.training_data_dir) / system_name
@@ -204,7 +207,9 @@ def train_and_evaluate(
     policy = policy_factory(config.seed)
 
     # Create approach with properly initialized policy
-    approach = ImprovisationalTAMPApproach(system, policy, seed=config.seed)
+    approach = ImprovisationalTAMPApproach(
+        system, policy, seed=config.seed, max_preimage_size=config.max_preimage_size
+    )
 
     # Load or collect training data for new policy
     if policy.requires_training and "_Loaded" not in policy_name:

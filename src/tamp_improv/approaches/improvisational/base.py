@@ -234,20 +234,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                         },
                     )
                 )
-
-                # If in training mode, collect this state and terminate
-                if self.training_mode:
-                    aug_obs = self.context_env.augment_observation(obs)
-                    return ApproachStepResult(
-                        action=self.policy.get_action(aug_obs),
-                        terminate=True,
-                        info={
-                            "training_state": obs,
-                            "current_atoms": atoms,
-                            "preimage": self._current_preimage,
-                        },
-                    )
-
                 aug_obs = self.context_env.augment_observation(obs)
                 return ApproachStepResult(action=self.policy.get_action(aug_obs))
 
@@ -446,6 +432,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     for edge in graph.node_to_outgoing_edges.get(source_node, [])
                 ):
                     continue
+                if target_node.id <= source_node.id:
+                    continue
 
                 source_atoms = set(source_node.atoms)
                 target_preimage = graph.preimages.get(target_node, set())
@@ -462,7 +450,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
                     for trained_sig in self.trained_signatures:
                         similarity = current_sig.similarity(trained_sig)
-                        if similarity > 0.9:  # Threshold to be tuned
+                        if similarity > 0.99:  # Threshold to be tuned
                             can_handle = True
                             best_similarity = max(best_similarity, similarity)
 
@@ -493,7 +481,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self,
         obs: ObsType,
         info: dict[str, Any],
-        debug: bool = True,
+        debug: bool = False,
     ) -> None:
         """Add edge costs to the current planning graph."""
         assert self.planning_graph is not None
