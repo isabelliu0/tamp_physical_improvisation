@@ -93,6 +93,29 @@ class ShortcutSignature:
             + 0.2 * target_type_sim
         )
 
+    def __eq__(self, other: object) -> bool:
+        """Check equality with another ShortcutSignature."""
+        if not isinstance(other, ShortcutSignature):
+            return False
+        return (
+            self.source_predicates == other.source_predicates
+            and self.target_predicates == other.target_predicates
+            and self.source_types == other.source_types
+            and self.target_types == other.target_types
+        )
+
+    def __hash__(self) -> int:
+        """Hash function for ShortcutSignature."""
+        # Convert sets to frozensets for hashing
+        return hash(
+            (
+                frozenset(self.source_predicates),
+                frozenset(self.target_predicates),
+                frozenset(self.source_types),
+                frozenset(self.target_types),
+            )
+        )
+
 
 class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
     """General improvisational TAMP approach.
@@ -110,26 +133,32 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         planner_id: str = "pyperplan",
         max_skill_steps: int = 200,
         max_preimage_size: int = 12,
+        use_context_wrapper: bool = True,
     ) -> None:
         """Initialize approach."""
         super().__init__(system, seed)
         self.policy = policy
         self.planner_id = planner_id
         self._max_skill_steps = max_skill_steps
+        self.use_context_wrapper = use_context_wrapper
+        self.context_env = None
 
         # Create context-aware wrapper
-        if not isinstance(system.wrapped_env, ContextAwareWrapper):
-            self.context_env = ContextAwareWrapper(
-                system.wrapped_env,
-                system.perceiver,
-                max_preimage_size=max_preimage_size,
-            )
-            system.wrapped_env = self.context_env
-        else:
-            self.context_env = system.wrapped_env
+        if self.use_context_wrapper:
+            if not isinstance(system.wrapped_env, ContextAwareWrapper):
+                self.context_env = ContextAwareWrapper(
+                    system.wrapped_env,
+                    system.perceiver,
+                    max_preimage_size=max_preimage_size,
+                )
+                system.wrapped_env = self.context_env
+            else:
+                self.context_env = system.wrapped_env
 
-        # Initialize policy with (context-aware) wrapped environment
-        policy.initialize(self.context_env)
+            # Initialize policy with (context-aware) wrapped environment
+            policy.initialize(self.context_env)
+        else:
+            policy.initialize(system.wrapped_env)
 
         # Get domain
         self.domain = system.get_domain()
@@ -198,9 +227,12 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 self.policy_active = False
                 self._current_preimage = set()
                 return self.step(obs, reward, terminated, truncated, info)
-            self.context_env.set_context(atoms, self._current_preimage)
-            aug_obs = self.context_env.augment_observation(obs)
-            return ApproachStepResult(action=self.policy.get_action(aug_obs))
+
+            if self.use_context_wrapper and self.context_env is not None:
+                self.context_env.set_context(atoms, self._current_preimage)
+                aug_obs = self.context_env.augment_observation(obs)
+                return ApproachStepResult(action=self.policy.get_action(aug_obs))
+            return ApproachStepResult(action=self.policy.get_action(obs))
 
         # Get next edge if needed
         assert self.planning_graph is not None
@@ -223,7 +255,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     self._current_preimage = set(target_node.atoms)
 
                 # Configure policy and context wrapper
-                self.context_env.set_context(atoms, self._current_preimage)
                 self.policy.configure_context(
                     PolicyContext(
                         preimage=self._current_preimage,
@@ -234,8 +265,11 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                         },
                     )
                 )
-                aug_obs = self.context_env.augment_observation(obs)
-                return ApproachStepResult(action=self.policy.get_action(aug_obs))
+                if self.use_context_wrapper and self.context_env is not None:
+                    self.context_env.set_context(atoms, self._current_preimage)
+                    aug_obs = self.context_env.augment_observation(obs)
+                    return ApproachStepResult(action=self.policy.get_action(aug_obs))
+                return ApproachStepResult(action=self.policy.get_action(obs))
 
             # Regular edge - use operator skill
             self._current_operator = self._current_edge.operator
@@ -460,7 +494,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     print(f"Found similar shortcut with similarity {best_similarity}")
 
                 # Configure context for environment and policy
-                self.context_env.set_context(source_atoms, target_preimage)
+                if self.use_context_wrapper and self.context_env is not None:
+                    self.context_env.set_context(source_atoms, target_preimage)
                 self.policy.configure_context(
                     PolicyContext(
                         preimage=target_preimage,
@@ -531,8 +566,11 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                             },
                         )
                     )
-                    self.context_env.set_context(init_atoms, preimage)
-                    aug_obs = self.context_env.augment_observation(raw_obs)
+                    if self.use_context_wrapper and self.context_env is not None:
+                        self.context_env.set_context(init_atoms, preimage)
+                        aug_obs = self.context_env.augment_observation(raw_obs)
+                    else:
+                        aug_obs = raw_obs
                     skill: Policy | Skill = self.policy
                 else:
                     assert edge.operator is not None
@@ -553,7 +591,11 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                         if hasattr(raw_env, "render") and self.training_mode is False:
                             frames.append(raw_env.render())
 
-                    if edge.is_shortcut:
+                    if (
+                        edge.is_shortcut
+                        and self.use_context_wrapper
+                        and self.context_env is not None
+                    ):
                         self.context_env.set_context(atoms, preimage)
                         curr_aug_obs = self.context_env.augment_observation(
                             curr_raw_obs

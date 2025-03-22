@@ -262,9 +262,14 @@ def collect_graph_based_training_data(
 
         # Collect data (with augmented observations) for each selected shortcut
         for candidate in selected_candidates:
-            context_env.set_context(candidate.source_atoms, candidate.target_preimage)
-            augmented_obs = context_env.augment_observation(candidate.source_state)
-            training_states.append(augmented_obs)
+            if approach.use_context_wrapper and context_env is not None:
+                context_env.set_context(
+                    candidate.source_atoms, candidate.target_preimage
+                )
+                augmented_obs = context_env.augment_observation(candidate.source_state)
+                training_states.append(augmented_obs)
+            else:
+                training_states.append(candidate.source_state)
             current_atoms_list.append(candidate.source_atoms)
             preimages_list.append(candidate.target_preimage)
 
@@ -320,7 +325,11 @@ def collect_graph_based_training_data(
 
     # Get the atom-to-index mapping from the context environment
     atom_to_index = {}
-    if hasattr(context_env, "get_atom_index_mapping"):
+    if (
+        approach.use_context_wrapper
+        and context_env is not None
+        and hasattr(context_env, "get_atom_index_mapping")
+    ):
         atom_to_index = context_env.get_atom_index_mapping()
 
     return TrainingData(
@@ -331,6 +340,7 @@ def collect_graph_based_training_data(
             **config,
             "shortcut_info": shortcut_info,
             "atom_to_index": atom_to_index,
+            "using_context_wrapper": approach.use_context_wrapper,
         },
     )
 
