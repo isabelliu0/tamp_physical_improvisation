@@ -109,35 +109,36 @@ class PickUpSkill(BaseBlocks2DSkill):
         obs: NDArray[np.float32],
     ) -> NDArray[np.float32]:
         robot_x, robot_y = obs[0:2]
-        robot_height = obs[3]
+        robot_width, robot_height = obs[2:4]
 
-        # Get which block to pick up and its position
+        # Get which block to pick up and positions
         block_obj = objects[1]
         if block_obj.name == "block1":
             block_x, block_y = obs[4:6]
+            other_block_x, other_block_y = obs[6:8]
         else:
             block_x, block_y = obs[6:8]
-        block_height = obs[9]
+            other_block_x, other_block_y = obs[4:6]
+        block_width, block_height = obs[8:10]
+
+        # If too close to the other block, move away first
+        if (
+            np.isclose(robot_y, other_block_y, atol=1e-3)
+            and abs(robot_x - other_block_x) < (robot_width + block_width) / 2
+        ):
+            dx = np.clip(robot_x - other_block_x, -0.1, 0.1)
+            return np.array([dx, 0.0, 0.0])
 
         # Target position above block
         target_y = block_y + block_height / 2 + robot_height / 2
 
-        # Calculate distance to block
-        dist_to_block = np.hypot(block_x - robot_x, target_y - robot_y)
-
-        if dist_to_block > 0.15:
-            # If we're far from the block, move towards it using combined motion
-            dx = np.clip(block_x - robot_x, -0.1, 0.1)
-            dy = np.clip(target_y - robot_y, -0.1, 0.1)
-            return np.array([dx, dy, 0.0])
-
+        # Move towards y-level of target position first
         if not np.isclose(robot_y, target_y, atol=1e-3):
-            # Fine positioning: align vertically first
             dy = np.clip(target_y - robot_y, -0.1, 0.1)
             return np.array([0.0, dy, 0.0])
 
+        # Move towards x-level of target position next
         if not np.isclose(robot_x, block_x, atol=1e-3):
-            # Then align horizontally
             dx = np.clip(block_x - robot_x, -0.1, 0.1)
             return np.array([dx, 0.0, 0.0])
 

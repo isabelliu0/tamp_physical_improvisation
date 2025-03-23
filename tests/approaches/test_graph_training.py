@@ -76,7 +76,7 @@ def test_graph_training_collection():
     return train_data
 
 
-def test_graph_rl_pipeline(use_context_wrapper=False):
+def test_graph_rl_pipeline(use_context_wrapper=True):
     """Test the full graph-based RL training and evaluation pipeline."""
     print("\n=== Testing Graph-Based RL Pipeline ===")
 
@@ -86,7 +86,7 @@ def test_graph_rl_pipeline(use_context_wrapper=False):
         num_episodes=1,
         max_steps=50,
         collect_episodes=2,
-        episodes_per_scenario=500,
+        episodes_per_scenario=200,
         force_collect=True,
         render=True,
         record_training=True,

@@ -236,7 +236,7 @@ def collect_graph_based_training_data(
                 # Check if this is one of our target shortcuts
                 if is_target_shortcut_1(candidate) and 1 not in found_target_shortcuts:
                     print("Found TARGET SHORTCUT 1!")
-                    # target_candidates.append(candidate)
+                    target_candidates.append(candidate)
                     found_target_shortcuts.append(1)
                 elif (
                     is_target_shortcut_2(candidate) and 2 not in found_target_shortcuts
