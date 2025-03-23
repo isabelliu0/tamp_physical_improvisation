@@ -9,6 +9,7 @@ from tamp_improv.approaches.improvisational.graph_training import (
     collect_graph_based_training_data,
 )
 from tamp_improv.approaches.improvisational.policies.mpc import MPCConfig, MPCPolicy
+from tamp_improv.approaches.improvisational.policies.multi_rl import MultiRLPolicy
 from tamp_improv.approaches.improvisational.policies.pushing import PushingPolicy
 from tamp_improv.approaches.improvisational.policies.rl import RLConfig, RLPolicy
 from tamp_improv.approaches.improvisational.policies.rl2mpc import (
@@ -89,7 +90,7 @@ def test_graph_rl_pipeline(use_context_wrapper=False):
         episodes_per_scenario=100,
         force_collect=True,
         render=True,
-        record_training=False,
+        record_training=True,
         training_record_interval=25,
         training_data_dir=f"training_data/graph_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
         save_dir=f"trained_policies/graph_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
@@ -124,6 +125,68 @@ def test_graph_rl_pipeline(use_context_wrapper=False):
         policy_factory,
         config,
         policy_name=f"GraphRL{'_Context' if use_context_wrapper else ''}",
+        use_context_wrapper=use_context_wrapper,
+    )
+
+    print("\n=== Results ===")
+    print(f"Success Rate: {metrics.success_rate:.2%}")
+    print(f"Average Episode Length: {metrics.avg_episode_length:.2f}")
+    print(f"Average Reward: {metrics.avg_reward:.2f}")
+    print(f"Training Time: {metrics.training_time:.2f} seconds")
+    print(f"Total Time: {metrics.total_time:.2f} seconds")
+
+    return metrics
+
+
+def test_multi_rl_pipeline(use_context_wrapper=False):
+    """Test the multi-policy RL training and evaluation pipeline."""
+    print("\n=== Testing Multi-Policy RL Pipeline ===")
+    print(f"Using context wrapper: {use_context_wrapper}")
+
+    # Configuration
+    config = TrainingConfig(
+        seed=42,
+        num_episodes=1,
+        max_steps=50,
+        collect_episodes=2,
+        episodes_per_scenario=100,
+        force_collect=True,
+        render=True,
+        record_training=True,
+        training_record_interval=25,
+        training_data_dir=f"training_data/multi_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
+        save_dir=f"trained_policies/multi_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
+        batch_size=32,
+        max_preimage_size=12,
+    )
+
+    # RL configuration
+    rl_config = RLConfig(
+        learning_rate=3e-4,
+        batch_size=32,
+        n_epochs=10,
+        gamma=0.99,
+        ent_coef=0.01,
+        device="cuda" if torch.cuda.is_available() else "cpu",
+    )
+
+    print("\n1. Creating system...")
+    system = Blocks2DTAMPSystem.create_default(
+        seed=config.seed, render_mode="rgb_array" if config.render else None
+    )
+
+    print("\n2. Training and evaluating policy...")
+
+    # Define policy factory
+    def policy_factory(seed: int) -> MultiRLPolicy:
+        return MultiRLPolicy(seed=seed, config=rl_config)
+
+    # Train and evaluate with graph-based collection
+    metrics = train_and_evaluate(
+        system,
+        policy_factory,
+        config,
+        policy_name=f"MultiRL{'_Context' if use_context_wrapper else ''}",
         use_context_wrapper=use_context_wrapper,
     )
 

@@ -584,6 +584,14 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 for _ in range(self._max_skill_steps):
                     act = skill.get_action(curr_aug_obs)
                     next_raw_obs, _, _, _, info = raw_env.step(act)
+                    # # DEBUG: print start/goal node indices of the current edge
+                    # if edge.source.id == 0 and edge.target.id == 3:
+                    #     print(f"DEBUG: Edge {edge.source.id} -> {edge.target.id}")
+                    #     print(f"DEBUG: Step {num_steps}")
+                    #     print(f"DEBUG: Action: {act}")
+                    #     print(f"DEBUG: Next raw obs: {next_raw_obs}")
+                    #     print(f"DEBUG: Current atoms: {init_atoms}")
+                    #     import ipdb; ipdb.set_trace()
                     curr_raw_obs = next_raw_obs
                     atoms = self.system.perceiver.step(curr_raw_obs)
 

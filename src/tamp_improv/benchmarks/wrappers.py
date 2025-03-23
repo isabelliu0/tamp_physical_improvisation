@@ -70,6 +70,13 @@ class ImprovWrapper(gym.Env):
             "max_steps", self.max_episode_steps
         )
 
+        # DEBUG: Print first few scenarios to verify
+        print("First few training scenarios:")
+        for i in range(min(3, len(self.training_states))):
+            print(f"  Scenario {i+1}:")
+            print(f"    Current atoms: {self.current_atoms_list[i]}")
+            print(f"    Preimage: {self.preimages_list[i]}")
+
     def reset(
         self,
         *,
