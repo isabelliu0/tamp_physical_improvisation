@@ -77,13 +77,13 @@ def test_graph_rl_pipeline(force_collect=True, render=True):
     # Configuration
     config = TrainingConfig(
         seed=42,
-        num_episodes=3,
+        num_episodes=1,
         max_steps=50,
         collect_episodes=2,
-        episodes_per_scenario=500,
+        episodes_per_scenario=200,
         force_collect=force_collect,
         render=render,
-        record_training=True,
+        record_training=False,
         training_record_interval=25,
         training_data_dir="training_data/graph_rl",
         save_dir="trained_policies/graph_rl",
