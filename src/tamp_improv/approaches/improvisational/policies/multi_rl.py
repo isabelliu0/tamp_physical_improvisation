@@ -82,9 +82,6 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
         print("\n=== Training Multi-Policy RL ===")
         print(f"Total training examples: {len(train_data.states)}")
 
-        # DEBUG:
-        # train_data = self.reorder_training_data(train_data)
-
         # Group training data by shortcut signature
         grouped_data = self._group_training_data(train_data)
         print("\nShortcut types identified:")
@@ -195,81 +192,3 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
             self._policies[key] = policy
 
         print(f"Loaded {len(self._policies)} specialized policies")
-
-    def reorder_training_data(self, train_data: TrainingData) -> TrainingData:
-        """Reorder shortcuts in training data to prioritize the second shortcut
-        type."""
-        print(f"Reordering {len(train_data.states)} training examples...")
-
-        # Group the data by shortcut signature
-        grouped_data: dict[str, dict[str, list]] = {}
-
-        for i in range(len(train_data)):
-            current_atoms = train_data.current_atoms[i]
-            preimage = train_data.preimages[i]
-
-            # Create context and get policy key
-            context: PolicyContext[ObsType, ActType] = PolicyContext(
-                current_atoms=current_atoms, preimage=preimage
-            )
-            signature = self._get_policy_key(context)
-
-            if signature not in grouped_data:
-                grouped_data[signature] = {
-                    "states": [],
-                    "current_atoms": [],
-                    "preimages": [],
-                    "info": [],
-                }
-
-            grouped_data[signature]["states"].append(train_data.states[i])
-            grouped_data[signature]["current_atoms"].append(current_atoms)
-            grouped_data[signature]["preimages"].append(preimage)
-
-            # Also keep track of shortcut_info if available
-            if "shortcut_info" in train_data.config and i < len(
-                train_data.config["shortcut_info"]
-            ):
-                grouped_data[signature]["info"].append(
-                    train_data.config["shortcut_info"][i]
-                )
-
-        # Print the groups found
-        print(f"Found {len(grouped_data)} shortcut types:")
-        signatures = list(grouped_data.keys())
-        for idx, sig in enumerate(signatures):
-            print(f"{idx+1}. {sig} - {len(grouped_data[sig]['states'])} examples")
-
-        if len(signatures) < 2:
-            print("Not enough shortcut types to reorder.")
-            return train_data
-
-        # Reverse the order (put signature 2 first, then signature 1)
-        new_order = signatures[::-1]  # Simple reverse
-
-        # Create a new reordered training data
-        new_states = []
-        new_current_atoms = []
-        new_preimages = []
-        new_shortcut_info = []
-
-        for sig in new_order:
-            new_states.extend(grouped_data[sig]["states"])
-            new_current_atoms.extend(grouped_data[sig]["current_atoms"])
-            new_preimages.extend(grouped_data[sig]["preimages"])
-            if "info" in grouped_data[sig]:
-                new_shortcut_info.extend(grouped_data[sig]["info"])
-
-        # Create new config with updated shortcut_info
-        new_config = dict(train_data.config)
-        if new_shortcut_info:
-            new_config["shortcut_info"] = new_shortcut_info
-
-        print(f"Reordered training data - new order: {new_order}")
-
-        return TrainingData(
-            states=new_states,
-            current_atoms=new_current_atoms,
-            preimages=new_preimages,
-            config=new_config,
-        )
