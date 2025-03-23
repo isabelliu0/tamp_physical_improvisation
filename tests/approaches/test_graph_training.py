@@ -86,10 +86,10 @@ def test_graph_rl_pipeline(use_context_wrapper=False):
         num_episodes=1,
         max_steps=50,
         collect_episodes=2,
-        episodes_per_scenario=100,
+        episodes_per_scenario=500,
         force_collect=True,
         render=True,
-        record_training=False,
+        record_training=True,
         training_record_interval=25,
         training_data_dir=f"training_data/graph_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
         save_dir=f"trained_policies/graph_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long

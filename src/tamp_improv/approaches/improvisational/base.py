@@ -516,7 +516,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self,
         obs: ObsType,
         info: dict[str, Any],
-        debug: bool = False,
+        debug: bool = True,
     ) -> None:
         """Add edge costs to the current planning graph."""
         assert self.planning_graph is not None
