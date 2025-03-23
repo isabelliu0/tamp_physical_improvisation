@@ -328,16 +328,26 @@ class Blocks2DEnv(gym.Env):
 
     def _check_collisions(self) -> bool:
         """Check for collisions between objects."""
+
+        # TODO refactor this (copied code from above)
+        block1_held = np.allclose(
+            self.block_1_position, self.robot_position, atol=1e-3
+        )
+        block2_held = np.allclose(
+            self.block_2_position, self.robot_position, atol=1e-3
+        )
+        block_held = block1_held or block2_held
+
         # Robot-Block1 collision with empty gripper
         if self._check_collision_between(
             self.robot_position, self.block_1_position
-        ) and np.isclose(self.gripper_status, 0.0, atol=1e-3):
+        ) and not block_held:
             return True
 
         # Robot-Block2 collision with empty gripper
         if self._check_collision_between(
             self.robot_position, self.block_2_position
-        ) and np.isclose(self.gripper_status, 0.0, atol=1e-3):
+        ) and not block_held:
             return True
 
         # Block1-Block2 collision
