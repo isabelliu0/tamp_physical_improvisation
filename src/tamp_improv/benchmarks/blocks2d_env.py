@@ -247,48 +247,48 @@ class Blocks2DEnv(gym.Env):
         new_gripper_status = float(gripper_action)
 
         # Handle block 2 pushing
-        if self._is_adjacent(prev_state.robot_position, self.block_2_position):
-            relative_pos = prev_state.robot_position[0] - self.block_2_position[0]
+        if self._is_adjacent(self.robot_position, self.block_2_position):
+            relative_pos = self.robot_position[0] - self.block_2_position[0]
             if relative_pos * dx < 0.0:  # Push
                 new_block_2_position[0] = np.clip(
                     self.block_2_position[0] + dx, 0.0, 1.0
                 ).astype(np.float32)
 
         # Check if already holding a block
-        block1_held = np.allclose(
-            self.block_1_position, prev_state.robot_position, atol=1e-3
-        )
-        block2_held = np.allclose(
-            self.block_2_position, prev_state.robot_position, atol=1e-3
-        )
+        block1_held = np.allclose(self.block_1_position, self.robot_position, atol=1e-3)
+        block2_held = np.allclose(self.block_2_position, self.robot_position, atol=1e-3)
+        block_held = block1_held or block2_held
 
         # Handle picking up and placing down a block
-        if self.gripper_status > 0.0:  # Already holding a block
+        picking_up_block1 = False
+        picking_up_block2 = False
+        if self.gripper_status > 0.0 and block_held:  # Already holding a block
             if new_gripper_status <= 0.0:  # Releasing grip
                 if block1_held:
                     new_block_1_position = np.array(
-                        [new_robot_position[0], 0.0], dtype=np.float32
+                        [self.block_1_position[0], 0.0], dtype=np.float32
                     )
                 elif block2_held:
                     new_block_2_position = np.array(
-                        [new_robot_position[0], 0.0], dtype=np.float32
+                        [self.block_2_position[0], 0.0], dtype=np.float32
                     )
             else:  # Continuing to hold
                 if block1_held:
                     new_block_1_position = new_robot_position.copy()
                 elif block2_held:
                     new_block_2_position = new_robot_position.copy()
-        elif new_gripper_status > 0.0:  # Attempting pickup
+        elif new_gripper_status > 0.0:  # Attempting to pick up
             # Calculate distances to blocks
             dist_to_block1 = np.linalg.norm(new_robot_position - self.block_1_position)
             dist_to_block2 = np.linalg.norm(new_robot_position - self.block_2_position)
-
             # Pick up a block that's close enough
             threshold = ((self._robot_width + self._block_width) / 2) + 1e-3
             if dist_to_block1 <= threshold:
                 new_block_1_position = new_robot_position.copy()
+                picking_up_block1 = True
             elif dist_to_block2 <= threshold:
                 new_block_2_position = new_robot_position.copy()
+                picking_up_block2 = True
 
         # Update state
         self.state = Blocks2DState(
@@ -299,15 +299,8 @@ class Blocks2DEnv(gym.Env):
         )
 
         # Check for collisions - revert to previous state if collision
-        if check_collisions(
-            self.robot_position,
-            self.block_1_position,
-            self.block_2_position,
-            self.gripper_status,
-            self._robot_width,
-            self._robot_height,
-            self._block_width,
-            self._block_height,
+        if self._check_collisions(
+            block1_held, block2_held, picking_up_block1, picking_up_block2
         ):
             self.state = prev_state
             obs = self._get_obs()
@@ -334,6 +327,50 @@ class Blocks2DEnv(gym.Env):
         terminated = goal_reached
 
         return obs, reward, terminated, False, info
+
+    def _check_collisions(
+        self,
+        block1_held: bool,
+        block2_held: bool,
+        picking_up_block1: bool,
+        picking_up_block2: bool,
+    ) -> bool:
+        """Check for collisions between objects."""
+        if (
+            self._check_collision_between(self.robot_position, self.block_1_position)
+            and not picking_up_block1
+            and not block1_held
+        ):
+            return True
+        if (
+            self._check_collision_between(self.robot_position, self.block_2_position)
+            and not picking_up_block2
+            and not block2_held
+        ):
+            return True
+        if self._check_collision_between(self.block_1_position, self.block_2_position):
+            return True
+        return False
+
+    def _check_collision_between(
+        self,
+        pos1: NDArray[np.float32],
+        pos2: NDArray[np.float32],
+    ) -> bool:
+        """Check collision between two positions."""
+        dx = abs(pos1[0] - pos2[0])
+        dy = abs(pos1[1] - pos2[1])
+
+        width_sum = self._block_width - 1e-3
+        height_sum = self._block_height - 1e-3
+
+        if np.array_equal(pos1, self.robot_position) or np.array_equal(
+            pos2, self.robot_position
+        ):
+            width_sum = (self._robot_width + self._block_width) / 2 - 1e-3
+            height_sum = (self._robot_height + self._block_height) / 2 - 1e-3
+
+        return dx < width_sum and dy < height_sum
 
     def _is_adjacent(
         self,
@@ -401,66 +438,3 @@ class Blocks2DEnv(gym.Env):
         img = fig2data(fig)
         plt.close(fig)
         return img
-
-
-def check_collisions(
-    robot_position: NDArray[np.float32],
-    block_1_position: NDArray[np.float32],
-    block_2_position: NDArray[np.float32],
-    gripper_status: float,
-    robot_width: float = 0.2,
-    robot_height: float = 0.2,
-    block_width: float = 0.2,
-    block_height: float = 0.2,
-) -> bool:
-    """Check for collisions between objects."""
-    # Robot-Block1 collision with empty gripper
-    if check_collision_between(
-        robot_position,
-        block_1_position,
-        robot_width,
-        robot_height,
-        block_width,
-        block_height,
-    ) and np.isclose(gripper_status, 0.0, atol=1e-3):
-        return True
-
-    # Robot-Block2 collision with empty gripper
-    if check_collision_between(
-        robot_position,
-        block_2_position,
-        robot_width,
-        robot_height,
-        block_width,
-        block_height,
-    ) and np.isclose(gripper_status, 0.0, atol=1e-3):
-        return True
-
-    # Block1-Block2 collision
-    if check_collision_between(
-        block_1_position,
-        block_2_position,
-        block_width,
-        block_height,
-        block_width,
-        block_height,
-    ):
-        return True
-
-    return False
-
-
-def check_collision_between(
-    pos1: NDArray[np.float32],
-    pos2: NDArray[np.float32],
-    width1: float = 0.2,
-    height1: float = 0.2,
-    width2: float = 0.2,
-    height2: float = 0.2,
-) -> bool:
-    """Check collision between two positions."""
-    dx = abs(pos1[0] - pos2[0])
-    dy = abs(pos1[1] - pos2[1])
-    width_sum = (width1 + width2) / 2 - 1e-3
-    height_sum = (height1 + height2) / 2 - 1e-3
-    return dx < width_sum and dy < height_sum

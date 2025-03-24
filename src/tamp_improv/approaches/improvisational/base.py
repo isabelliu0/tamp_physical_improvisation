@@ -224,6 +224,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             current_node = self._current_edge.source if self._current_edge else None
             if current_node and self._current_preimage.issubset(atoms):
                 print("Policy successfully achieved preimage!")
+                self._current_edge = None
                 self.policy_active = False
                 self._current_preimage = set()
                 return self.step(obs, reward, terminated, truncated, info)
@@ -518,7 +519,11 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         info: dict[str, Any],
         debug: bool = False,
     ) -> None:
-        """Add edge costs to the current planning graph."""
+        """Compute edge costs considering the path taken to reach each node.
+
+        Explores all potential paths through the graph to find the
+        optimal cost for each edge based on the path history.
+        """
         assert self.planning_graph is not None
 
         if debug:
@@ -527,32 +532,57 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
         _, init_atoms, _ = self.system.perceiver.reset(obs, info)
         initial_node = self.planning_graph.node_map[frozenset(init_atoms)]
-        node_to_obs_info: dict[PlanningGraphNode, tuple[ObsType, dict]] = {}
-        node_to_obs_info[initial_node] = (obs, info)
+
+        # Map from (path, source_node, target_node) to observation and info
+        path_states: dict[
+            tuple[tuple[int, ...], PlanningGraphNode, PlanningGraphNode],
+            tuple[ObsType, dict],
+        ] = {}
+        empty_path: tuple[int, ...] = tuple()
+        path_states[(empty_path, initial_node, initial_node)] = (obs, info)
 
         raw_env = self._get_base_env(self.system.wrapped_env)
 
-        queue = [initial_node]
+        # BFS to explore all paths
+        queue = [(initial_node, empty_path)]  # (node, path)
+        explored_segments = set()
         while queue:
-            node = queue.pop()
-            for edge in self.planning_graph.node_to_outgoing_edges[node]:
+            node, path = queue.pop(0)
+            if (path, node) in explored_segments:
+                continue
+            explored_segments.add((path, node))
+
+            if (path, node, node) not in path_states:
+                print(f"Warning: State not found for path {path} to node {node.id}")
+                continue
+
+            path_state, path_info = path_states[(path, node, node)]
+
+            # Try each outgoing edge from this node
+            for edge in self.planning_graph.node_to_outgoing_edges.get(node, []):
+                if (path, node, edge.target) in path_states:
+                    continue
+                if edge.target.id <= node.id:
+                    continue
+
                 frames: list[Any] = []
                 video_filename = ""
                 if debug:
                     edge_type = "shortcut" if edge.is_shortcut else "regular"
-                    video_filename = f"{edge_videos_dir}/edge_{edge.source.id}_to_{edge.target.id}_{edge_type}.mp4"  # pylint: disable=line-too-long
+                    path_str = (
+                        "-".join(str(node_id) for node_id in path) if path else "start"
+                    )
+                    video_filename = f"{edge_videos_dir}/edge_{node.id}_to_{edge.target.id}_{edge_type}_via_{path_str}.mp4"  # pylint: disable=line-too-long
 
-                raw_obs, info = node_to_obs_info[node]
-                raw_env.reset_from_state(raw_obs)  # type: ignore
+                raw_env.reset_from_state(path_state)  # type: ignore
 
-                if debug:
-                    if hasattr(raw_env, "render") and self.training_mode is False:
-                        try:
-                            frames.append(raw_env.render())
-                        except Exception as e:
-                            print(f"Error rendering initial frame: {e}")
+                if debug and hasattr(raw_env, "render") and not self.training_mode:
+                    try:
+                        frames.append(raw_env.render())
+                    except Exception as e:
+                        print(f"Error rendering initial frame: {e}")
 
-                _, init_atoms, _ = self.system.perceiver.reset(raw_obs, info)
+                _, init_atoms, _ = self.system.perceiver.reset(path_state, path_info)
                 preimage = self.planning_graph.preimages[edge.target]
 
                 if edge.is_shortcut:
@@ -568,18 +598,19 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     )
                     if self.use_context_wrapper and self.context_env is not None:
                         self.context_env.set_context(init_atoms, preimage)
-                        aug_obs = self.context_env.augment_observation(raw_obs)
+                        aug_obs = self.context_env.augment_observation(path_state)
                     else:
-                        aug_obs = raw_obs
+                        aug_obs = path_state
                     skill: Policy | Skill = self.policy
                 else:
                     assert edge.operator is not None
                     skill = self._get_skill(edge.operator)
                     skill.reset(edge.operator)
-                    aug_obs = raw_obs
+                    aug_obs = path_state
 
+                # Execute the skill and track steps
                 num_steps = 0
-                curr_raw_obs = raw_obs
+                curr_raw_obs = path_state
                 curr_aug_obs = aug_obs
                 for _ in range(self._max_skill_steps):
                     act = skill.get_action(curr_aug_obs)
@@ -587,9 +618,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     curr_raw_obs = next_raw_obs
                     atoms = self.system.perceiver.step(curr_raw_obs)
 
-                    if debug:
-                        if hasattr(raw_env, "render") and self.training_mode is False:
-                            frames.append(raw_env.render())
+                    if debug and hasattr(raw_env, "render") and not self.training_mode:
+                        frames.append(raw_env.render())
 
                     if (
                         edge.is_shortcut
@@ -606,8 +636,13 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     num_steps += 1
 
                     if preimage.issubset(atoms):
+                        path_str = (
+                            "-".join(str(node_id) for node_id in path)
+                            if path
+                            else "start"
+                        )
                         print(
-                            f"Added edge {edge.source.id} -> {edge.target.id} cost: {num_steps}. Is shortcut? {edge.is_shortcut}"  # pylint: disable=line-too-long
+                            f"Added edge {edge.source.id} -> {edge.target.id} cost: {num_steps} via {path_str}. Is shortcut? {edge.is_shortcut}"  # pylint: disable=line-too-long
                         )
                         if debug and frames:
                             iio.mimsave(
@@ -622,16 +657,26 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                         iio.mimsave(video_filename, frames, fps=5)
                     continue
 
-                assert edge.cost == float("inf")
-                edge.cost = num_steps
+                # Store cost for this specific path
+                edge.costs[(path, node.id)] = num_steps
+                if edge.cost == float("inf") or num_steps < edge.cost:
+                    edge.cost = num_steps
 
-                # NOTE: we are making the strong assumption that it does not
-                # matter which low-level state you are in within the abstract
-                # state, so if there are multiple observations for a node, we
-                # just keep one arbitrarily.
-                if edge.target not in node_to_obs_info:
-                    node_to_obs_info[edge.target] = (curr_raw_obs, info)
-                    queue.append(edge.target)
+                # Update path to include current node for next traversal
+                new_path = path + (node.id,)
+                path_states[(new_path, edge.target, edge.target)] = (curr_raw_obs, info)
+                queue.append((edge.target, new_path))
+
+        print("\nAll path costs:")
+        for edge in self.planning_graph.edges:
+            if edge.costs:
+                cost_details = []
+                for (p, _), cost in edge.costs.items():
+                    path_str = "-".join(str(node_id) for node_id in p) if p else "start"
+                    cost_details.append(f"via {path_str}: {cost}")
+                print(
+                    f"Edge {edge.source.id}->{edge.target.id}: {', '.join(cost_details)}"
+                )
 
     def _get_base_env(self, env: gym.Env) -> gym.Env:
         """Get the base environment by unwrapping wrappers if needed."""

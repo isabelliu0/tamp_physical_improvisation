@@ -10,7 +10,6 @@ import numpy as np
 from numpy.typing import NDArray
 from relational_structs import (
     GroundAtom,
-    LiftedAtom,
     LiftedOperator,
     Object,
     PDDLDomain,
@@ -27,7 +26,6 @@ from tamp_improv.benchmarks.base import (
 )
 from tamp_improv.benchmarks.blocks2d_env import (
     Blocks2DEnv,
-    check_collisions,
     is_block_in_target_area,
 )
 from tamp_improv.benchmarks.wrappers import ImprovWrapper
@@ -60,7 +58,6 @@ class Blocks2DPredicates:
         self.clear = Predicate("Clear", [types.surface])
         self.is_target = Predicate("IsTarget", [types.surface])
         self.not_is_target = Predicate("NotIsTarget", [types.surface])
-        self.no_collision = Predicate("NoCollision", [])
 
     def __getitem__(self, key: str) -> Predicate:
         """Get predicate by name."""
@@ -75,7 +72,6 @@ class Blocks2DPredicates:
             self.clear,
             self.is_target,
             self.not_is_target,
-            self.no_collision,
         }
 
 
@@ -113,35 +109,36 @@ class PickUpSkill(BaseBlocks2DSkill):
         obs: NDArray[np.float32],
     ) -> NDArray[np.float32]:
         robot_x, robot_y = obs[0:2]
-        robot_height = obs[3]
+        robot_width, robot_height = obs[2:4]
 
-        # Get which block to pick up and its position
+        # Get which block to pick up and positions
         block_obj = objects[1]
         if block_obj.name == "block1":
             block_x, block_y = obs[4:6]
+            other_block_x, other_block_y = obs[6:8]
         else:
             block_x, block_y = obs[6:8]
-        block_height = obs[9]
+            other_block_x, other_block_y = obs[4:6]
+        block_width, block_height = obs[8:10]
+
+        # If too close to the other block, move away first
+        if (
+            np.isclose(robot_y, other_block_y, atol=1e-3)
+            and abs(robot_x - other_block_x) < (robot_width + block_width) / 2
+        ):
+            dx = np.clip(robot_x - other_block_x, -0.1, 0.1)
+            return np.array([dx, 0.0, 0.0])
 
         # Target position above block
         target_y = block_y + block_height / 2 + robot_height / 2
 
-        # Calculate distance to block
-        dist_to_block = np.hypot(block_x - robot_x, target_y - robot_y)
-
-        if dist_to_block > 0.15:
-            # If we're far from the block, move towards it using combined motion
-            dx = np.clip(block_x - robot_x, -0.1, 0.1)
-            dy = np.clip(target_y - robot_y, -0.1, 0.1)
-            return np.array([dx, dy, 0.0])
-
+        # Move towards y-level of target position first
         if not np.isclose(robot_y, target_y, atol=1e-3):
-            # Fine positioning: align vertically first
             dy = np.clip(target_y - robot_y, -0.1, 0.1)
             return np.array([0.0, dy, 0.0])
 
+        # Move towards x-level of target position next
         if not np.isclose(robot_x, block_x, atol=1e-3):
-            # Then align horizontally
             dx = np.clip(block_x - robot_x, -0.1, 0.1)
             return np.array([dx, 0.0, 0.0])
 
@@ -270,7 +267,6 @@ class Blocks2DPerceiver(Perceiver[NDArray[np.float32]]):
 
         # Get positions from observation
         robot_x, robot_y = obs[0:2]
-        robot_width, robot_height = obs[2:4]
         block_1_x, block_1_y = obs[4:6]
         block_2_x, block_2_y = obs[6:8]
         block_width, block_height = obs[8:10]
@@ -280,19 +276,6 @@ class Blocks2DPerceiver(Perceiver[NDArray[np.float32]]):
         # Add target identification predicates
         atoms.add(self.predicates["IsTarget"]([self._target_area]))
         atoms.add(self.predicates["NotIsTarget"]([self._table]))
-
-        # Check for collisions
-        if not check_collisions(
-            np.array([robot_x, robot_y], dtype=np.float32),
-            np.array([block_1_x, block_1_y], dtype=np.float32),
-            np.array([block_2_x, block_2_y], dtype=np.float32),
-            gripper_status,
-            robot_width,
-            robot_height,
-            block_width,
-            block_height,
-        ):
-            atoms.add(GroundAtom(self.predicates["NoCollision"], []))
 
         # Check gripper status
         block1_held = False
@@ -451,7 +434,6 @@ class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.floa
                     predicates["GripperEmpty"]([robot]),
                     predicates["On"]([block, surface]),
                     predicates["NotIsTarget"]([surface]),
-                    LiftedAtom(predicates["NoCollision"], []),
                 },
                 add_effects={
                     predicates["Holding"]([robot, block]),
@@ -469,7 +451,6 @@ class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.floa
                     predicates["GripperEmpty"]([robot]),
                     predicates["On"]([block, surface]),
                     predicates["IsTarget"]([surface]),
-                    LiftedAtom(predicates["NoCollision"], []),
                 },
                 add_effects={
                     predicates["Holding"]([robot, block]),
@@ -487,7 +468,6 @@ class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.floa
                     predicates["Holding"]([robot, block]),
                     predicates["Clear"]([surface]),
                     predicates["NotIsTarget"]([surface]),
-                    LiftedAtom(predicates["NoCollision"], []),
                 },
                 add_effects={
                     predicates["On"]([block, surface]),
@@ -502,7 +482,6 @@ class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.floa
                     predicates["Holding"]([robot, block]),
                     predicates["Clear"]([surface]),
                     predicates["IsTarget"]([surface]),
-                    LiftedAtom(predicates["NoCollision"], []),
                 },
                 add_effects={
                     predicates["On"]([block, surface]),
