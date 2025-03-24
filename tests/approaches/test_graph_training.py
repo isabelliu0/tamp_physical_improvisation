@@ -89,11 +89,11 @@ def test_graph_rl_pipeline(use_context_wrapper):
         num_episodes=1,
         max_steps=50,
         collect_episodes=2,
-        episodes_per_scenario=200,
+        episodes_per_scenario=1000,
         force_collect=True,
         render=True,
-        record_training=True,
-        training_record_interval=25,
+        record_training=False,
+        training_record_interval=250,
         training_data_dir=f"training_data/graph_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
         save_dir=f"trained_policies/graph_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
         batch_size=32,
@@ -140,10 +140,10 @@ def test_graph_rl_pipeline(use_context_wrapper):
     return metrics
 
 
-def test_multi_rl_pipeline(use_context_wrapper=False):
+@pytest.mark.parametrize("use_context_wrapper", [True, False])
+def test_multi_rl_pipeline(use_context_wrapper):
     """Test the multi-policy RL training and evaluation pipeline."""
     print("\n=== Testing Multi-Policy RL Pipeline ===")
-    print(f"Using context wrapper: {use_context_wrapper}")
 
     # Configuration
     config = TrainingConfig(
@@ -151,11 +151,11 @@ def test_multi_rl_pipeline(use_context_wrapper=False):
         num_episodes=1,
         max_steps=50,
         collect_episodes=2,
-        episodes_per_scenario=100,
+        episodes_per_scenario=1000,
         force_collect=True,
         render=True,
-        record_training=True,
-        training_record_interval=25,
+        record_training=False,
+        training_record_interval=250,
         training_data_dir=f"training_data/multi_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
         save_dir=f"trained_policies/multi_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
         batch_size=32,

@@ -1,6 +1,7 @@
 """Multi-Policy RL implementation."""
 
 import copy
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -42,15 +43,27 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
         # specialized policies as needed
 
     def _get_policy_key(self, context: PolicyContext) -> str:
-        """Create a unique key for a policy based on the context."""
-        source_preds = {atom.predicate.name for atom in context.current_atoms}
-        target_preds = {atom.predicate.name for atom in context.preimage}
+        """Create a unique key for a policy based on the context.
 
-        # Sort for consistent ordering
-        source_str = ",".join(sorted(source_preds))
-        target_str = ",".join(sorted(target_preds))
+        Encodes both predicates and object information to ensure
+        different shortcuts with similar structure but different objects
+        get different policies.
+        """
+        # Get ground atoms as strings to preserve object information
+        source_atoms_str = sorted([str(atom) for atom in context.current_atoms])
+        target_atoms_str = sorted([str(atom) for atom in context.preimage])
 
-        return f"{source_str}|{target_str}"
+        # Create hash of the source and target atoms
+        source_hash = hashlib.md5("|".join(source_atoms_str).encode()).hexdigest()[:8]
+        target_hash = hashlib.md5("|".join(target_atoms_str).encode()).hexdigest()[:8]
+
+        # Include source and target node IDs if available
+        source_id = context.info.get("source_node_id", "")
+        target_id = context.info.get("target_node_id", "")
+
+        if source_id != "" and target_id != "":
+            return f"n{source_id}-to-n{target_id}_{source_hash}_{target_hash}"
+        return f"{source_hash}_{target_hash}"
 
     def configure_context(self, context: PolicyContext) -> None:
         """Configure policy with context information."""
@@ -84,13 +97,6 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
 
         # Group training data by shortcut signature
         grouped_data = self._group_training_data(train_data)
-        print("\nShortcut types identified:")
-        for key, group in grouped_data.items():
-            source, target = key.split("|")
-            print(f"- Key: {key}")
-            print(f"  Source predicates: {source}")
-            print(f"  Target predicates: {target}")
-            print(f"  Training examples: {len(group.states)}")
 
         # Train a policy for each group
         for policy_key, group_data in grouped_data.items():
@@ -112,14 +118,18 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
     def _group_training_data(self, train_data: TrainingData) -> dict[str, TrainingData]:
         """Group training data by shortcut signature."""
         grouped: dict[str, dict[str, list]] = {}
+        shortcut_info = train_data.config.get("shortcut_info", [])
 
         for i in range(len(train_data)):
             current_atoms = train_data.current_atoms[i]
             preimage = train_data.preimages[i]
+            info = {}
+            if i < len(shortcut_info):
+                info = shortcut_info[i]
 
             # Create a context and get the key
             context: PolicyContext[ObsType, ActType] = PolicyContext(
-                current_atoms=current_atoms, preimage=preimage
+                current_atoms=current_atoms, preimage=preimage, info=info
             )
             policy_key = self._get_policy_key(context)
 
@@ -163,7 +173,7 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
 
         # Save each policy in its own subdirectory
         for key, policy in self._policies.items():
-            safe_key = key.replace("|", "_").replace(",", "-")
+            safe_key = "".join(c if c.isalnum() or c in "-_" else "_" for c in key)
             policy_path = os.path.join(path, f"policy_{safe_key}")
             policy.save(policy_path)
 
@@ -183,7 +193,7 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
 
         self._policies = {}
         for key in manifest["policies"]:
-            safe_key = key.replace("|", "_").replace(",", "-")
+            safe_key = "".join(c if c.isalnum() or c in "-_" else "_" for c in key)
             policy_path = os.path.join(path, f"policy_{safe_key}")
 
             policy: RLPolicy = RLPolicy(self._seed, self.config)
