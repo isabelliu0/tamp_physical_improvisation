@@ -178,6 +178,14 @@ class PutDownSkill(BaseBlocks2DSkill):
             target_x = 0.7
             target_y = 0.0
 
+        # Check if block is already on the target surface
+        if np.isclose(robot_x, target_x, atol=1e-3) and np.isclose(
+            robot_y, target_y, atol=1e-3
+        ):
+            if gripper_status > 0.0:
+                return np.array([0.0, 0.0, -1.0])
+            return np.array([0.0, 0.0, 0.0])
+
         # Target position above drop location
         target_y = target_y + block_height / 2 + robot_height / 2
 
