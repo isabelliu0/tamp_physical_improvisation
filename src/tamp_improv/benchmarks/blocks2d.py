@@ -181,24 +181,15 @@ class PutDownSkill(BaseBlocks2DSkill):
         # Target position above drop location
         target_y = target_y + block_height / 2 + robot_height / 2
 
-        # Calculate distance to target
-        dist_to_target = np.hypot(target_x - robot_x, target_y - robot_y)
-
-        if dist_to_target > 0.15:
-            # If we're far from the target, use combined motion
-            dx = np.clip(target_x - robot_x, -0.1, 0.1)
-            dy = np.clip(target_y - robot_y, -0.1, 0.1)
-            return np.array([dx, dy, gripper_status])
-
-        if not np.isclose(robot_x, target_x, atol=1e-3):
-            # Fine positioning: align horizontally first
-            dx = np.clip(target_x - robot_x, -0.1, 0.1)
-            return np.array([dx, 0.0, gripper_status])
-
-        if robot_y - target_y > 0.0:
-            # Then align vertically
+        # Move towards y-level of target position first
+        if not np.isclose(robot_y, target_y, atol=1e-3):
             dy = np.clip(target_y - robot_y, -0.1, 0.1)
             return np.array([0.0, dy, gripper_status])
+
+        # Move towards x-level of target position next
+        if not np.isclose(robot_x, target_x, atol=1e-3):
+            dx = np.clip(target_x - robot_x, -0.1, 0.1)
+            return np.array([dx, 0.0, gripper_status])
 
         # If aligned and holding block, release it
         if gripper_status > 0.0:
