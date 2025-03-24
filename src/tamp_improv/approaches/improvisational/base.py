@@ -533,44 +533,46 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         _, init_atoms, _ = self.system.perceiver.reset(obs, info)
         initial_node = self.planning_graph.node_map[frozenset(init_atoms)]
 
-        # Map from (path_key, source_node, target_node) to observation and info
+        # Map from (path, source_node, target_node) to observation and info
         path_states: dict[
-            tuple[str, PlanningGraphNode, PlanningGraphNode], tuple[ObsType, dict]
+            tuple[tuple[int, ...], PlanningGraphNode, PlanningGraphNode],
+            tuple[ObsType, dict],
         ] = {}
-        path_states[("0", initial_node, initial_node)] = (obs, info)
+        empty_path: tuple[int, ...] = tuple()
+        path_states[(empty_path, initial_node, initial_node)] = (obs, info)
 
         raw_env = self._get_base_env(self.system.wrapped_env)
 
         # BFS to explore all paths
-        queue = [(initial_node, "0", "0")]  # (node, path_key, path_description)
+        queue = [(initial_node, empty_path)]  # (node, path)
         explored_segments = set()
         while queue:
-            node, path_key, path_desc = queue.pop()
-            if (path_key, node) in explored_segments:
+            node, path = queue.pop(0)
+            if (path, node) in explored_segments:
                 continue
-            explored_segments.add((path_key, node))
+            explored_segments.add((path, node))
 
-            if (path_key, node, node) not in path_states:
-                print(f"Warning: State not found for path {path_key} to node {node.id}")
+            if (path, node, node) not in path_states:
+                print(f"Warning: State not found for path {path} to node {node.id}")
                 continue
 
-            path_state, path_info = path_states[(path_key, node, node)]
+            path_state, path_info = path_states[(path, node, node)]
 
             # Try each outgoing edge from this node
             for edge in self.planning_graph.node_to_outgoing_edges.get(node, []):
-                edge_key = f"{path_key}-{node.id}-{edge.target.id}"
-                # Skip if we've already explored this exact edge via this exact path
-                if (path_key, node, edge.target) in path_states:
+                if (path, node, edge.target) in path_states:
                     continue
-                # Skip backward edges
-                if edge.target.id <= edge.source.id:
+                if edge.target.id <= node.id:
                     continue
 
                 frames: list[Any] = []
                 video_filename = ""
                 if debug:
                     edge_type = "shortcut" if edge.is_shortcut else "regular"
-                    video_filename = f"{edge_videos_dir}/edge_{node.id}_to_{edge.target.id}_{edge_type}_via_{path_desc}.mp4"  # pylint: disable=line-too-long
+                    path_str = (
+                        "-".join(str(node_id) for node_id in path) if path else "start"
+                    )
+                    video_filename = f"{edge_videos_dir}/edge_{node.id}_to_{edge.target.id}_{edge_type}_via_{path_str}.mp4"  # pylint: disable=line-too-long
 
                 raw_env.reset_from_state(path_state)  # type: ignore
 
@@ -634,8 +636,13 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     num_steps += 1
 
                     if preimage.issubset(atoms):
+                        path_str = (
+                            "-".join(str(node_id) for node_id in path)
+                            if path
+                            else "start"
+                        )
                         print(
-                            f"Added edge {edge.source.id} -> {edge.target.id} cost: {num_steps} via {path_desc}. Is shortcut? {edge.is_shortcut}"  # pylint: disable=line-too-long
+                            f"Added edge {edge.source.id} -> {edge.target.id} cost: {num_steps} via {path_str}. Is shortcut? {edge.is_shortcut}"  # pylint: disable=line-too-long
                         )
                         if debug and frames:
                             iio.mimsave(
@@ -650,23 +657,26 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                         iio.mimsave(video_filename, frames, fps=5)
                     continue
 
-                if not hasattr(edge, "costs"):
-                    edge.costs = {}
-                edge.costs[(path_desc, node.id)] = num_steps
-
+                # Store cost for this specific path
+                edge.costs[(path, node.id)] = num_steps
                 if edge.cost == float("inf") or num_steps < edge.cost:
                     edge.cost = num_steps
 
-                path_states[(edge_key, edge.target, edge.target)] = (curr_raw_obs, info)
-                queue.append((edge.target, edge_key, f"{path_desc}->{node.id}"))
+                # Update path to include current node for next traversal
+                new_path = path + (node.id,)
+                path_states[(new_path, edge.target, edge.target)] = (curr_raw_obs, info)
+                queue.append((edge.target, new_path))
 
         print("\nAll path costs:")
         for edge in self.planning_graph.edges:
-            if hasattr(edge, "costs") and edge.costs:
-                cost_details = ", ".join(
-                    [f"via {path}: {cost}" for (path, _), cost in edge.costs.items()]
+            if edge.costs:
+                cost_details = []
+                for (p, _), cost in edge.costs.items():
+                    path_str = "-".join(str(node_id) for node_id in p) if p else "start"
+                    cost_details.append(f"via {path_str}: {cost}")
+                print(
+                    f"Edge {edge.source.id}->{edge.target.id}: {', '.join(cost_details)}"
                 )
-                print(f"Edge {edge.source.id}->{edge.target.id}: {cost_details}")
 
     def _get_base_env(self, env: gym.Env) -> gym.Env:
         """Get the base environment by unwrapping wrappers if needed."""

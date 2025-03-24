@@ -33,8 +33,9 @@ class PlanningGraphEdge:
     cost: float = float("inf")
     is_shortcut: bool = False
 
-    # Store path-dependent costs: (path_desc, node_id) -> cost
-    costs: dict[tuple[str, int], float] = field(default_factory=dict)
+    # Store path-dependent costs: (path, source_node_id) -> cost
+    # where path is a tuple of node IDs
+    costs: dict[tuple[tuple[int, ...], int], float] = field(default_factory=dict)
 
     def __hash__(self) -> int:
         return hash((self.source, self.target, self.operator))
@@ -48,20 +49,19 @@ class PlanningGraphEdge:
             and self.operator == other.operator
         )
 
-    def get_cost(self, path_desc: str) -> float:
+    def get_cost(self, path: tuple[int, ...]) -> float:
         """Get the cost of this edge when coming via the specified path."""
-        if not hasattr(self, "costs") or not self.costs:
+        if not self.costs:
             return self.cost
 
         # Try to find exact path match
-        for (p_desc, _), cost in self.costs.items():
-            if p_desc == path_desc:
+        for (p, _), cost in self.costs.items():
+            if p == path:
                 return cost
 
-        # If no exact match, look for a path that includes the same nodes
-        # but might have a different complete path history
-        for (p_desc, node_id), cost in self.costs.items():
-            if p_desc.endswith(f"->{self.source.id}") and node_id == self.source.id:
+        # If no exact match, look for a path ending with the same node
+        for (p, node_id), cost in self.costs.items():
+            if p and p[-1] == self.source.id and node_id == self.source.id:
                 return cost
 
         # Default to the minimum cost if no matching path is found
@@ -157,23 +157,24 @@ class PlanningGraph:
         goal_node = goal_nodes[0]
 
         # Modified Dijkstra's algorithm that considers the path taken
-        distances: dict[tuple[PlanningGraphNode, str], float] = {}
+        distances: dict[tuple[PlanningGraphNode, tuple[int, ...]], float] = {}
         previous: dict[
-            tuple[PlanningGraphNode, str],
-            tuple[tuple[PlanningGraphNode, str], PlanningGraphEdge] | None,
+            tuple[PlanningGraphNode, tuple[int, ...]],
+            tuple[tuple[PlanningGraphNode, tuple[int, ...]], PlanningGraphEdge] | None,
         ] = {}
 
-        # Initialize the start state: (node, path_desc)
-        start_state = (initial_node, "0")
+        # Initialize with empty path for initial node
+        empty_path: tuple[int, ...] = tuple()
+        start_state = (initial_node, empty_path)
         distances[start_state] = 0
         previous[start_state] = None
 
         # Priority queue for Dijkstra's algorithm
         # (use a counter to break ties and avoid comparing non-comparable objects)
         counter = itertools.count()
-        queue: list[tuple[float, int, tuple[PlanningGraphNode, str]]] = [
+        queue: list[tuple[float, int, tuple[PlanningGraphNode, tuple[int, ...]]]] = [
             (0, next(counter), start_state)
-        ]  # (distance, counter, (node, path_desc))
+        ]  # (distance, counter, (node, path))
 
         # Track visited states to avoid cycles
         visited = set()
@@ -194,7 +195,7 @@ class PlanningGraph:
             for edge in [e for e in self.edges if e.source == current_node]:
                 edge_cost = edge.get_cost(current_path)
                 new_dist = current_dist + edge_cost
-                new_path = f"{current_path}->{current_node.id}"
+                new_path = current_path + (current_node.id,)
                 new_state = (edge.target, new_path)
 
                 # If we found a better path, update
@@ -207,8 +208,7 @@ class PlanningGraph:
 
         # Find the best goal state
         goal_states = [(n, p) for (n, p) in distances if n == goal_node]
-        if not goal_states:
-            return []  # No path found
+        assert goal_states, "No goal state found"
 
         best_goal_state = min(goal_states, key=lambda s: distances.get(s, float("inf")))
 
@@ -218,7 +218,7 @@ class PlanningGraph:
         while current_state != start_state:
             prev_entry = previous.get(current_state)
             if prev_entry is None:
-                return []  # No valid path found
+                raise ValueError("No valid path found")
             prev_state, edge = prev_entry
             path.append(edge)
             current_state = prev_state
@@ -229,12 +229,13 @@ class PlanningGraph:
         print(f"Shortest path's cost: {total_cost}")
         path_details = []
         for edge in path:
-            if hasattr(edge, "costs") and edge.costs:
-                cost_details = ", ".join(
-                    [f"via {path}: {cost}" for (path, _), cost in edge.costs.items()]
-                )
+            if edge.costs:
+                cost_details = []
+                for (p, _), cost in edge.costs.items():
+                    path_str = "-".join(str(node_id) for node_id in p) if p else "start"
+                    cost_details.append(f"via {path_str}: {cost}")
                 path_details.append(
-                    f"{edge.source.id}->{edge.target.id} [{cost_details}]"
+                    f"{edge.source.id}->{edge.target.id} [{', '.join(cost_details)}]"
                 )
             else:
                 path_details.append(

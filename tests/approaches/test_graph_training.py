@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import pytest
 import torch
 
 from tamp_improv.approaches.improvisational.base import ImprovisationalTAMPApproach
@@ -76,7 +77,8 @@ def test_graph_training_collection():
     return train_data
 
 
-def test_graph_rl_pipeline(use_context_wrapper=True):
+@pytest.mark.parametrize("use_context_wrapper", [True, False])
+def test_graph_rl_pipeline(use_context_wrapper):
     """Test the full graph-based RL training and evaluation pipeline."""
     print("\n=== Testing Graph-Based RL Pipeline ===")
 
@@ -89,7 +91,7 @@ def test_graph_rl_pipeline(use_context_wrapper=True):
         episodes_per_scenario=200,
         force_collect=True,
         render=True,
-        record_training=True,
+        record_training=False,
         training_record_interval=25,
         training_data_dir=f"training_data/graph_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
         save_dir=f"trained_policies/graph_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
