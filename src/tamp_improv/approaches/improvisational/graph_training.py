@@ -177,7 +177,7 @@ def collect_graph_based_training_data(
     approach: ImprovisationalTAMPApproach,
     config: dict[str, Any],
     max_shortcuts_per_graph: int = 100,
-    target_specific_shortcuts: bool = True,
+    target_specific_shortcuts: bool = False,
 ) -> TrainingData:
     """Collect training data by exploring the planning graph.
 

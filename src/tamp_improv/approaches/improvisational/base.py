@@ -517,7 +517,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self,
         obs: ObsType,
         info: dict[str, Any],
-        debug: bool = False,
+        debug: bool = True,
     ) -> None:
         """Compute edge costs considering the path taken to reach each node.
 
