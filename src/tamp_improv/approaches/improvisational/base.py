@@ -133,7 +133,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         planner_id: str = "pyperplan",
         max_skill_steps: int = 200,
         max_preimage_size: int = 12,
-        use_context_wrapper: bool = True,
+        use_context_wrapper: bool = False,
     ) -> None:
         """Initialize approach."""
         super().__init__(system, seed)

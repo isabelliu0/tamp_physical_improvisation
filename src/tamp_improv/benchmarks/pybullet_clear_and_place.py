@@ -12,7 +12,7 @@ from pybullet_blocks.envs.clear_and_place_env import (
     ClearAndPlacePyBulletBlocksEnv,
     ClearAndPlaceSceneDescription,
 )
-from pybullet_blocks.planning_models.action import get_active_operators_and_skills
+from pybullet_blocks.planning_models.action import OPERATORS, SKILLS
 from pybullet_blocks.planning_models.perception import (
     PREDICATES,
     TYPES,
@@ -103,12 +103,11 @@ class BaseClearAndPlaceTAMPSystem(
             use_gui=False,
         )
 
-        # Get operators and skills from imported planning models
-        base_operators, skill_types = get_active_operators_and_skills(
-            include_improvisational_models=False
-        )
-        _ = get_active_operators_and_skills(include_improvisational_models=True)
-        pybullet_skills = {s(sim, max_motion_planning_time=0.1) for s in skill_types}
+        # Get skills from imported planning models
+        pybullet_skills = {
+            s(sim, max_motion_planning_time=0.1)  # type:ignore[abstract]
+            for s in SKILLS
+        }
         skills: set[Skill[NDArray[np.float32], NDArray[np.float32]]] = cast(
             set[Skill[NDArray[np.float32], NDArray[np.float32]]], pybullet_skills
         )
@@ -124,7 +123,7 @@ class BaseClearAndPlaceTAMPSystem(
             PlanningComponents(
                 types=set(TYPES),
                 predicate_container=predicates,
-                operators=base_operators,
+                operators=OPERATORS,
                 skills=skills,
                 perceiver=perceiver,
             ),

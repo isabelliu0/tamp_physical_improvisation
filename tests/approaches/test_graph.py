@@ -4,10 +4,15 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import networkx as nx
+import pytest
 
 from tamp_improv.approaches.improvisational.base import ImprovisationalTAMPApproach
 from tamp_improv.approaches.improvisational.policies.pushing import PushingPolicy
+from tamp_improv.approaches.improvisational.policies.pushing_pybullet import (
+    PybulletPushingPolicy,
+)
 from tamp_improv.benchmarks.blocks2d import Blocks2DTAMPSystem
+from tamp_improv.benchmarks.pybullet_clear_and_place import ClearAndPlaceTAMPSystem
 
 
 def visualize_graph(graph, output_path=None):
@@ -77,15 +82,22 @@ def visualize_graph(graph, output_path=None):
         print(f"Graph visualization saved to {output_path}")
 
 
-def test_planning_graph_visualization():
-    """Test building and visualizing the planning graph."""
-    print("\n=== Testing Planning Graph Visualization ===")
+@pytest.mark.parametrize(
+    "system_cls,policy_cls,env_name",
+    [
+        (Blocks2DTAMPSystem, PushingPolicy, "blocks2d"),
+        (ClearAndPlaceTAMPSystem, PybulletPushingPolicy, "pybullet"),
+    ],
+)
+def test_planning_graph_visualization(system_cls, policy_cls, env_name):
+    """Test building and visualizing the planning graphs."""
+    print(f"\n=== Testing {env_name} Planning Graph Visualization ===")
 
-    system = Blocks2DTAMPSystem.create_default(seed=42)
-
+    # Create system and approach
+    system = system_cls.create_default(seed=42)
     approach = ImprovisationalTAMPApproach(
         system=system,
-        policy=PushingPolicy(seed=42),
+        policy=policy_cls(seed=42),
         seed=42,
     )
 
@@ -98,8 +110,8 @@ def test_planning_graph_visualization():
     output_dir = Path("results/planning_graph")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    with open(output_dir / "blocks2d_planning_info.txt", "w", encoding="utf-8") as f:
-        f.write("=== Blocks2D Planning Problem Information ===\n\n")
+    with open(output_dir / f"{env_name}_planning_info.txt", "w", encoding="utf-8") as f:
+        f.write(f"=== {env_name} Planning Problem Information ===\n\n")
 
         f.write("Objects:\n")
         for obj in objects:
@@ -118,6 +130,6 @@ def test_planning_graph_visualization():
     )
 
     print("\nVisualizing planning graph...")
-    visualize_graph(graph, output_dir / "blocks2d_planning_graph.png")
+    visualize_graph(graph, output_dir / f"{env_name}_planning_graph.png")
 
     return graph

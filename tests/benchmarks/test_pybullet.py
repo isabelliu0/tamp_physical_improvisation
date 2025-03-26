@@ -1,12 +1,10 @@
 """Test pybullet clear and place environment."""
 
-import pytest
 from task_then_motion_planning.planning import TaskThenMotionPlanner
 
 from tamp_improv.benchmarks.pybullet_clear_and_place import ClearAndPlaceTAMPSystem
 
 
-@pytest.mark.skip(reason="TAMP plan would fail without improvisational policies.")
 def test_pybullet():
     """Test base TAMP functionality of pybullet environment."""
     # Create system
