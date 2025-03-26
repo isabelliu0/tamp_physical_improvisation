@@ -20,6 +20,7 @@ dependencies = [
    "task-then-motion-planning@git+https://github.com/tomsilver/task-then-motion-planning.git",
    "relational-structs@git+https://github.com/tomsilver/relational-structs.git",
    "pybullet-blocks@git+https://github.com/tomsilver/pybullet-blocks.git",
+   "pybullet_helpers@git+https://github.com/tomsilver/pybullet-helpers.git",
    "gymnasium>=1.0.0",
    "moviepy",
    "stable_baselines3>=2.5.0",
