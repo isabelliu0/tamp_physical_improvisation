@@ -36,6 +36,7 @@ from tamp_improv.approaches.improvisational.graph import (
 )
 from tamp_improv.approaches.improvisational.policies.base import Policy, PolicyContext
 from tamp_improv.benchmarks.context_wrapper import ContextAwareWrapper
+from tamp_improv.benchmarks.goal_wrapper import GoalConditionedWrapper
 
 
 @dataclass
@@ -142,8 +143,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self._max_skill_steps = max_skill_steps
         self.use_context_wrapper = use_context_wrapper
         self.context_env = None
-
-        # Create context-aware wrapper
         if self.use_context_wrapper:
             if not isinstance(system.wrapped_env, ContextAwareWrapper):
                 self.context_env = ContextAwareWrapper(
@@ -229,7 +228,19 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 self._current_preimage = set()
                 return self.step(obs, reward, terminated, truncated, info)
 
-            if self.use_context_wrapper and self.context_env is not None:
+            if isinstance(self.system.wrapped_env, GoalConditionedWrapper):
+                assert hasattr(
+                    self.policy, "node_states"
+                ), "Policy must have node_states"
+                if self._current_edge and self._current_edge.target:
+                    target_node_id = self._current_edge.target.id
+                    dict_obs = {
+                        "observation": obs,
+                        "achieved_goal": obs,
+                        "desired_goal": self.policy.node_states[target_node_id],
+                    }
+                    return ApproachStepResult(action=self.policy.get_action(dict_obs))  # type: ignore[arg-type] # pylint: disable=line-too-long
+            elif self.use_context_wrapper and self.context_env is not None:
                 self.context_env.set_context(atoms, self._current_preimage)
                 aug_obs = self.context_env.augment_observation(obs)
                 return ApproachStepResult(action=self.policy.get_action(aug_obs))
@@ -266,6 +277,14 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                         },
                     )
                 )
+                if isinstance(self.system.wrapped_env, GoalConditionedWrapper):
+                    target_state = self.policy.node_states[target_node.id]
+                    dict_obs = {
+                        "observation": obs,
+                        "achieved_goal": obs,
+                        "desired_goal": target_state,
+                    }
+                    return ApproachStepResult(action=self.policy.get_action(dict_obs))  # type: ignore[arg-type] # pylint: disable=line-too-long
                 if self.use_context_wrapper and self.context_env is not None:
                     self.context_env.set_context(atoms, self._current_preimage)
                     aug_obs = self.context_env.augment_observation(obs)
@@ -476,7 +495,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     continue
 
                 # Check if this is similar to a trained shortcut
-                if self.trained_signatures:
+                if self.trained_signatures and not isinstance(
+                    self.system.wrapped_env, GoalConditionedWrapper
+                ):
                     current_sig = ShortcutSignature.from_context(
                         source_atoms, target_preimage
                     )
@@ -517,7 +538,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self,
         obs: ObsType,
         info: dict[str, Any],
-        debug: bool = True,
+        debug: bool = False,
     ) -> None:
         """Compute edge costs considering the path taken to reach each node.
 
@@ -596,17 +617,27 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                             },
                         )
                     )
-                    if self.use_context_wrapper and self.context_env is not None:
+                    if isinstance(self.system.wrapped_env, GoalConditionedWrapper):
+                        assert hasattr(
+                            self.policy, "node_states"
+                        ), "Policy must have node_states"
+                        target_state = self.policy.node_states[edge.target.id]
+                        aug_obs = {
+                            "observation": path_state,
+                            "achieved_goal": path_state,
+                            "desired_goal": target_state,
+                        }
+                    elif self.use_context_wrapper and self.context_env is not None:
                         self.context_env.set_context(init_atoms, preimage)
-                        aug_obs = self.context_env.augment_observation(path_state)
+                        aug_obs = self.context_env.augment_observation(path_state)  # type: ignore[arg-type] # pylint: disable=line-too-long
                     else:
-                        aug_obs = path_state
+                        aug_obs = path_state  # type: ignore[assignment]
                     skill: Policy | Skill = self.policy
                 else:
                     assert edge.operator is not None
                     skill = self._get_skill(edge.operator)
                     skill.reset(edge.operator)
-                    aug_obs = path_state
+                    aug_obs = path_state  # type: ignore[assignment]
 
                 # Execute the skill and track steps
                 num_steps = 0
@@ -621,17 +652,23 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     if debug and hasattr(raw_env, "render") and not self.training_mode:
                         frames.append(raw_env.render())
 
-                    if (
-                        edge.is_shortcut
-                        and self.use_context_wrapper
-                        and self.context_env is not None
-                    ):
-                        self.context_env.set_context(atoms, preimage)
-                        curr_aug_obs = self.context_env.augment_observation(
-                            curr_raw_obs
-                        )
+                    if edge.is_shortcut:
+                        if isinstance(self.system.wrapped_env, GoalConditionedWrapper):
+                            target_state = self.policy.node_states[edge.target.id]
+                            curr_aug_obs = {
+                                "observation": curr_raw_obs,
+                                "achieved_goal": curr_raw_obs,
+                                "desired_goal": target_state,
+                            }
+                        elif self.use_context_wrapper and self.context_env is not None:
+                            self.context_env.set_context(atoms, preimage)
+                            curr_aug_obs = self.context_env.augment_observation(
+                                curr_raw_obs  # type: ignore[arg-type]
+                            )
+                        else:
+                            curr_aug_obs = curr_raw_obs  # type: ignore[assignment]
                     else:
-                        curr_aug_obs = curr_raw_obs
+                        curr_aug_obs = curr_raw_obs  # type: ignore[assignment]
 
                     num_steps += 1
 
@@ -683,6 +720,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         current_env = env
         while hasattr(current_env, "env"):
             if isinstance(current_env, ContextAwareWrapper):
+                current_env = current_env.env
+                continue
+            if isinstance(current_env, GoalConditionedWrapper):
                 current_env = current_env.env
                 continue
             if hasattr(current_env, "reset_from_state"):

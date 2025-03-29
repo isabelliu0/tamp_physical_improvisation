@@ -13,10 +13,12 @@ from gymnasium.wrappers import RecordVideo
 
 from tamp_improv.approaches.improvisational.base import ImprovisationalTAMPApproach
 from tamp_improv.approaches.improvisational.graph_training import (
+    collect_goal_conditioned_training_data,
     collect_graph_based_training_data,
 )
 from tamp_improv.approaches.improvisational.policies.base import Policy, TrainingData
 from tamp_improv.benchmarks.base import ImprovisationalTAMPSystem
+from tamp_improv.benchmarks.goal_wrapper import GoalConditionedWrapper
 from tamp_improv.utils.gpu_utils import set_torch_seed
 
 ObsType = TypeVar("ObsType")
@@ -58,6 +60,11 @@ class TrainingConfig:
 
     # Context size for augmenting observations
     max_preimage_size: int = 12
+
+    # Goal-conditioned training settings
+    success_threshold: float = 0.01
+    success_reward: float = 10.0
+    step_penalty: float = -0.5
 
     def get_training_data_path(self, system_name: str) -> Path:
         """Get path for training data for specific system."""
@@ -277,6 +284,107 @@ def train_and_evaluate(
         policy.initialize(system.wrapped_env)
 
     # Run evaluation episodes
+    print(f"\nEvaluating policy on {system.name}...")
+    rewards = []
+    lengths = []
+    successes = []
+
+    for episode in range(config.num_episodes):
+        print(f"\nEvaluation Episode {episode + 1}/{config.num_episodes}")
+        reward, length, success = run_evaluation_episode(
+            system,
+            approach,
+            policy_name,
+            config,
+            is_loaded_policy="_Loaded" in policy_name,
+            episode_num=episode,
+        )
+        rewards.append(reward)
+        lengths.append(length)
+        successes.append(success)
+
+        print(f"Current Success Rate: {sum(successes)/(episode+1):.2%}")
+        print(f"Current Avg Episode Length: {np.mean(lengths):.2f}")
+        print(f"Current Avg Reward: {np.mean(rewards):.2f}")
+
+    total_time = time.time() - start_time
+    return Metrics(
+        success_rate=float(sum(successes) / len(successes)),
+        avg_episode_length=float(np.mean(lengths)),
+        avg_reward=float(np.mean(rewards)),
+        training_time=training_time,
+        total_time=total_time,
+    )
+
+
+def train_and_evaluate_goal_conditioned(
+    system: ImprovisationalTAMPSystem[ObsType, ActType],
+    policy_factory: Callable[[int], Policy[ObsType, ActType]],
+    config: TrainingConfig,
+    policy_name: str,
+) -> Metrics:
+    """Train and evaluate a goal-conditioned policy for shortcut learning."""
+    print(f"\nInitializing goal-conditioned training for {system.name}...")
+
+    # Set random seeds
+    seed = config.seed
+    np.random.seed(seed)
+    set_torch_seed(seed)
+
+    training_time = 0.0
+    start_time = time.time()
+
+    # Create policy and approach
+    policy = policy_factory(config.seed)
+    approach = ImprovisationalTAMPApproach(system, policy, seed=config.seed)
+
+    # Collect goal-conditioned training data
+    train_data = collect_goal_conditioned_training_data(
+        system, approach, config.__dict__
+    )
+
+    if policy.requires_training and "_Loaded" not in policy_name:
+        if train_data.node_states:
+            print("\nPreparing goal-conditioned environment...")
+
+            # Create goal-conditioned environment
+            # Here we replace the ImprovWrapper with GoalConditionedWrapper
+            goal_env = GoalConditionedWrapper(
+                env=system.env,  # access base env, not wrapped env
+                node_states=train_data.node_states,
+                valid_shortcuts=train_data.valid_shortcuts,
+                success_threshold=config.success_threshold,
+                success_reward=config.success_reward,
+                step_penalty=config.step_penalty,
+                max_episode_steps=config.max_steps,
+            )
+
+            # Use this environment for training
+            system.wrapped_env = goal_env
+
+            print("\nTraining policy...")
+
+            if hasattr(system.wrapped_env, "configure_training"):
+                system.wrapped_env.configure_training(train_data)
+
+            # Record training if requested
+            if config.record_training and hasattr(system.wrapped_env, "render_mode"):
+                video_folder = Path(f"videos/{system.name}_{policy_name}_train")
+                video_folder.mkdir(parents=True, exist_ok=True)
+                system.wrapped_env = RecordVideo(
+                    system.wrapped_env,
+                    str(video_folder),
+                    episode_trigger=lambda x: x % config.training_record_interval == 0,
+                )
+
+            policy.train(system.wrapped_env, train_data)
+            training_time = time.time() - start_time
+
+            save_path = Path(config.save_dir) / f"{system.name}_{policy_name}"
+            print(f"\nSaving policy to {save_path}")
+            policy.save(str(save_path))
+
+    # Run evaluation
     print(f"\nEvaluating policy on {system.name}...")
     rewards = []
     lengths = []

@@ -2,7 +2,7 @@
 
 from collections import deque
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeVar
 
 import numpy as np
 from relational_structs import GroundAtom
@@ -16,8 +16,13 @@ from tamp_improv.approaches.improvisational.graph import (
     PlanningGraphEdge,
     PlanningGraphNode,
 )
-from tamp_improv.approaches.improvisational.policies.base import TrainingData
+from tamp_improv.approaches.improvisational.policies.base import (
+    GoalConditionedTrainingData,
+    TrainingData,
+)
 from tamp_improv.benchmarks.base import ImprovisationalTAMPSystem
+
+ObsType = TypeVar("ObsType")
 
 
 @dataclass
@@ -33,7 +38,7 @@ class ShortcutCandidate:
 
 def collect_states_for_all_nodes(
     system, planning_graph: PlanningGraph, max_attempts: int = 10
-) -> dict[int, Any]:
+) -> dict[int, ObsType]:
     """Collect observed states for all nodes in the planning graph.
 
     This function systematically visits each node in the planning graph by:
@@ -44,7 +49,7 @@ def collect_states_for_all_nodes(
     """
     print("\n=== Collecting States for All Nodes ===")
 
-    observed_states: dict[int, Any] = {}
+    observed_states: dict[int, ObsType] = {}
 
     initial_node = None
     if planning_graph.nodes:
@@ -143,6 +148,48 @@ def collect_states_for_all_nodes(
     return observed_states
 
 
+def collect_node_states_for_shortcuts(
+    system, planning_graph, max_attempts: int = 3
+) -> tuple[dict[int, ObsType], list[tuple[int, int]]]:
+    """Collect observed states for all nodes in the planning graph."""
+    print("\n=== Collecting States for Goal-Conditioned Learning ===")
+    node_states: dict[int, ObsType] = collect_states_for_all_nodes(
+        system, planning_graph, max_attempts
+    )
+
+    # Generate valid shortcuts
+    valid_shortcuts = []
+    node_ids = sorted(list(node_states.keys()))
+    for i, source_id in enumerate(node_ids):
+        source_node = next((n for n in planning_graph.nodes if n.id == source_id), None)
+        if not source_node:
+            continue
+
+        for target_id in node_ids[i + 1 :]:
+            target_node = next(
+                (n for n in planning_graph.nodes if n.id == target_id), None
+            )
+            if not target_node:
+                continue
+
+            # Skip if there's already a direct edge
+            has_direct_edge = False
+            for edge in planning_graph.node_to_outgoing_edges.get(source_node, []):
+                if edge.target == target_node and not edge.is_shortcut:
+                    has_direct_edge = True
+                    break
+            if has_direct_edge:
+                continue
+
+            # Only include shortcuts where states are available
+            if source_id in node_states and target_id in node_states:
+                valid_shortcuts.append((source_id, target_id))
+
+    print(f"Collected states for {len(node_states)} nodes")
+    print(f"Identified {len(valid_shortcuts)} valid shortcuts")
+    return node_states, valid_shortcuts
+
+
 def find_path_to_node(
     planning_graph: PlanningGraph,
     start_node: PlanningGraphNode,
@@ -195,7 +242,6 @@ def collect_graph_based_training_data(
 
     # settings from config
     collect_episodes = config.get("collect_episodes", 10)
-    _ = config.get("max_steps", 100)
     seed = config.get("seed", 42)
 
     np.random.seed(seed)
@@ -215,7 +261,7 @@ def collect_graph_based_training_data(
         context_env = approach.context_env
 
         # Proactively collect states for all nodes
-        observed_states = collect_states_for_all_nodes(
+        observed_states: dict[int, Any] = collect_states_for_all_nodes(
             system, planning_graph, max_attempts=3
         )
 
@@ -345,9 +391,60 @@ def collect_graph_based_training_data(
     )
 
 
+def collect_goal_conditioned_training_data(
+    system: ImprovisationalTAMPSystem,
+    approach: ImprovisationalTAMPApproach,
+    config: dict[str, Any],
+) -> GoalConditionedTrainingData:
+    """Collect training data for goal-conditioned learning."""
+    print("\n=== Collecting Training Data for Goal-Conditioned Learning ===")
+    collect_episodes = config.get("collect_episodes", 10)
+    seed = config.get("seed", 42)
+    np.random.seed(seed)
+    all_node_states: dict[int, Any] = {}
+    all_valid_shortcuts: list[tuple[int, int]] = []
+
+    # Collect standard training data first
+    train_data = collect_graph_based_training_data(system, approach, config)
+
+    # Now collect node states for all episodes
+    approach.training_mode = True
+    for episode in range(collect_episodes):
+        print(f"\n=== Building planning graph for episode {episode + 1} ===")
+        obs, info = system.reset()
+        _ = approach.reset(obs, info)
+
+        assert (
+            hasattr(approach, "planning_graph") and approach.planning_graph is not None
+        )
+        planning_graph = approach.planning_graph
+        node_states: dict[int, Any]
+        node_states, valid_shortcuts = collect_node_states_for_shortcuts(
+            system, planning_graph, max_attempts=3
+        )
+        all_node_states.update(node_states)
+        all_valid_shortcuts.extend(valid_shortcuts)
+
+    # Create goal-conditioned training data
+    goal_train_data = GoalConditionedTrainingData(
+        states=train_data.states,
+        current_atoms=train_data.current_atoms,
+        preimages=train_data.preimages,
+        config={
+            **train_data.config,
+            "node_state_count": len(all_node_states),
+            "valid_shortcut_count": len(all_valid_shortcuts),
+        },
+        node_states=all_node_states,
+        valid_shortcuts=all_valid_shortcuts,
+    )
+    approach.training_mode = False
+    return goal_train_data
+
+
 def identify_shortcut_candidates(
     planning_graph: PlanningGraph,
-    observed_states: dict[int, Any],
+    observed_states: dict[int, ObsType],
 ) -> list[ShortcutCandidate]:
     """Identify potential shortcuts in the planning graph.
 

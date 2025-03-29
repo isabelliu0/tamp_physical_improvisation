@@ -103,6 +103,45 @@ class TrainingData:
 
 
 @dataclass
+class GoalConditionedTrainingData(TrainingData, Generic[ObsType]):
+    """Training data for goal-conditioned learning."""
+
+    node_states: dict[int, ObsType] = field(default_factory=dict)
+    valid_shortcuts: list[tuple[int, int]] = field(default_factory=list)
+
+    def save(self, path: Path) -> None:
+        """Save training data including node states."""
+        super().save(path)
+        if self.node_states:
+            with open(path / "node_states.pkl", "wb") as f:
+                pickle.dump(self.node_states, f)
+        if self.valid_shortcuts:
+            with open(path / "valid_shortcuts.pkl", "wb") as f:
+                pickle.dump(self.valid_shortcuts, f)
+
+    @classmethod
+    def load(cls, path: Path) -> GoalConditionedTrainingData:
+        """Load training data including node states."""
+        train_data = super().load(path)
+        node_states: dict[int, ObsType] = {}
+        if (path / "node_states.pkl").exists():
+            with open(path / "node_states.pkl", "rb") as f:
+                node_states = pickle.load(f)
+        valid_shortcuts: list[tuple[int, int]] = []
+        if (path / "valid_shortcuts.pkl").exists():
+            with open(path / "valid_shortcuts.pkl", "rb") as f:
+                valid_shortcuts = pickle.load(f)
+        return cls(
+            states=train_data.states,
+            current_atoms=train_data.current_atoms,
+            preimages=train_data.preimages,
+            config=train_data.config,
+            node_states=node_states,
+            valid_shortcuts=valid_shortcuts,
+        )
+
+
+@dataclass
 class PolicyContext(Generic[ObsType, ActType]):
     """Context information passed from approach to policy."""
 
@@ -113,6 +152,8 @@ class PolicyContext(Generic[ObsType, ActType]):
 
 class Policy(Generic[ObsType, ActType], ABC):
     """Base class for policies."""
+
+    node_states: dict[int, ObsType]
 
     def __init__(self, seed: int) -> None:
         """Initialize policy with environment."""

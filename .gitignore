@@ -7,6 +7,7 @@ videos/
 trained_policies/
 logs/
 training_data/
+test_data/
 results/
 plots/
 *.slurm
