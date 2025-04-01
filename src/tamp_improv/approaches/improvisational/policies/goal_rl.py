@@ -38,10 +38,7 @@ class GoalConditionedRLConfig:
         256  # transitions sampled from the replay buffer for each training update
     )
     buffer_size: int = 1000000
-
-    # HER specific
     n_sampled_goal: int = 4
-    goal_selection_strategy: str = "future"  # Fallback strategy
 
     # Training parameters
     success_threshold: float = 0.01
@@ -229,33 +226,18 @@ class GoalConditionedRLPolicy(Policy[ObsType, ActType]):
         """Train the policy."""
         print(f"\nTraining goal-conditioned RL policy ({self.config.algorithm})...")
 
-        node_states = getattr(train_data, "node_states", None)
-        valid_shortcuts = getattr(train_data, "valid_shortcuts", None)
-        assert (
-            node_states is not None and valid_shortcuts is not None
-        ), "Node states and valid shortcuts must be provided in training data"
-        self.node_states = node_states
-        self.valid_shortcuts = valid_shortcuts
+        self.node_states = train_data.node_states
+        self.valid_shortcuts = train_data.valid_shortcuts
         print(
             f"Using {len(self.node_states)} node states and {len(self.valid_shortcuts)} from training data"  # pylint: disable=line-too-long
         )
 
         # Use our custom buffer with node states
-        replay_buffer_kwargs = dict(  # pylint: disable=use-dict-literal
-            node_states=self.node_states,
-            valid_shortcuts=self.valid_shortcuts,
-            n_sampled_goal=self.config.n_sampled_goal,
-        )
-
-        # Create action noise for exploration if using TD3
-        action_noise = None
-        if self.config.algorithm == "TD3":
-            assert env.action_space.shape is not None
-            action_dim = env.action_space.shape[0]
-            action_noise = NormalActionNoise(
-                mean=np.zeros(action_dim),
-                sigma=self.config.action_noise * np.ones(action_dim),
-            )
+        replay_buffer_kwargs = {
+            "node_states": self.node_states,
+            "valid_shortcuts": self.valid_shortcuts,
+            "n_sampled_goal": self.config.n_sampled_goal,
+        }
 
         # Initialize model based on algorithm
         if self.config.algorithm == "SAC":
@@ -272,6 +254,12 @@ class GoalConditionedRLPolicy(Policy[ObsType, ActType]):
                 verbose=1,
             )
         elif self.config.algorithm == "TD3":
+            assert env.action_space.shape is not None
+            action_dim = env.action_space.shape[0]
+            action_noise = NormalActionNoise(
+                mean=np.zeros(action_dim),
+                sigma=self.config.action_noise * np.ones(action_dim),
+            )
             self.model = TD3(
                 "MultiInputPolicy",
                 env,
@@ -295,7 +283,8 @@ class GoalConditionedRLPolicy(Policy[ObsType, ActType]):
         print(f"Training for {total_timesteps} timesteps...")
 
         callback = HERTrainingProgressCallback(
-            check_freq=train_data.config.get("training_record_interval", 100)
+            check_freq=max_steps
+            * train_data.config.get("training_record_interval", 100)
         )
         self.model.learn(total_timesteps=total_timesteps, callback=callback)
 

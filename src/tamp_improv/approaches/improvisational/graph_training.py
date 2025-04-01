@@ -151,7 +151,7 @@ def collect_states_for_all_nodes(
 def collect_node_states_for_shortcuts(
     system, planning_graph, max_attempts: int = 3
 ) -> tuple[dict[int, ObsType], list[tuple[int, int]]]:
-    """Collect observed states for all nodes in the planning graph."""
+    """Collect node states for valid shortcuts in the planning graph."""
     print("\n=== Collecting States for Goal-Conditioned Learning ===")
     node_states: dict[int, ObsType] = collect_states_for_all_nodes(
         system, planning_graph, max_attempts

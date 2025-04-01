@@ -228,7 +228,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 self._current_preimage = set()
                 return self.step(obs, reward, terminated, truncated, info)
 
-            if isinstance(self.system.wrapped_env, GoalConditionedWrapper):
+            if self._using_goal_env(self.system.wrapped_env):
                 assert hasattr(
                     self.policy, "node_states"
                 ), "Policy must have node_states"
@@ -277,7 +277,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                         },
                     )
                 )
-                if isinstance(self.system.wrapped_env, GoalConditionedWrapper):
+                if self._using_goal_env(self.system.wrapped_env):
                     target_state = self.policy.node_states[target_node.id]
                     dict_obs = {
                         "observation": obs,
@@ -476,6 +476,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
     def _try_add_shortcuts(self, graph: PlanningGraph) -> None:
         """Try to add shortcut edges to the graph."""
+        using_goal_env = self._using_goal_env(self.system.wrapped_env)
         for source_node in graph.nodes:
             for target_node in graph.nodes:
                 # Skip same node and existing edges
@@ -495,9 +496,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     continue
 
                 # Check if this is similar to a trained shortcut
-                if self.trained_signatures and not isinstance(
-                    self.system.wrapped_env, GoalConditionedWrapper
-                ):
+                if self.trained_signatures and not using_goal_env:
                     current_sig = ShortcutSignature.from_context(
                         source_atoms, target_preimage
                     )
@@ -563,6 +562,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         path_states[(empty_path, initial_node, initial_node)] = (obs, info)
 
         raw_env = self._get_base_env(self.system.wrapped_env)
+        using_goal_env = self._using_goal_env(self.system.wrapped_env)
 
         # BFS to explore all paths
         queue = [(initial_node, empty_path)]  # (node, path)
@@ -617,7 +617,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                             },
                         )
                     )
-                    if isinstance(self.system.wrapped_env, GoalConditionedWrapper):
+                    if using_goal_env:
                         assert hasattr(
                             self.policy, "node_states"
                         ), "Policy must have node_states"
@@ -653,7 +653,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                         frames.append(raw_env.render())
 
                     if edge.is_shortcut:
-                        if isinstance(self.system.wrapped_env, GoalConditionedWrapper):
+                        if using_goal_env:
                             target_state = self.policy.node_states[edge.target.id]
                             curr_aug_obs = {
                                 "observation": curr_raw_obs,
@@ -733,3 +733,15 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             return current_env
 
         raise AttributeError("Could not find environment with reset_from_state method")
+
+    def _using_goal_env(self, env: gym.Env) -> bool:
+        """Check if we're using the goal-conditioned wrapper by unwrapping
+        additional wrappers if needed."""
+        using_goal_env = False
+        current_env = env
+        while hasattr(current_env, "env"):
+            if isinstance(current_env, GoalConditionedWrapper):
+                using_goal_env = True
+                break
+            current_env = current_env.env
+        return using_goal_env
