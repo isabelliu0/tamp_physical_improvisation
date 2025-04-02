@@ -78,6 +78,59 @@ def test_graph_training_collection():
     return train_data
 
 
+def test_random_rollout_shortcut_selection():
+    """Test collecting training data with random rollout shortcut selection."""
+    print("\n=== Testing Random Rollout Shortcut Selection ===")
+
+    config = {
+        "seed": 42,
+        "num_episodes": 1,
+        "max_steps": 50,
+        "render": False,
+        "collect_episodes": 1,
+        "force_collect": True,
+        "training_data_dir": "training_data/random_rollout_shortcuts",
+    }
+
+    system = Blocks2DTAMPSystem.create_default(
+        seed=config["seed"], render_mode="rgb_array" if config["render"] else None
+    )
+    policy = PushingPolicy(seed=config["seed"])
+    approach = ImprovisationalTAMPApproach(system, policy, seed=config["seed"])
+    train_data = collect_graph_based_training_data(
+        system,
+        approach,
+        config,
+        target_specific_shortcuts=False,
+        use_random_rollouts=True,
+        num_rollouts_per_node=1000,
+        max_steps_per_rollout=100,
+        shortcut_success_threshold=1,
+    )
+
+    print("\n=== Training Data Statistics ===")
+    print(f"Collected {len(train_data)} training examples")
+
+    # Print details of each collected shortcut
+    for i in range(len(train_data)):
+        print(f"\nShortcut Example {i+1}:")
+        print("Source atoms:")
+        for atom in sorted(train_data.current_atoms[i], key=str):
+            print(f"  - {atom}")
+
+        print("Target preimage:")
+        for atom in sorted(train_data.preimages[i], key=str):
+            print(f"  - {atom}")
+
+    save_dir = Path(config["training_data_dir"])
+    save_dir.mkdir(parents=True, exist_ok=True)
+    save_path = save_dir / "blocks2d_shortcuts.pkl"
+    train_data.save(save_path)
+    print(f"\nSaved training data to {save_path}")
+
+    return train_data
+
+
 @pytest.mark.parametrize("use_context_wrapper", [True, False])
 def test_graph_rl_pipeline(use_context_wrapper):
     """Test the full graph-based RL training and evaluation pipeline."""
