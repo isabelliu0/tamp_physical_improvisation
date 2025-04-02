@@ -108,6 +108,7 @@ class GoalConditionedTrainingData(TrainingData, Generic[ObsType]):
 
     node_states: dict[int, ObsType] = field(default_factory=dict)
     valid_shortcuts: list[tuple[int, int]] = field(default_factory=list)
+    node_preimages: dict[int, set[GroundAtom]] = field(default_factory=dict)
 
     def save(self, path: Path) -> None:
         """Save training data including node states."""
@@ -118,6 +119,9 @@ class GoalConditionedTrainingData(TrainingData, Generic[ObsType]):
         if self.valid_shortcuts:
             with open(path / "valid_shortcuts.pkl", "wb") as f:
                 pickle.dump(self.valid_shortcuts, f)
+        if self.node_preimages:
+            with open(path / "node_preimages.pkl", "wb") as f:
+                pickle.dump(self.node_preimages, f)
 
     @classmethod
     def load(cls, path: Path) -> GoalConditionedTrainingData:
@@ -131,6 +135,10 @@ class GoalConditionedTrainingData(TrainingData, Generic[ObsType]):
         if (path / "valid_shortcuts.pkl").exists():
             with open(path / "valid_shortcuts.pkl", "rb") as f:
                 valid_shortcuts = pickle.load(f)
+        node_preimages: dict[int, set[GroundAtom]] = {}
+        if (path / "node_preimages.pkl").exists():
+            with open(path / "node_preimages.pkl", "rb") as f:
+                node_preimages = pickle.load(f)
         return cls(
             states=train_data.states,
             current_atoms=train_data.current_atoms,
@@ -138,6 +146,7 @@ class GoalConditionedTrainingData(TrainingData, Generic[ObsType]):
             config=train_data.config,
             node_states=node_states,
             valid_shortcuts=valid_shortcuts,
+            node_preimages=node_preimages,
         )
 
 

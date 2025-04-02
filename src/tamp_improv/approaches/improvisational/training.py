@@ -322,6 +322,7 @@ def train_and_evaluate_goal_conditioned(
     policy_factory: Callable[[int], Policy[ObsType, ActType]],
     config: TrainingConfig,
     policy_name: str,
+    use_preimages: bool = True,
 ) -> Metrics:
     """Train and evaluate a goal-conditioned policy for shortcut learning."""
     print(f"\nInitializing goal-conditioned training for {system.name}...")
@@ -353,6 +354,10 @@ def train_and_evaluate_goal_conditioned(
                 env=system.env,  # access base env, not wrapped env
                 node_states=train_data.node_states,
                 valid_shortcuts=train_data.valid_shortcuts,
+                perceiver=system.perceiver if use_preimages else None,
+                node_preimages=train_data.node_preimages if use_preimages else None,
+                use_preimages=use_preimages,
+                max_preimage_size=config.max_preimage_size,
                 success_threshold=config.success_threshold,
                 success_reward=config.success_reward,
                 step_penalty=config.step_penalty,

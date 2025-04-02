@@ -10,6 +10,7 @@ import gymnasium as gym
 import numpy as np
 import torch
 from gymnasium import spaces
+from relational_structs import GroundAtom
 from stable_baselines3 import SAC, TD3
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.noise import NormalActionNoise
@@ -24,6 +25,7 @@ from tamp_improv.approaches.improvisational.policies.base import (
 from tamp_improv.approaches.improvisational.policies.node_replay_buffer import (
     NodeBasedHerBuffer,
 )
+from tamp_improv.benchmarks.goal_wrapper import GoalConditionedWrapper
 
 
 @dataclass
@@ -187,6 +189,7 @@ class GoalConditionedRLPolicy(Policy[ObsType, ActType]):
         self.model: SAC | TD3 | None = None
         self.node_states: dict[int, ObsType] = {}
         self.valid_shortcuts: list[tuple[int, int]] = []
+        self.node_preimages: dict[int, set[GroundAtom]] = {}
         self._current_context: PolicyContext | None = None
         self._current_goal: ObsType | None = None
 
@@ -228,16 +231,23 @@ class GoalConditionedRLPolicy(Policy[ObsType, ActType]):
 
         self.node_states = train_data.node_states
         self.valid_shortcuts = train_data.valid_shortcuts
+        self.node_preimages = train_data.node_preimages
         print(
-            f"Using {len(self.node_states)} node states and {len(self.valid_shortcuts)} from training data"  # pylint: disable=line-too-long
+            f"Using {len(self.node_states)} node states, {len(self.valid_shortcuts)} valid shortcuts, and {len(self.node_preimages)} node preimages from training data"  # pylint: disable=line-too-long
         )
+        goal_env = self._get_goal_env(env)
+        use_preimages = goal_env.use_preimages
 
         # Use our custom buffer with node states
         replay_buffer_kwargs = {
             "node_states": self.node_states,
             "valid_shortcuts": self.valid_shortcuts,
             "n_sampled_goal": self.config.n_sampled_goal,
+            "using_preimages": use_preimages,
         }
+        if use_preimages:
+            replay_buffer_kwargs["atom_to_index"] = goal_env.atom_to_index
+            replay_buffer_kwargs["preimage_vectors"] = goal_env.preimage_vectors
 
         # Initialize model based on algorithm
         if self.config.algorithm == "SAC":
@@ -364,3 +374,14 @@ class GoalConditionedRLPolicy(Policy[ObsType, ActType]):
             self.node_states = pickle.load(f)
         with open(f"{path}/valid_shortcuts.pkl", "rb") as f:
             self.valid_shortcuts = pickle.load(f)
+
+    def _get_goal_env(self, env: gym.Env) -> GoalConditionedWrapper:
+        """Get the goal-conditioned environment."""
+        current_env = env
+        while hasattr(current_env, "env"):
+            if isinstance(current_env, GoalConditionedWrapper):
+                return current_env
+            current_env = current_env.env
+        raise ValueError(
+            "GoalConditionedWrapper not found when using GoalConditionedRLPolicy."
+        )

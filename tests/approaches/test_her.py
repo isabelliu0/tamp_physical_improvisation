@@ -49,9 +49,11 @@ def test_goal_conditioned_data_collection():
 
     assert hasattr(train_data, "node_states"), "No node states in training data"
     assert hasattr(train_data, "valid_shortcuts"), "No valid shortcuts in training data"
+    assert hasattr(train_data, "node_preimages"), "No node preimages in training data"
 
     print(f"Collected states for {len(train_data.node_states)} nodes")
     print(f"Found {len(train_data.valid_shortcuts)} valid shortcuts")
+    print(f"Collected {len(train_data.node_preimages)} node preimages")
 
     save_dir = Path(config["training_data_dir"])
     save_dir.mkdir(parents=True, exist_ok=True)
@@ -64,6 +66,9 @@ def test_goal_conditioned_data_collection():
     assert len(loaded_data.valid_shortcuts) == len(
         train_data.valid_shortcuts
     ), "Valid shortcuts not preserved"
+    assert len(loaded_data.node_preimages) == len(
+        train_data.node_preimages
+    ), "Node preimages not preserved"
 
     return train_data
 
@@ -77,6 +82,9 @@ def test_goal_wrapper():
         env=system.env,
         node_states=train_data.node_states,
         valid_shortcuts=train_data.valid_shortcuts,
+        perceiver=system.perceiver,
+        node_preimages=train_data.node_preimages,
+        use_preimages=True,
         success_threshold=0.01,
         success_reward=10.0,
         step_penalty=-0.5,
@@ -90,15 +98,19 @@ def test_goal_wrapper():
     assert "achieved_goal" in obs, "Observation should have 'achieved_goal' key"
     assert "desired_goal" in obs, "Observation should have 'desired_goal' key"
     assert obs["observation"].shape == goal_env.observation_space["observation"].shape
-    assert (
-        obs["achieved_goal"].shape == goal_env.observation_space["achieved_goal"].shape
-    )
-    assert obs["desired_goal"].shape == goal_env.observation_space["desired_goal"].shape
+    assert obs["achieved_goal"].shape == (
+        12,
+    ), "Achieved goal should be a multi-hot vector"
+    assert obs["desired_goal"].shape == (
+        12,
+    ), "Desired goal should be a multi-hot vector"
 
     action = goal_env.action_space.sample()
     next_obs, reward, _, _, step_info = goal_env.step(action)
     assert isinstance(next_obs, dict), "Step should return a Dict observation"
-    print(f"Step reward: {reward}, goal distance: {step_info['goal_distance']:.3f}")
+    print(
+        f"Step reward: {reward}, preimage distance: {step_info['preimage_distance']:.3f}"
+    )
 
     return goal_env
 
@@ -113,6 +125,13 @@ def test_goal_conditioned_rl(algorithm):
         env=system.env,
         node_states=train_data.node_states,
         valid_shortcuts=train_data.valid_shortcuts,
+        perceiver=system.perceiver,
+        node_preimages=train_data.node_preimages,
+        use_preimages=True,
+        success_threshold=0.01,
+        success_reward=10.0,
+        step_penalty=-0.5,
+        max_episode_steps=50,
     )
     config = GoalConditionedRLConfig(
         algorithm=algorithm,
@@ -124,6 +143,7 @@ def test_goal_conditioned_rl(algorithm):
     # Set node states and valid shortcuts
     policy.node_states = train_data.node_states
     policy.valid_shortcuts = train_data.valid_shortcuts
+    policy.node_preimages = train_data.node_preimages
 
     # Train the policy
     train_data.config["max_steps"] = 50
@@ -139,13 +159,11 @@ def test_goal_conditioned_rl(algorithm):
         )
         policy.configure_context(context)
 
-        source_state = train_data.node_states[source_id]
-        dict_obs = {
-            "observation": source_state,
-            "achieved_goal": source_state,
-            "desired_goal": train_data.node_states[target_id],
-        }
-        action = policy.get_action(dict_obs)
+        obs, _ = goal_env.reset(
+            options={"source_node_id": source_id, "goal_node_id": target_id}
+        )
+        print(f"Initial observation: {obs}")
+        action = policy.get_action(obs)
         assert (
             action.shape == goal_env.action_space.shape
         ), f"Wrong action shape: {action.shape}"
@@ -211,6 +229,7 @@ def test_goal_conditioned_training_pipeline(algorithm):
         policy_factory,
         config,
         policy_name=f"Test_Goal_{algorithm}",
+        use_preimages=True,
     )
     print(f"Success rate: {metrics.success_rate:.2%}")
     print(f"Average episode length: {metrics.avg_episode_length:.2f}")

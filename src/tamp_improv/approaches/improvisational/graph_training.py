@@ -224,7 +224,7 @@ def collect_graph_based_training_data(
     approach: ImprovisationalTAMPApproach,
     config: dict[str, Any],
     max_shortcuts_per_graph: int = 100,
-    target_specific_shortcuts: bool = False,
+    target_specific_shortcuts: bool = True,
 ) -> TrainingData:
     """Collect training data by exploring the planning graph.
 
@@ -403,6 +403,7 @@ def collect_goal_conditioned_training_data(
     np.random.seed(seed)
     all_node_states: dict[int, Any] = {}
     all_valid_shortcuts: list[tuple[int, int]] = []
+    node_preimages: dict[int, set[GroundAtom]] = {}
 
     # Collect standard training data first
     train_data = collect_graph_based_training_data(system, approach, config)
@@ -424,6 +425,9 @@ def collect_goal_conditioned_training_data(
         )
         all_node_states.update(node_states)
         all_valid_shortcuts.extend(valid_shortcuts)
+        for node in planning_graph.nodes:
+            if node.id in node_states and node in planning_graph.preimages:
+                node_preimages[node.id] = planning_graph.preimages[node]
 
     # Create goal-conditioned training data
     goal_train_data = GoalConditionedTrainingData(
@@ -436,7 +440,8 @@ def collect_goal_conditioned_training_data(
             "valid_shortcut_count": len(all_valid_shortcuts),
         },
         node_states=all_node_states,
-        valid_shortcuts=all_valid_shortcuts,
+        valid_shortcuts=valid_shortcuts,
+        node_preimages=node_preimages,
     )
     approach.training_mode = False
     return goal_train_data
