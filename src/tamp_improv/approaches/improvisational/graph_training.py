@@ -475,6 +475,62 @@ def collect_goal_conditioned_training_data(
     return goal_train_data
 
 
+def collect_goal_conditioned_training_data(
+    system: ImprovisationalTAMPSystem,
+    approach: ImprovisationalTAMPApproach,
+    config: dict[str, Any],
+) -> GoalConditionedTrainingData:
+    """Collect training data for goal-conditioned learning."""
+    print("\n=== Collecting Training Data for Goal-Conditioned Learning ===")
+    collect_episodes = config.get("collect_episodes", 10)
+    seed = config.get("seed", 42)
+    np.random.seed(seed)
+    all_node_states: dict[int, Any] = {}
+    all_valid_shortcuts: list[tuple[int, int]] = []
+    node_preimages: dict[int, set[GroundAtom]] = {}
+
+    # Collect standard training data first
+    train_data = collect_graph_based_training_data(system, approach, config)
+
+    # Now collect node states for all episodes
+    approach.training_mode = True
+    for episode in range(collect_episodes):
+        print(f"\n=== Building planning graph for episode {episode + 1} ===")
+        obs, info = system.reset()
+        _ = approach.reset(obs, info)
+
+        assert (
+            hasattr(approach, "planning_graph") and approach.planning_graph is not None
+        )
+        planning_graph = approach.planning_graph
+        node_states: dict[int, Any]
+        node_states, valid_shortcuts = collect_node_states_for_shortcuts(
+            system, planning_graph, max_attempts=3
+        )
+        all_node_states.update(node_states)
+        all_valid_shortcuts.extend(valid_shortcuts)
+        for node in planning_graph.nodes:
+            if node.id in node_states and node in planning_graph.preimages:
+                node_preimages[node.id] = planning_graph.preimages[node]
+
+    # Create goal-conditioned training data
+    goal_train_data = GoalConditionedTrainingData(
+        states=train_data.states,
+        current_atoms=train_data.current_atoms,
+        preimages=train_data.preimages,
+        config={
+            **train_data.config,
+            "node_state_count": len(all_node_states),
+            "valid_shortcut_count": len(all_valid_shortcuts),
+        },
+        node_states=all_node_states,
+        valid_shortcuts=valid_shortcuts,
+        node_preimages=node_preimages,
+    )
+    approach.training_mode = False
+    return goal_train_data
+
+
 def identify_shortcut_candidates(
     planning_graph: PlanningGraph,
     observed_states: dict[int, ObsType],
