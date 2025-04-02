@@ -36,6 +36,7 @@ from tamp_improv.approaches.improvisational.graph import (
 )
 from tamp_improv.approaches.improvisational.policies.base import Policy, PolicyContext
 from tamp_improv.benchmarks.context_wrapper import ContextAwareWrapper
+from tamp_improv.benchmarks.goal_wrapper import GoalConditionedWrapper
 
 
 @dataclass
@@ -142,8 +143,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self._max_skill_steps = max_skill_steps
         self.use_context_wrapper = use_context_wrapper
         self.context_env = None
-
-        # Create context-aware wrapper
         if self.use_context_wrapper:
             if not isinstance(system.wrapped_env, ContextAwareWrapper):
                 self.context_env = ContextAwareWrapper(
@@ -218,6 +217,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
     ) -> ApproachStepResult[ActType]:
         """Step approach with new observation."""
         atoms = self.system.perceiver.step(obs)
+        using_goal_env, goal_env = self._using_goal_env(self.system.wrapped_env)
+        target_preimage_vector = None
+        current_preimage_vector = None
 
         # Check if policy achieved its goal
         if self.policy_active and self.planning_graph:
@@ -229,7 +231,35 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 self._current_preimage = set()
                 return self.step(obs, reward, terminated, truncated, info)
 
-            if self.use_context_wrapper and self.context_env is not None:
+            if using_goal_env and goal_env is not None:
+                assert hasattr(
+                    self.policy, "node_states"
+                ), "Policy must have node_states"
+                if self._current_edge and self._current_edge.target:
+                    target_node_id = self._current_edge.target.id
+                    target_preimage = self.planning_graph.preimages.get(
+                        self._current_edge.target, set()
+                    )
+                    if goal_env.use_preimages is True:
+                        target_preimage_vector = goal_env.create_preimage_vector(
+                            target_preimage
+                        )
+                        current_preimage_vector = goal_env.create_preimage_vector(atoms)
+                    dict_obs = {
+                        "observation": obs,
+                        "achieved_goal": (
+                            obs
+                            if goal_env.use_preimages is False
+                            else current_preimage_vector
+                        ),
+                        "desired_goal": (
+                            self.policy.node_states[target_node_id]
+                            if goal_env.use_preimages is False
+                            else target_preimage_vector
+                        ),
+                    }
+                    return ApproachStepResult(action=self.policy.get_action(dict_obs))  # type: ignore[arg-type] # pylint: disable=line-too-long
+            elif self.use_context_wrapper and self.context_env is not None:
                 self.context_env.set_context(atoms, self._current_preimage)
                 aug_obs = self.context_env.augment_observation(obs)
                 return ApproachStepResult(action=self.policy.get_action(aug_obs))
@@ -266,6 +296,30 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                         },
                     )
                 )
+                if using_goal_env and goal_env is not None:
+                    target_state = self.policy.node_states[target_node.id]
+                    target_preimage = self.planning_graph.preimages.get(
+                        self._current_edge.target, set()
+                    )
+                    if goal_env.use_preimages is True:
+                        target_preimage_vector = goal_env.create_preimage_vector(
+                            target_preimage
+                        )
+                        current_preimage_vector = goal_env.create_preimage_vector(atoms)
+                    dict_obs = {
+                        "observation": obs,
+                        "achieved_goal": (
+                            obs
+                            if goal_env.use_preimages is False
+                            else current_preimage_vector
+                        ),
+                        "desired_goal": (
+                            target_state
+                            if goal_env.use_preimages is False
+                            else target_preimage_vector
+                        ),
+                    }
+                    return ApproachStepResult(action=self.policy.get_action(dict_obs))  # type: ignore[arg-type] # pylint: disable=line-too-long
                 if self.use_context_wrapper and self.context_env is not None:
                     self.context_env.set_context(atoms, self._current_preimage)
                     aug_obs = self.context_env.augment_observation(obs)
@@ -457,6 +511,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
     def _try_add_shortcuts(self, graph: PlanningGraph) -> None:
         """Try to add shortcut edges to the graph."""
+        using_goal_env, _ = self._using_goal_env(self.system.wrapped_env)
         for source_node in graph.nodes:
             for target_node in graph.nodes:
                 # Skip same node and existing edges
@@ -476,7 +531,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     continue
 
                 # Check if this is similar to a trained shortcut
-                if self.trained_signatures:
+                if self.trained_signatures and not using_goal_env:
                     current_sig = ShortcutSignature.from_context(
                         source_atoms, target_preimage
                     )
@@ -517,7 +572,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self,
         obs: ObsType,
         info: dict[str, Any],
-        debug: bool = True,
+        debug: bool = False,
     ) -> None:
         """Compute edge costs considering the path taken to reach each node.
 
@@ -542,6 +597,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         path_states[(empty_path, initial_node, initial_node)] = (obs, info)
 
         raw_env = self._get_base_env(self.system.wrapped_env)
+        using_goal_env, goal_env = self._using_goal_env(self.system.wrapped_env)
 
         # BFS to explore all paths
         queue = [(initial_node, empty_path)]  # (node, path)
@@ -596,17 +652,45 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                             },
                         )
                     )
-                    if self.use_context_wrapper and self.context_env is not None:
+                    if using_goal_env and goal_env is not None:
+                        assert hasattr(
+                            self.policy, "node_states"
+                        ), "Policy must have node_states"
+                        target_state = self.policy.node_states[edge.target.id]
+                        target_preimage = self.planning_graph.preimages.get(
+                            edge.target, set()
+                        )
+                        if goal_env.use_preimages is True:
+                            target_preimage_vector = goal_env.create_preimage_vector(
+                                target_preimage
+                            )
+                            current_preimage_vector = goal_env.create_preimage_vector(
+                                init_atoms
+                            )
+                        aug_obs = {
+                            "observation": path_state,
+                            "achieved_goal": (
+                                path_state
+                                if goal_env.use_preimages is False
+                                else current_preimage_vector
+                            ),
+                            "desired_goal": (
+                                target_state
+                                if goal_env.use_preimages is False
+                                else target_preimage_vector
+                            ),
+                        }
+                    elif self.use_context_wrapper and self.context_env is not None:
                         self.context_env.set_context(init_atoms, preimage)
-                        aug_obs = self.context_env.augment_observation(path_state)
+                        aug_obs = self.context_env.augment_observation(path_state)  # type: ignore[arg-type] # pylint: disable=line-too-long
                     else:
-                        aug_obs = path_state
+                        aug_obs = path_state  # type: ignore[assignment]
                     skill: Policy | Skill = self.policy
                 else:
                     assert edge.operator is not None
                     skill = self._get_skill(edge.operator)
                     skill.reset(edge.operator)
-                    aug_obs = path_state
+                    aug_obs = path_state  # type: ignore[assignment]
 
                 # Execute the skill and track steps
                 num_steps = 0
@@ -621,17 +705,41 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     if debug and hasattr(raw_env, "render") and not self.training_mode:
                         frames.append(raw_env.render())
 
-                    if (
-                        edge.is_shortcut
-                        and self.use_context_wrapper
-                        and self.context_env is not None
-                    ):
-                        self.context_env.set_context(atoms, preimage)
-                        curr_aug_obs = self.context_env.augment_observation(
-                            curr_raw_obs
-                        )
+                    if edge.is_shortcut:
+                        if using_goal_env and goal_env is not None:
+                            target_state = self.policy.node_states[edge.target.id]
+                            target_preimage = self.planning_graph.preimages.get(
+                                edge.target, set()
+                            )
+                            if goal_env.use_preimages is True:
+                                target_preimage_vector = (
+                                    goal_env.create_preimage_vector(target_preimage)
+                                )
+                                current_preimage_vector = (
+                                    goal_env.create_preimage_vector(atoms)
+                                )
+                            curr_aug_obs = {
+                                "observation": curr_raw_obs,
+                                "achieved_goal": (
+                                    curr_raw_obs
+                                    if goal_env.use_preimages is False
+                                    else current_preimage_vector
+                                ),
+                                "desired_goal": (
+                                    target_state
+                                    if goal_env.use_preimages is False
+                                    else target_preimage_vector
+                                ),
+                            }
+                        elif self.use_context_wrapper and self.context_env is not None:
+                            self.context_env.set_context(atoms, preimage)
+                            curr_aug_obs = self.context_env.augment_observation(
+                                curr_raw_obs  # type: ignore[arg-type]
+                            )
+                        else:
+                            curr_aug_obs = curr_raw_obs  # type: ignore[assignment]
                     else:
-                        curr_aug_obs = curr_raw_obs
+                        curr_aug_obs = curr_raw_obs  # type: ignore[assignment]
 
                     num_steps += 1
 
@@ -685,6 +793,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             if isinstance(current_env, ContextAwareWrapper):
                 current_env = current_env.env
                 continue
+            if isinstance(current_env, GoalConditionedWrapper):
+                current_env = current_env.env
+                continue
             if hasattr(current_env, "reset_from_state"):
                 return current_env
             current_env = current_env.env
@@ -693,3 +804,18 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             return current_env
 
         raise AttributeError("Could not find environment with reset_from_state method")
+
+    def _using_goal_env(
+        self, env: gym.Env | None
+    ) -> tuple[bool, GoalConditionedWrapper | None]:
+        """Check if we're using the goal-conditioned wrapper and using node
+        preimages as goals."""
+        using_goal_env = False
+        current_env = env
+        while hasattr(current_env, "env") and current_env is not None:
+            if isinstance(current_env, GoalConditionedWrapper):
+                using_goal_env = True
+                return using_goal_env, current_env
+            current_env = current_env.env
+        current_env = None
+        return using_goal_env, current_env
