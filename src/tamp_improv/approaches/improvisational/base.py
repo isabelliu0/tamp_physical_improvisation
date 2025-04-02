@@ -244,9 +244,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                         target_preimage_vector = goal_env.create_preimage_vector(
                             target_preimage
                         )
-                        current_preimage_vector = goal_env.create_preimage_vector(
-                            self._current_preimage
-                        )
+                        current_preimage_vector = goal_env.create_preimage_vector(atoms)
                     dict_obs = {
                         "observation": obs,
                         "achieved_goal": (
@@ -307,9 +305,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                         target_preimage_vector = goal_env.create_preimage_vector(
                             target_preimage
                         )
-                        current_preimage_vector = goal_env.create_preimage_vector(
-                            self._current_preimage
-                        )
+                        current_preimage_vector = goal_env.create_preimage_vector(atoms)
                     dict_obs = {
                         "observation": obs,
                         "achieved_goal": (
@@ -576,7 +572,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self,
         obs: ObsType,
         info: dict[str, Any],
-        debug: bool = True,
+        debug: bool = False,
     ) -> None:
         """Compute edge costs considering the path taken to reach each node.
 
@@ -669,7 +665,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                                 target_preimage
                             )
                             current_preimage_vector = goal_env.create_preimage_vector(
-                                self._current_preimage
+                                init_atoms
                             )
                         aug_obs = {
                             "observation": path_state,
@@ -720,9 +716,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                                     goal_env.create_preimage_vector(target_preimage)
                                 )
                                 current_preimage_vector = (
-                                    goal_env.create_preimage_vector(
-                                        self._current_preimage
-                                    )
+                                    goal_env.create_preimage_vector(atoms)
                                 )
                             curr_aug_obs = {
                                 "observation": curr_raw_obs,
