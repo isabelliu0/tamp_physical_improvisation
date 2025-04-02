@@ -48,11 +48,64 @@ def test_graph_training_collection():
     approach = ImprovisationalTAMPApproach(system, policy, seed=config["seed"])
 
     print("\n3. Collecting training data...")
-    train_data = collect_graph_based_training_data(
+    train_data, _ = collect_graph_based_training_data(
         system,
         approach,
         config,
         target_specific_shortcuts=True,
+    )
+
+    print("\n=== Training Data Statistics ===")
+    print(f"Collected {len(train_data)} training examples")
+
+    # Print details of each collected shortcut
+    for i in range(len(train_data)):
+        print(f"\nShortcut Example {i+1}:")
+        print("Source atoms:")
+        for atom in sorted(train_data.current_atoms[i], key=str):
+            print(f"  - {atom}")
+
+        print("Target preimage:")
+        for atom in sorted(train_data.preimages[i], key=str):
+            print(f"  - {atom}")
+
+    save_dir = Path(config["training_data_dir"])
+    save_dir.mkdir(parents=True, exist_ok=True)
+    save_path = save_dir / "blocks2d_shortcuts.pkl"
+    train_data.save(save_path)
+    print(f"\nSaved training data to {save_path}")
+
+    return train_data
+
+
+def test_random_rollout_shortcut_selection():
+    """Test collecting training data with random rollout shortcut selection."""
+    print("\n=== Testing Random Rollout Shortcut Selection ===")
+
+    config = {
+        "seed": 42,
+        "num_episodes": 1,
+        "max_steps": 50,
+        "render": False,
+        "collect_episodes": 1,
+        "force_collect": True,
+        "training_data_dir": "training_data/random_rollout_shortcuts",
+    }
+
+    system = Blocks2DTAMPSystem.create_default(
+        seed=config["seed"], render_mode="rgb_array" if config["render"] else None
+    )
+    policy = PushingPolicy(seed=config["seed"])
+    approach = ImprovisationalTAMPApproach(system, policy, seed=config["seed"])
+    train_data, _ = collect_graph_based_training_data(
+        system,
+        approach,
+        config,
+        target_specific_shortcuts=False,
+        use_random_rollouts=True,
+        num_rollouts_per_node=1000,
+        max_steps_per_rollout=100,
+        shortcut_success_threshold=1,
     )
 
     print("\n=== Training Data Statistics ===")
@@ -190,6 +243,72 @@ def test_multi_rl_pipeline(use_context_wrapper):
         config,
         policy_name=f"MultiRL{'_Context' if use_context_wrapper else ''}",
         use_context_wrapper=use_context_wrapper,
+    )
+
+    print("\n=== Results ===")
+    print(f"Success Rate: {metrics.success_rate:.2%}")
+    print(f"Average Episode Length: {metrics.avg_episode_length:.2f}")
+    print(f"Average Reward: {metrics.avg_reward:.2f}")
+    print(f"Training Time: {metrics.training_time:.2f} seconds")
+    print(f"Total Time: {metrics.total_time:.2f} seconds")
+
+    return metrics
+
+
+def test_multi_rl_rollouts(
+    use_context_wrapper=False,
+    use_random_rollouts=True,
+    num_rollouts_per_node=1000,
+    max_steps_per_rollout=100,
+    shortcut_success_threshold=1,
+):
+    """Test multi-policy RL with random rollout shortcut selection."""
+    print("\n=== Testing Multi-Policy RL with Random Rollout Selection ===")
+
+    config = TrainingConfig(
+        seed=42,
+        num_episodes=1,
+        max_steps=50,
+        collect_episodes=1,
+        episodes_per_scenario=200,
+        force_collect=False,
+        render=True,
+        record_training=False,
+        training_record_interval=25,
+        training_data_dir="training_data/multi_rl_rollouts",
+        save_dir="trained_policies/multi_rl_rollouts",
+        batch_size=32,
+        max_preimage_size=12,
+    )
+
+    rl_config = RLConfig(
+        learning_rate=3e-4,
+        batch_size=32,
+        n_epochs=10,
+        gamma=0.99,
+        ent_coef=0.01,
+        device="cuda" if torch.cuda.is_available() else "cpu",
+    )
+
+    system = Blocks2DTAMPSystem.create_default(
+        seed=config.seed, render_mode="rgb_array" if config.render else None
+    )
+
+    # Define policy factory
+    def policy_factory(seed: int) -> MultiRLPolicy:
+        return MultiRLPolicy(seed=seed, config=rl_config)
+
+    # Use the enhanced training function with direct parameters
+    metrics = train_and_evaluate(
+        system=system,
+        policy_factory=policy_factory,
+        config=config,
+        policy_name="MultiRL_Rollouts",
+        use_context_wrapper=use_context_wrapper,
+        use_random_rollouts=use_random_rollouts,
+        num_rollouts_per_node=num_rollouts_per_node,
+        max_steps_per_rollout=max_steps_per_rollout,
+        shortcut_success_threshold=shortcut_success_threshold,
     )
 
     print("\n=== Results ===")

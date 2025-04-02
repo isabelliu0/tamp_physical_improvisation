@@ -86,6 +86,11 @@ def get_or_collect_training_data(
     system: ImprovisationalTAMPSystem[ObsType, ActType],
     approach: ImprovisationalTAMPApproach[ObsType, ActType],
     config: TrainingConfig,
+    use_random_rollouts: bool = False,
+    num_rollouts_per_node: int = 50,
+    max_steps_per_rollout: int = 50,
+    shortcut_success_threshold: int = 1,
+    rng: np.random.Generator | None = None,
 ) -> TrainingData:
     """Get existing or collect new training data."""
     # Check if saved data exists
@@ -108,26 +113,39 @@ def get_or_collect_training_data(
                 train_data.config.get("seed") == config.seed
                 and train_data.config.get("collect_episodes") == config.collect_episodes
                 and train_data.config.get("max_steps") == config.max_steps
-                and train_data.config.get("using_context_wrapper", True)
+                and train_data.config.get("using_context_wrapper", False)
                 == approach.use_context_wrapper
+                and train_data.config.get("use_random_rollouts") == use_random_rollouts
             ):
-                print(f"Loaded {len(train_data)} training scenarios")
-                train_data.config.update(config.__dict__)
-                return train_data
+                if (
+                    use_random_rollouts
+                    and train_data.config.get("num_rollouts_per_node")
+                    == num_rollouts_per_node
+                    and train_data.config.get("max_steps_per_rollout")
+                    == max_steps_per_rollout
+                    and train_data.config.get("shortcut_success_threshold")
+                    == shortcut_success_threshold
+                ):
+                    print(f"Loaded {len(train_data)} training scenarios")
+                    train_data.config.update(config.__dict__)
+                    return train_data
 
-            if (
-                train_data.config.get("using_context_wrapper", True)
-                != approach.use_context_wrapper
-            ):
-                print("Context wrapper setting has changed, collecting new data...")
-            else:
                 print("Existing data has different config, collecting new data...")
         except Exception as e:
             print(f"Error loading training data: {e}")
             print("Collecting new data instead...")
 
     # Collect new data
-    train_data = collect_graph_based_training_data(system, approach, config.__dict__)
+    train_data, _ = collect_graph_based_training_data(
+        system,
+        approach,
+        config.__dict__,
+        use_random_rollouts=use_random_rollouts,
+        num_rollouts_per_node=num_rollouts_per_node,
+        max_steps_per_rollout=max_steps_per_rollout,
+        shortcut_success_threshold=shortcut_success_threshold,
+        rng=rng,
+    )
 
     # Save the collected data
     print(f"\nSaving training data to {data_path}")
@@ -208,14 +226,18 @@ def train_and_evaluate(
     policy_factory: Callable[[int], Policy[ObsType, ActType]],
     config: TrainingConfig,
     policy_name: str,
-    use_context_wrapper: bool = True,
+    use_context_wrapper: bool = False,
+    use_random_rollouts: bool = False,
+    num_rollouts_per_node: int = 50,
+    max_steps_per_rollout: int = 50,
+    shortcut_success_threshold: int = 1,
 ) -> Metrics:
     """Train and evaluate a policy on a system."""
     print(f"\nInitializing training for {system.name}...")
 
     # Set all random seeds at the entry point
     seed = config.seed
-    np.random.seed(seed)
+    rng = np.random.default_rng(seed)
     set_torch_seed(seed)
 
     # Print GPU information
@@ -248,7 +270,16 @@ def train_and_evaluate(
 
     # Load or collect training data for new policy
     if policy.requires_training and "_Loaded" not in policy_name:
-        train_data = get_or_collect_training_data(system, approach, config)
+        train_data = get_or_collect_training_data(
+            system,
+            approach,
+            config,
+            use_random_rollouts=use_random_rollouts,
+            num_rollouts_per_node=num_rollouts_per_node,
+            max_steps_per_rollout=max_steps_per_rollout,
+            shortcut_success_threshold=shortcut_success_threshold,
+            rng=rng,
+        )
 
         if train_data.states:
             print("\nTraining policy...")
@@ -323,13 +354,17 @@ def train_and_evaluate_goal_conditioned(
     config: TrainingConfig,
     policy_name: str,
     use_preimages: bool = True,
+    use_random_rollouts: bool = False,
+    num_rollouts_per_node: int = 50,
+    max_steps_per_rollout: int = 50,
+    shortcut_success_threshold: int = 1,
 ) -> Metrics:
     """Train and evaluate a goal-conditioned policy for shortcut learning."""
     print(f"\nInitializing goal-conditioned training for {system.name}...")
 
     # Set random seeds
     seed = config.seed
-    np.random.seed(seed)
+    rng = np.random.default_rng(seed)
     set_torch_seed(seed)
 
     training_time = 0.0
@@ -337,11 +372,23 @@ def train_and_evaluate_goal_conditioned(
 
     # Create policy and approach
     policy = policy_factory(config.seed)
-    approach = ImprovisationalTAMPApproach(system, policy, seed=config.seed)
+    approach = ImprovisationalTAMPApproach(
+        system,
+        policy,
+        seed=config.seed,
+        max_preimage_size=config.max_preimage_size,
+    )
 
     # Collect goal-conditioned training data
     train_data = collect_goal_conditioned_training_data(
-        system, approach, config.__dict__
+        system,
+        approach,
+        config.__dict__,
+        use_random_rollouts=use_random_rollouts,
+        num_rollouts_per_node=num_rollouts_per_node,
+        max_steps_per_rollout=max_steps_per_rollout,
+        shortcut_success_threshold=shortcut_success_threshold,
+        rng=rng,
     )
 
     if policy.requires_training and "_Loaded" not in policy_name:
