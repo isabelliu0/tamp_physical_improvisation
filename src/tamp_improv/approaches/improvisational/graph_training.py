@@ -6,6 +6,7 @@ from typing import Any, TypeVar
 
 import numpy as np
 from relational_structs import GroundAtom
+from tomsutils.utils import sample_seed_from_rng
 
 from tamp_improv.approaches.improvisational.base import (
     ImprovisationalTAMPApproach,
@@ -225,11 +226,12 @@ def collect_graph_based_training_data(
     config: dict[str, Any],
     max_shortcuts_per_graph: int = 100,
     target_specific_shortcuts: bool = False,
-    use_random_rollouts: bool = True,
+    use_random_rollouts: bool = False,
     num_rollouts_per_node: int = 50,
     max_steps_per_rollout: int = 50,
     shortcut_success_threshold: int = 1,
-) -> TrainingData:
+    rng: np.random.Generator | None = None,
+) -> tuple[TrainingData, dict[int, ObsType]]:
     """Collect training data by exploring the planning graph.
 
     This actively identifies potential shortcuts between nodes in the
@@ -247,14 +249,14 @@ def collect_graph_based_training_data(
     # settings from config
     collect_episodes = config.get("collect_episodes", 10)
     seed = config.get("seed", 42)
-
-    np.random.seed(seed)
+    rng = np.random.default_rng(seed)
 
     # Keep track of shortcuts we want to find
     found_target_shortcuts = []
 
     for episode in range(collect_episodes):
         print(f"\n=== Building planning graph for episode {episode + 1} ===")
+        episode_seed = sample_seed_from_rng(rng)
         obs, info = system.reset()
         _ = approach.reset(obs, info)
 
@@ -280,7 +282,7 @@ def collect_graph_based_training_data(
                 num_rollouts_per_node,
                 max_steps_per_rollout,
                 shortcut_success_threshold,
-                random_seed=seed + episode,  # Use different seed for each episode
+                random_seed=episode_seed,
             )
         else:
             shortcut_candidates = identify_shortcut_candidates(
@@ -313,11 +315,15 @@ def collect_graph_based_training_data(
             else:
                 print("No target shortcuts found, using regular selection")
                 selected_candidates = select_random_shortcuts(
-                    shortcut_candidates, max_shortcuts_per_graph
+                    shortcut_candidates,
+                    max_shortcuts_per_graph,
+                    rng,
                 )
         else:
             selected_candidates = select_random_shortcuts(
-                shortcut_candidates, max_shortcuts_per_graph
+                shortcut_candidates,
+                max_shortcuts_per_graph,
+                rng,
             )
 
         print(f"Selected {len(selected_candidates)} shortcuts for training")
@@ -394,20 +400,23 @@ def collect_graph_based_training_data(
     ):
         atom_to_index = context_env.get_atom_index_mapping()
 
-    return TrainingData(
-        states=training_states,
-        current_atoms=current_atoms_list,
-        preimages=preimages_list,
-        config={
-            **config,
-            "shortcut_info": shortcut_info,
-            "atom_to_index": atom_to_index,
-            "using_context_wrapper": approach.use_context_wrapper,
-            "use_random_rollouts": use_random_rollouts,
-            "num_rollouts_per_node": num_rollouts_per_node,
-            "max_steps_per_rollout": max_steps_per_rollout,
-            "shortcut_success_threshold": shortcut_success_threshold,
-        },
+    return (
+        TrainingData(
+            states=training_states,
+            current_atoms=current_atoms_list,
+            preimages=preimages_list,
+            config={
+                **config,
+                "shortcut_info": shortcut_info,
+                "atom_to_index": atom_to_index,
+                "using_context_wrapper": approach.use_context_wrapper,
+                "use_random_rollouts": use_random_rollouts,
+                "num_rollouts_per_node": num_rollouts_per_node,
+                "max_steps_per_rollout": max_steps_per_rollout,
+                "shortcut_success_threshold": shortcut_success_threshold,
+            },
+        ),
+        observed_states,
     )
 
 
@@ -415,39 +424,39 @@ def collect_goal_conditioned_training_data(
     system: ImprovisationalTAMPSystem,
     approach: ImprovisationalTAMPApproach,
     config: dict[str, Any],
+    use_random_rollouts: bool = False,
+    num_rollouts_per_node: int = 50,
+    max_steps_per_rollout: int = 50,
+    shortcut_success_threshold: int = 1,
+    rng: np.random.Generator | None = None,
 ) -> GoalConditionedTrainingData:
     """Collect training data for goal-conditioned learning."""
     print("\n=== Collecting Training Data for Goal-Conditioned Learning ===")
-    collect_episodes = config.get("collect_episodes", 10)
-    seed = config.get("seed", 42)
-    np.random.seed(seed)
-    all_node_states: dict[int, Any] = {}
-    all_valid_shortcuts: list[tuple[int, int]] = []
+    node_states: dict[int, Any] = {}
+    valid_shortcuts: list[tuple[int, int]] = []
     node_preimages: dict[int, set[GroundAtom]] = {}
 
-    # Collect standard training data first
-    train_data = collect_graph_based_training_data(system, approach, config)
-
-    # Now collect node states for all episodes
-    approach.training_mode = True
-    for episode in range(collect_episodes):
-        print(f"\n=== Building planning graph for episode {episode + 1} ===")
-        obs, info = system.reset()
-        _ = approach.reset(obs, info)
-
-        assert (
-            hasattr(approach, "planning_graph") and approach.planning_graph is not None
-        )
-        planning_graph = approach.planning_graph
-        node_states: dict[int, Any]
-        node_states, valid_shortcuts = collect_node_states_for_shortcuts(
-            system, planning_graph, max_attempts=3
-        )
-        all_node_states.update(node_states)
-        all_valid_shortcuts.extend(valid_shortcuts)
-        for node in planning_graph.nodes:
-            if node.id in node_states and node in planning_graph.preimages:
-                node_preimages[node.id] = planning_graph.preimages[node]
+    train_data, node_states = collect_graph_based_training_data(
+        system,
+        approach,
+        config,
+        use_random_rollouts=use_random_rollouts,
+        num_rollouts_per_node=num_rollouts_per_node,
+        max_steps_per_rollout=max_steps_per_rollout,
+        shortcut_success_threshold=shortcut_success_threshold,
+        rng=rng,
+    )
+    shortcut_info = train_data.config.get("shortcut_info", [])
+    planning_graph = approach.planning_graph
+    assert planning_graph is not None
+    for info in shortcut_info:
+        source_id = info.get("source_node_id")
+        target_id = info.get("target_node_id")
+        assert source_id is not None and target_id is not None
+        valid_shortcuts.append((source_id, target_id))
+    for node in planning_graph.nodes:
+        if node.id in node_states and node in planning_graph.preimages:
+            node_preimages[node.id] = planning_graph.preimages[node]
 
     # Create goal-conditioned training data
     goal_train_data = GoalConditionedTrainingData(
@@ -456,14 +465,13 @@ def collect_goal_conditioned_training_data(
         preimages=train_data.preimages,
         config={
             **train_data.config,
-            "node_state_count": len(all_node_states),
-            "valid_shortcut_count": len(all_valid_shortcuts),
+            "node_state_count": len(node_states),
+            "valid_shortcut_count": len(valid_shortcuts),
         },
-        node_states=all_node_states,
+        node_states=node_states,
         valid_shortcuts=valid_shortcuts,
         node_preimages=node_preimages,
     )
-    approach.training_mode = False
     return goal_train_data
 
 
@@ -549,9 +557,6 @@ def identify_promising_shortcuts_with_rollouts(
     are considered promising candidates for training.
     """
     print("\n=== Identifying Promising Shortcuts with Random Rollouts ===")
-
-    np.random.seed(random_seed)
-
     shortcut_success_counts: defaultdict[tuple[int, int], int] = defaultdict(
         int
     )  # (source_node_id, target_node_id) -> count
@@ -559,6 +564,7 @@ def identify_promising_shortcuts_with_rollouts(
 
     # Get the base environment for running rollouts
     raw_env = system.env
+    raw_env.action_space.seed(random_seed)
 
     # For each node with an observed state, perform random rollouts
     for source_node_id, source_state in observed_states.items():
@@ -769,11 +775,14 @@ def is_target_shortcut_2(candidate: ShortcutCandidate) -> bool:
 
 
 def select_random_shortcuts(
-    candidates: list[ShortcutCandidate], max_shortcuts: int
+    candidates: list[ShortcutCandidate],
+    max_shortcuts: int,
+    rng: np.random.Generator | None = None,
 ) -> list[ShortcutCandidate]:
     """Select a random subset of shortcut candidates."""
+    rng = rng or np.random.default_rng()
     if len(candidates) <= max_shortcuts:
         return candidates
     indices = np.arange(len(candidates))
-    selected_indices = np.random.choice(indices, size=max_shortcuts, replace=False)
+    selected_indices = rng.choice(indices, size=max_shortcuts, replace=False)
     return [candidates[i] for i in selected_indices]

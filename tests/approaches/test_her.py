@@ -202,6 +202,7 @@ def test_goal_conditioned_training_pipeline(algorithm):
         training_record_interval=100,
         training_data_dir="training_data/test_goal_pipeline",
         save_dir="trained_policies/test_goal_pipeline",
+        max_preimage_size=12,
         success_threshold=0.01,
         success_reward=10.0,
         step_penalty=-0.5,
@@ -230,6 +231,69 @@ def test_goal_conditioned_training_pipeline(algorithm):
         config,
         policy_name=f"Test_Goal_{algorithm}",
         use_preimages=True,
+    )
+    print(f"Success rate: {metrics.success_rate:.2%}")
+    print(f"Average episode length: {metrics.avg_episode_length:.2f}")
+
+    return metrics
+
+
+@pytest.mark.parametrize("algorithm", ["SAC"])
+def test_goal_conditioned_rl_rollouts(
+    algorithm,
+    use_random_rollouts=True,
+    num_rollouts_per_node=1000,
+    max_steps_per_rollout=100,
+    shortcut_success_threshold=1,
+):
+    """Test the full goal-conditioned RL with random rollout shortcut
+    selection."""
+    print("\n=== Testing Goal-Conditioned RL with Random Rollout Selection ===")
+    config = TrainingConfig(
+        seed=42,
+        num_episodes=1,
+        max_steps=50,
+        collect_episodes=1,
+        episodes_per_scenario=200,
+        force_collect=False,
+        render=True,
+        record_training=True,
+        training_record_interval=100,
+        training_data_dir="training_data/test_goal_rollouts",
+        save_dir="trained_policies/test_goal_rollouts",
+        max_preimage_size=12,
+        success_threshold=0.01,
+        success_reward=10.0,
+        step_penalty=-0.5,
+    )
+
+    # Create system
+    system = Blocks2DTAMPSystem.create_default(
+        seed=config.seed, render_mode="rgb_array" if config.render else None
+    )
+
+    # Create policy factory
+    def policy_factory(seed):
+        return GoalConditionedRLPolicy(
+            seed=seed,
+            config=GoalConditionedRLConfig(
+                algorithm=algorithm,
+                batch_size=64,
+                buffer_size=1000,
+                n_sampled_goal=4,
+            ),
+        )
+
+    metrics = train_and_evaluate_goal_conditioned(
+        system,
+        policy_factory,
+        config,
+        policy_name=f"Goal_{algorithm}_rollouts",
+        use_preimages=True,
+        use_random_rollouts=use_random_rollouts,
+        num_rollouts_per_node=num_rollouts_per_node,
+        max_steps_per_rollout=max_steps_per_rollout,
+        shortcut_success_threshold=shortcut_success_threshold,
     )
     print(f"Success rate: {metrics.success_rate:.2%}")
     print(f"Average episode length: {metrics.avg_episode_length:.2f}")
