@@ -391,7 +391,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         visited_states = {frozenset(init_atoms): initial_node}
         queue = deque([(initial_node, 0)])  # Queue for BFS: [(node, depth)]
         node_count = 0
-        max_nodes = 100
+        max_nodes = 500
         print(f"Building planning graph with max {max_nodes} nodes...")
 
         # Breadth-first search to build the graph
@@ -402,9 +402,12 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             print(f"\n--- Node {node_count-1} at depth {depth} ---")
             print(f"Contains {len(current_node.atoms)} atoms: {current_node.atoms}")
 
-            # Check if this is a goal state
+            # Check if this is a goal state, stop search if so
+            # NOTE: we use the same assumption as PDDL to find the goal nodes of the
+            # shortest sequences of symbolic actions
             if self._goal and self._goal.issubset(current_node.atoms):
-                continue
+                queue.clear()
+                break
 
             # Find applicable ground operators using the domain's operators
             applicable_ops = self._find_applicable_operators(
@@ -696,11 +699,17 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 num_steps = 0
                 curr_raw_obs = path_state
                 curr_aug_obs = aug_obs
+                frame_counter = 0
                 for _ in range(self._max_skill_steps):
                     act = skill.get_action(curr_aug_obs)
                     next_raw_obs, _, _, _, info = raw_env.step(act)
                     curr_raw_obs = next_raw_obs
                     atoms = self.system.perceiver.step(curr_raw_obs)
+                    frame = raw_env.render()  # type: ignore
+                    iio.imwrite(
+                        f"videos/debug_frames/frame_{frame_counter:06d}.png", frame  # type: ignore    # pylint: disable=line-too-long
+                    )
+                    frame_counter += 1
 
                     if debug and hasattr(raw_env, "render") and not self.training_mode:
                         frames.append(raw_env.render())

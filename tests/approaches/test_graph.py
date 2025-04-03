@@ -125,6 +125,7 @@ def test_planning_graph_visualization(system_cls, policy_cls, env_name):
         for atom in goal_atoms:
             f.write(f"  {atom}\n")
 
+    approach._goal = goal_atoms  # pylint: disable=protected-access
     graph = approach._create_planning_graph(  # pylint: disable=protected-access
         objects, init_atoms
     )
