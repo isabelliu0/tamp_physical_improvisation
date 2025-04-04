@@ -588,6 +588,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             edge_videos_dir = "videos/edge_computation_videos"
             os.makedirs(edge_videos_dir, exist_ok=True)
 
+        output_dir = "videos/debug_frames"
+        os.makedirs(output_dir, exist_ok=True)
+
         _, init_atoms, _ = self.system.perceiver.reset(obs, info)
         initial_node = self.planning_graph.node_map[frozenset(init_atoms)]
 
@@ -707,7 +710,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     atoms = self.system.perceiver.step(curr_raw_obs)
                     frame = raw_env.render()  # type: ignore
                     iio.imwrite(
-                        f"videos/debug_frames/frame_{frame_counter:06d}.png", frame  # type: ignore    # pylint: disable=line-too-long
+                        f"{output_dir}/frame_{frame_counter:06d}.png", frame  # type: ignore    # pylint: disable=line-too-long
                     )
                     frame_counter += 1
 
