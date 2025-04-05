@@ -82,6 +82,7 @@ class PlanningGraph:
         ] = {}
         self.node_map: dict[frozenset[GroundAtom], PlanningGraphNode] = {}
         self.preimages: dict[PlanningGraphNode, set[GroundAtom]] = {}
+        self.goal_nodes: list[PlanningGraphNode] = []
 
     def add_node(self, atoms: set[GroundAtom]) -> PlanningGraphNode:
         """Add a node to the graph."""
@@ -117,15 +118,21 @@ class PlanningGraph:
         effects]
         """
         self.preimages = {}
-        goal_nodes = [node for node in self.nodes if goal.issubset(node.atoms)]
-        assert len(goal_nodes) == 1, "Figure out how to handle this"
-        goal_node = goal_nodes[0]
-        self.preimages[goal_node] = set(goal)
+        self.goal_nodes = [node for node in self.nodes if goal.issubset(node.atoms)]
+        assert self.goal_nodes, "No goal node found"
+        print(f"Found {len(self.goal_nodes)} goal nodes")
+        for goal_node in self.goal_nodes:
+            self.preimages[goal_node] = set(goal)
 
-        # Work backwards from the goal in (reverse) breadth-first order
-        queue = [goal_node]
+        # Initialize queue with all goal nodes
+        queue = []
+        for goal_node in self.goal_nodes:
+            self.preimages[goal_node] = set(goal)
+            queue.append(goal_node)
+
+        # Work backwards from the goals in (reverse) breadth-first order
         while queue:
-            node = queue.pop(0)  # breadth-first
+            node = queue.pop(0)
             assert node in self.preimages
             incoming_edges = self.node_to_incoming_edges[node]
             for edge in incoming_edges:
@@ -133,11 +140,9 @@ class PlanningGraph:
                 source_preimage = self.preimages[node].copy()
                 source_preimage.difference_update(edge.operator.add_effects)
                 source_preimage.update(edge.operator.preconditions)
-                # If there is more than one path to get to the goal, prefer
-                # the one that is closer to the goal -- this should happen
-                # because we are expanding in reverse breadth-first order.
-                # It's possible that there are ties, in which case we are
-                # tiebreaking arbitrarily.
+                # NOTE: If several branches start from the same source node, we only
+                # define the preimage of the source node once when we first encounter
+                # it in reverse BFS.
                 if edge.source not in self.preimages:
                     self.preimages[edge.source] = source_preimage
                     queue.append(edge.source)
@@ -209,7 +214,6 @@ class PlanningGraph:
         # Find the best goal state
         goal_states = [(n, p) for (n, p) in distances if n == goal_node]
         assert goal_states, "No goal state found"
-
         best_goal_state = min(goal_states, key=lambda s: distances.get(s, float("inf")))
 
         # Reconstruct path

@@ -195,7 +195,7 @@ def test_goal_conditioned_training_pipeline(algorithm):
         num_episodes=1,
         max_steps=50,
         collect_episodes=1,
-        episodes_per_scenario=200,
+        episodes_per_scenario=250,
         force_collect=True,
         render=True,
         record_training=False,

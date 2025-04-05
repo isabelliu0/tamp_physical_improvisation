@@ -28,7 +28,7 @@ def test_pybullet():
         action = planner.step(obs)
         obs, reward, done, _, info = system.env.step(action)
         if done:
-            print(f"Goal reached in {step + 1} steps with pushing models!")
+            print(f"Goal reached in {step + 1} steps!")
             assert reward > 0
             break
     else:

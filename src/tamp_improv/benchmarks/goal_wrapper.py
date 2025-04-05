@@ -157,53 +157,6 @@ class GoalConditionedWrapper(gym.Wrapper):
 
         return dict_obs, info
 
-    def reset_from_state(
-        self,
-        state: ObsType,
-        *,
-        seed: int | None = None,
-        options: dict[str, Any] | None = None,
-    ) -> tuple[dict[str, ObsType], dict[str, Any]]:
-        """Reset wrapped environment to a specific state."""
-        self.steps = 0
-        options = options or {}
-        self.current_node_id = options.get("source_node_id")
-        self.goal_node_id = options.get("goal_node_id")
-        self._sample_valid_nodes()
-
-        if hasattr(self.env, "reset_from_state"):
-            obs, info = self.env.reset_from_state(state, seed=seed)
-        else:
-            raise AttributeError(
-                "Base environment doesn't have reset_from_state method"
-            )
-        assert self.current_node_id is not None and self.goal_node_id is not None
-        self.goal_state = self.node_states[self.goal_node_id]
-
-        info.update(
-            {
-                "source_node_id": self.current_node_id,
-                "goal_node_id": self.goal_node_id,
-            }
-        )
-
-        if self.use_preimages:
-            self.goal_preimage_vector = self.preimage_vectors[self.goal_node_id]
-            current_preimage_vector = self._get_current_preimage_vector(obs)
-            dict_obs = {
-                "observation": obs,
-                "achieved_goal": current_preimage_vector,
-                "desired_goal": self.goal_preimage_vector,
-            }
-        else:
-            dict_obs = {
-                "observation": obs,
-                "achieved_goal": obs,
-                "desired_goal": self.goal_state,
-            }
-
-        return dict_obs, info
-
     def step(
         self, action: ActType
     ) -> tuple[dict[str, ObsType], float, bool, bool, dict[str, Any]]:
