@@ -66,16 +66,6 @@ class ContextAwareWrapper(gym.Wrapper):
             info,
         )
 
-    def reset_from_state(
-        self, state: ObsType, **kwargs: Any
-    ) -> tuple[ObsType, dict[str, Any]]:
-        """Reset from state with context augmentation."""
-        if hasattr(self.env, "reset_from_state"):
-            obs, info = self.env.reset_from_state(state, **kwargs)
-            self.current_atoms = self.perceiver.step(obs)
-            return self.augment_observation(obs), info
-        raise AttributeError("Wrapped environment doesn't have reset_from_state")
-
     def augment_observation(self, obs: ObsType) -> ObsType:
         """Augment observation with multi-hot vector for preimage atoms."""
         context = np.zeros(self.num_context_features, dtype=np.float32)

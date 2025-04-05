@@ -243,6 +243,7 @@ def test_multi_rl_pipeline(use_context_wrapper):
         config,
         policy_name=f"MultiRL{'_Context' if use_context_wrapper else ''}",
         use_context_wrapper=use_context_wrapper,
+        use_random_rollouts=False,
     )
 
     print("\n=== Results ===")
