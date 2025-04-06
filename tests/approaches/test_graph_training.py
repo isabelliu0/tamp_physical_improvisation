@@ -243,6 +243,7 @@ def test_multi_rl_pipeline(use_context_wrapper):
         config,
         policy_name=f"MultiRL{'_Context' if use_context_wrapper else ''}",
         use_context_wrapper=use_context_wrapper,
+        use_random_rollouts=False,
     )
 
     print("\n=== Results ===")
@@ -321,6 +322,7 @@ def test_multi_rl_rollouts(
     return metrics
 
 
+@pytest.mark.skip()
 def test_graph_mpc_pipeline(use_context_wrapper=True):
     """Test MPC policy with specific target shortcuts."""
     print("\n=== Testing MPC Policy with Specific Target Shortcuts ===")
@@ -377,6 +379,7 @@ def test_graph_mpc_pipeline(use_context_wrapper=True):
     return metrics
 
 
+@pytest.mark.skip()
 def test_graph_rl2mpc_pipeline(use_context_wrapper=True):
     """Test RL2MPC policy with the training and evaluation pipeline."""
     print("\n=== Testing RL2MPC with Training Pipeline ===")

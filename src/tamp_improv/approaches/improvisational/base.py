@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import itertools
 import os
 from collections import deque
@@ -391,7 +392,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         visited_states = {frozenset(init_atoms): initial_node}
         queue = deque([(initial_node, 0)])  # Queue for BFS: [(node, depth)]
         node_count = 0
-        max_nodes = 100
+        max_nodes = 500
         print(f"Building planning graph with max {max_nodes} nodes...")
 
         # Breadth-first search to build the graph
@@ -402,9 +403,12 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             print(f"\n--- Node {node_count-1} at depth {depth} ---")
             print(f"Contains {len(current_node.atoms)} atoms: {current_node.atoms}")
 
-            # Check if this is a goal state
+            # Check if this is a goal state, stop search if so
+            # NOTE: we use the same assumption as PDDL to find the goal nodes of the
+            # shortest sequences of symbolic actions
             if self._goal and self._goal.issubset(current_node.atoms):
-                continue
+                queue.clear()
+                break
 
             # Find applicable ground operators using the domain's operators
             applicable_ops = self._find_applicable_operators(
@@ -585,6 +589,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             edge_videos_dir = "videos/edge_computation_videos"
             os.makedirs(edge_videos_dir, exist_ok=True)
 
+        output_dir = "videos/debug_frames"
+        os.makedirs(output_dir, exist_ok=True)
+
         _, init_atoms, _ = self.system.perceiver.reset(obs, info)
         initial_node = self.planning_graph.node_map[frozenset(init_atoms)]
 
@@ -596,7 +603,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         empty_path: tuple[int, ...] = tuple()
         path_states[(empty_path, initial_node, initial_node)] = (obs, info)
 
-        raw_env = self._get_base_env(self.system.wrapped_env)
+        raw_env = self._create_planning_env()
         using_goal_env, goal_env = self._using_goal_env(self.system.wrapped_env)
 
         # BFS to explore all paths
@@ -604,6 +611,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         explored_segments = set()
         while queue:
             node, path = queue.pop(0)
+            print(f"Exploring node {node.id} with path {path}")
             if (path, node) in explored_segments:
                 continue
             explored_segments.add((path, node))
@@ -616,6 +624,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
             # Try each outgoing edge from this node
             for edge in self.planning_graph.node_to_outgoing_edges.get(node, []):
+                print(f"Trying edge {node.id} -> {edge.target.id}")
                 if (path, node, edge.target) in path_states:
                     continue
                 if edge.target.id <= node.id:
@@ -696,11 +705,17 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 num_steps = 0
                 curr_raw_obs = path_state
                 curr_aug_obs = aug_obs
+                frame_counter = 0
                 for _ in range(self._max_skill_steps):
                     act = skill.get_action(curr_aug_obs)
                     next_raw_obs, _, _, _, info = raw_env.step(act)
                     curr_raw_obs = next_raw_obs
                     atoms = self.system.perceiver.step(curr_raw_obs)
+                    # frame = raw_env.render()
+                    # iio.imwrite(
+                    #     f"{output_dir}/frame_{frame_counter:06d}.png", frame
+                    # )
+                    frame_counter += 1
 
                     if debug and hasattr(raw_env, "render") and not self.training_mode:
                         frames.append(raw_env.render())
@@ -763,6 +778,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     # Edge expansion failed.
                     if debug and frames:
                         iio.mimsave(video_filename, frames, fps=5)
+                    print(
+                        f"Edge expansion failed: {edge.source.id} -> {edge.target.id}"
+                    )
                     continue
 
                 # Store cost for this specific path
@@ -786,24 +804,30 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     f"Edge {edge.source.id}->{edge.target.id}: {', '.join(cost_details)}"
                 )
 
-    def _get_base_env(self, env: gym.Env) -> gym.Env:
-        """Get the base environment by unwrapping wrappers if needed."""
-        current_env = env
+    def _create_planning_env(self) -> gym.Env:
+        """Create a separate environment instance for planning simulations."""
+        current_env = self.system.env
+        valid_base_env = False
         while hasattr(current_env, "env"):
-            if isinstance(current_env, ContextAwareWrapper):
-                current_env = current_env.env
-                continue
-            if isinstance(current_env, GoalConditionedWrapper):
-                current_env = current_env.env
-                continue
             if hasattr(current_env, "reset_from_state"):
-                return current_env
+                valid_base_env = True
+                break
             current_env = current_env.env
-
         if hasattr(current_env, "reset_from_state"):
-            return current_env
+            valid_base_env = True
+        if not valid_base_env:
+            raise AttributeError(
+                "Could not find base environment with reset_from_state method"
+            )
+        base_env = current_env
 
-        raise AttributeError("Could not find environment with reset_from_state method")
+        if hasattr(base_env, "clone"):
+            planning_env = base_env.clone()
+            print("Created planning environment using custom clone() method.")
+            return planning_env
+        planning_env = copy.deepcopy(base_env)
+        print("No custom clone() found. Created planning environment using deepcopy().")
+        return planning_env
 
     def _using_goal_env(
         self, env: gym.Env | None

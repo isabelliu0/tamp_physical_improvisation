@@ -112,22 +112,6 @@ class ImprovWrapper(gym.Env):
 
         return self.env.reset(seed=seed, options=options)
 
-    def reset_from_state(
-        self,
-        state: ObsType,
-        *,
-        seed: int | None = None,
-    ) -> tuple[ObsType, dict[str, Any]]:
-        """Reset wrapped environment from state."""
-        self.steps = 0
-
-        if hasattr(self.env, "reset_from_state"):
-            obs, info = self.env.reset_from_state(state, seed=seed)
-            return obs, info
-        raise AttributeError(
-            "The wrapped environment does not have a 'reset_from_state' method."
-        )
-
     def step(
         self,
         action: ActType,

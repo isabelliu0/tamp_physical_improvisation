@@ -1,5 +1,7 @@
 """Core blocks2d environment."""
 
+from __future__ import annotations
+
 from typing import Any, NamedTuple
 
 import gymnasium as gym
@@ -438,3 +440,9 @@ class Blocks2DEnv(gym.Env):
         img = fig2data(fig)
         plt.close(fig)
         return img
+
+    def clone(self) -> Blocks2DEnv:
+        """Clone the environment."""
+        clone_env = Blocks2DEnv(self.render_mode)
+        clone_env.reset_from_state(self.state)
+        return clone_env
