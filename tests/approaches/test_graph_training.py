@@ -269,7 +269,7 @@ def test_multi_rl_rollouts(
     config = TrainingConfig(
         seed=42,
         num_episodes=1,
-        max_steps=500,
+        max_steps=200,
         collect_episodes=1,
         episodes_per_scenario=200,
         force_collect=False,

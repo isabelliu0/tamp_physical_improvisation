@@ -174,7 +174,10 @@ class PlanningGraph:
             if current_node in goal_nodes:
                 reached_goal_nodes.add(current_node)
                 # If we reached all goal nodes, we can stop
-                if len(reached_goal_nodes) == len(goal_nodes) and all(best_node_costs.get(goal, float("inf")) <= current_dist for goal in goal_nodes):
+                if len(reached_goal_nodes) == len(goal_nodes) and all(
+                    best_node_costs.get(goal, float("inf")) <= current_dist
+                    for goal in goal_nodes
+                ):
                     break
 
             # Check all outgoing edges
@@ -204,8 +207,11 @@ class PlanningGraph:
             goal_states = [(n, p) for (n, p) in distances if n == goal_node]
             if not goal_states:
                 continue
-            best_goal_states[goal_node] = min(goal_states, key=lambda s: distances.get(s, float("inf")))
-        
+            best_goal_states[goal_node] = min(
+                goal_states, key=lambda s: distances.get(s, float("inf"))
+            )
+
+        assert best_goal_states, "No goal state found"
         best_goal_state = min(
             best_goal_states.values(),
             key=lambda s: distances.get(s, float("inf")),

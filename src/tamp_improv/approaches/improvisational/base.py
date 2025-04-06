@@ -626,15 +626,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     continue
                 if edge.target.id <= node.id:
                     continue
-                # if not (node.id == 0 and edge.target.id == 2) and \
-                #     not (node.id == 2 and edge.target.id == 5) and \
-                #     not (node.id == 5 and edge.target.id == 8) and \
-                #     not (node.id == 8 and edge.target.id == 15) and \
-                #     not (node.id == 15 and edge.target.id == 25) and \
-                #     not (node.id == 25 and edge.target.id == 50) and \
-                #     not (node.id == 50 and edge.target.id == 76) and \
-                #     not (node.id == 76 and edge.target.id == 129):
-                #     continue
 
                 frames: list[Any] = []
                 video_filename = ""
@@ -645,7 +636,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     )
                     video_filename = f"{edge_videos_dir}/edge_{node.id}_to_{edge.target.id}_{edge_type}_via_{path_str}.mp4"  # pylint: disable=line-too-long
 
-                # import ipdb; ipdb.set_trace()
                 raw_env.reset_from_state(path_state)  # type: ignore
 
                 if debug and hasattr(raw_env, "render") and not self.training_mode:

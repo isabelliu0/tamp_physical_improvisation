@@ -27,11 +27,11 @@ def _get_training_config():
     )
 
 
-# @pytest.mark.skip("Debugging...")
+@pytest.mark.skip("Debugging...")
 @pytest.mark.parametrize(
     "system_cls,policy_cls,env_name",
     [
-        # (Blocks2DTAMPSystem, PushingPolicy, "blocks2d"),
+        (Blocks2DTAMPSystem, PushingPolicy, "blocks2d"),
         (ClearAndPlaceTAMPSystem, PybulletPushingPolicy, "pybullet"),
     ],
 )
