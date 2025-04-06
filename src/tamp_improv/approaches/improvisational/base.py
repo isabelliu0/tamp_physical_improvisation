@@ -407,8 +407,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             # NOTE: we use the same assumption as PDDL to find the goal nodes of the
             # shortest sequences of symbolic actions
             if self._goal and self._goal.issubset(current_node.atoms):
-                queue.clear()
-                break
+                continue
 
             # Find applicable ground operators using the domain's operators
             applicable_ops = self._find_applicable_operators(
@@ -611,7 +610,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         explored_segments = set()
         while queue:
             node, path = queue.pop(0)
-            print(f"Exploring node {node.id} with path {path}")
             if (path, node) in explored_segments:
                 continue
             explored_segments.add((path, node))
@@ -624,11 +622,19 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
             # Try each outgoing edge from this node
             for edge in self.planning_graph.node_to_outgoing_edges.get(node, []):
-                print(f"Trying edge {node.id} -> {edge.target.id}")
                 if (path, node, edge.target) in path_states:
                     continue
                 if edge.target.id <= node.id:
                     continue
+                # if not (node.id == 0 and edge.target.id == 2) and \
+                #     not (node.id == 2 and edge.target.id == 5) and \
+                #     not (node.id == 5 and edge.target.id == 8) and \
+                #     not (node.id == 8 and edge.target.id == 15) and \
+                #     not (node.id == 15 and edge.target.id == 25) and \
+                #     not (node.id == 25 and edge.target.id == 50) and \
+                #     not (node.id == 50 and edge.target.id == 76) and \
+                #     not (node.id == 76 and edge.target.id == 129):
+                #     continue
 
                 frames: list[Any] = []
                 video_filename = ""
@@ -639,6 +645,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     )
                     video_filename = f"{edge_videos_dir}/edge_{node.id}_to_{edge.target.id}_{edge_type}_via_{path_str}.mp4"  # pylint: disable=line-too-long
 
+                # import ipdb; ipdb.set_trace()
                 raw_env.reset_from_state(path_state)  # type: ignore
 
                 if debug and hasattr(raw_env, "render") and not self.training_mode:
@@ -706,16 +713,24 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 curr_raw_obs = path_state
                 curr_aug_obs = aug_obs
                 frame_counter = 0
+                # frame = raw_env.render()
+                # iio.imwrite(
+                #     f"{output_dir}/frame_{frame_counter:06d}.png", frame
+                # )
+                is_success = False
                 for _ in range(self._max_skill_steps):
                     act = skill.get_action(curr_aug_obs)
+                    if act is None:
+                        print("No action returned by skill")
+                        break
                     next_raw_obs, _, _, _, info = raw_env.step(act)
                     curr_raw_obs = next_raw_obs
                     atoms = self.system.perceiver.step(curr_raw_obs)
+                    frame_counter += 1
                     # frame = raw_env.render()
                     # iio.imwrite(
                     #     f"{output_dir}/frame_{frame_counter:06d}.png", frame
                     # )
-                    frame_counter += 1
 
                     if debug and hasattr(raw_env, "render") and not self.training_mode:
                         frames.append(raw_env.render())
@@ -773,8 +788,10 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                                 frames,
                                 fps=5,
                             )
+                        is_success = True
                         break  # success
-                else:
+
+                if not is_success:
                     # Edge expansion failed.
                     if debug and frames:
                         iio.mimsave(video_filename, frames, fps=5)
