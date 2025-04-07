@@ -325,9 +325,17 @@ class Blocks2DPerceiver(Perceiver[NDArray[np.float32]]):
         elif not block2_held:
             atoms.add(self.predicates["On"]([self._block_2, self._table]))
 
-        # Check if surface is clear: Target area is blocked by block 2 if overlapped
-        is_target_clear = block2_held or not self._is_target_area_blocked(
-            block_2_x, block_width, target_x, target_width
+        # Check if surface is clear
+        is_target_clear = (
+            block2_held
+            or not self._is_target_area_blocked(
+                block_2_x, block_width, target_x, target_width
+            )
+        ) and (
+            block1_held
+            or not self._is_target_area_blocked(
+                block_1_x, block_width, target_x, target_width
+            )
         )
         if is_target_clear:
             atoms.add(self.predicates["Clear"]([self._target_area]))
