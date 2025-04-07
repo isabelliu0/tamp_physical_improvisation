@@ -407,7 +407,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             # NOTE: we use the same assumption as PDDL to find the goal nodes of the
             # shortest sequences of symbolic actions
             if self._goal and self._goal.issubset(current_node.atoms):
-                continue
+                queue.clear()
+                break
 
             # Find applicable ground operators using the domain's operators
             applicable_ops = self._find_applicable_operators(
@@ -601,6 +602,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         explored_segments = set()
         while queue:
             node, path = queue.pop(0)
+            print(f"Exploring node {node.id} with path {path}")
             if (path, node) in explored_segments:
                 continue
             explored_segments.add((path, node))
@@ -613,6 +615,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
             # Try each outgoing edge from this node
             for edge in self.planning_graph.node_to_outgoing_edges.get(node, []):
+                print(f"Trying edge {node.id} -> {edge.target.id}")
                 if (path, node, edge.target) in path_states:
                     continue
                 if edge.target.id <= node.id:
