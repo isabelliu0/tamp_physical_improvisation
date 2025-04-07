@@ -225,7 +225,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         # Check if policy achieved its goal
         if self.policy_active and self.planning_graph:
             current_node = self._current_edge.source if self._current_edge else None
-            if current_node and self._current_preimage.issubset(atoms):
+            if current_node and self._current_preimage == atoms:
                 print("Policy successfully achieved preimage!")
                 self._current_edge = None
                 self.policy_active = False
@@ -338,7 +338,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             self._current_skill.reset(self._current_operator)
 
         # Check if current edge's target state is achieved
-        if self._current_edge and set(self._current_edge.target.atoms).issubset(atoms):
+        if self._current_edge and set(self._current_edge.target.atoms) == atoms:
             print("Edge target achieved")
             self._current_edge = None
             return self.step(obs, reward, terminated, truncated, info)
@@ -439,15 +439,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         )
 
         # Print detailed graph structure
-        print("\nDetailed Graph Structure:")
-        for node in sorted(graph.nodes, key=lambda n: n.id):
-            print(f"\nNode {node.id}:")
-            print("  Key atoms:")
-            count = 0
-            for atom in node.atoms:
-                print(f"  - {atom}")
-                count += 1
-
         print("\nGraph Edges:")
         for edge in graph.edges:
             op_str = f"{edge.operator.name}" if edge.operator else "SHORTCUT"
@@ -626,6 +617,13 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     continue
                 if edge.target.id <= node.id:
                     continue
+                # if (
+                #     not (node.id == 0 and edge.target.id == 50)
+                #     and not (node.id == 50 and edge.target.id == 76)
+                #     and not (node.id == 76 and edge.target.id == 129)
+                # ):
+                #     continue
+                # print(f"Exploring edge {node.id} -> {edge.target.id}")
 
                 frames: list[Any] = []
                 video_filename = ""
@@ -763,7 +761,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
                     num_steps += 1
 
-                    if preimage.issubset(atoms):
+                    if preimage == atoms:
                         path_str = (
                             "-".join(str(node_id) for node_id in path)
                             if path

@@ -119,7 +119,7 @@ def collect_states_for_all_nodes(
                     obs, _, term, trunc, info = system.env.step(action)
                     atoms = system.perceiver.step(obs)
 
-                    if set(edge.target.atoms).issubset(atoms):
+                    if set(edge.target.atoms) == atoms:
                         print(f"  Reached state for node {edge.target.id}")
                         break
 
@@ -616,7 +616,7 @@ def identify_promising_shortcuts_with_rollouts(
                     # since we want to explore all reachable preimages
                     if target_node in planning_graph.preimages:
                         preimage = planning_graph.preimages[target_node]
-                        if preimage and preimage.issubset(curr_atoms):
+                        if preimage and preimage == curr_atoms:
                             reached_preimages[target_node.id] += 1
                             shortcut_success_counts[
                                 (source_node_id, target_node.id)

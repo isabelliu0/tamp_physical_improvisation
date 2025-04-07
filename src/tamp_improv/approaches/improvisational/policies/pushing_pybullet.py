@@ -200,7 +200,7 @@ class PybulletPushingPolicy(Policy[NDArray[np.float32], NDArray[np.float32]]):
                     sim.robot.get_end_effector_pose(),
                     push_target_pose,
                     include_start=False,
-                    num_interp=100,  # slow movement for stable pushing
+                    num_interp=150,  # slow movement for stable pushing
                 )
             )
             push_plan = smoothly_follow_end_effector_path(

@@ -122,7 +122,7 @@ class ImprovWrapper(gym.Env):
         current_atoms = self.perceiver.step(obs)
 
         # Check achievement of preimage
-        achieved = self.current_preimage.issubset(current_atoms)
+        achieved = self.current_preimage == current_atoms
 
         # Calculate reward
         reward = self.step_penalty
