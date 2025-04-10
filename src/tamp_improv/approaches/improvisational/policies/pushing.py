@@ -89,7 +89,7 @@ class PushingPolicy(Policy[NDArray[np.float32], NDArray[np.float32]]):
         # Push
         return np.array([push_direction, 0.0, obs[10]])
 
-    def train(self, env: gym.Env, train_data: TrainingData) -> None:
+    def train(self, env: gym.Env, train_data: TrainingData | None) -> None:
         """No training needed for hard-coded policy."""
 
     def save(self, path: str) -> None:

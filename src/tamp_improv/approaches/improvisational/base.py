@@ -11,6 +11,7 @@ from typing import Any
 
 import gymnasium as gym
 import imageio.v2 as iio
+import numpy as np
 from relational_structs import (
     GroundAtom,
     GroundOperator,
@@ -174,6 +175,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self._current_edge: PlanningGraphEdge | None = None
         self._current_preimage: set[GroundAtom] = set()
         self.policy_active = False
+        self.observed_states: dict[int, list[ObsType]] = {}
 
         # Shortcut signatures for similarity matching
         self.trained_signatures: list[ShortcutSignature] = []
@@ -188,6 +190,12 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
         # Compute preimages
         self.planning_graph.compute_preimages(goal)
+
+        # Store initial state in observed states
+        initial_node = self.planning_graph.node_map[frozenset(atoms)]
+        if initial_node.id not in self.observed_states:
+            self.observed_states[initial_node.id] = []
+        self.observed_states[initial_node.id].append(obs)
 
         # Try to add shortcuts
         if not self.training_mode:
@@ -407,7 +415,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             # NOTE: we use the same assumption as PDDL to find the goal nodes of the
             # shortest sequences of symbolic actions
             if self._goal and self._goal.issubset(current_node.atoms):
-                continue
+                queue.clear()
+                break
 
             # Find applicable ground operators using the domain's operators
             applicable_ops = self._find_applicable_operators(
@@ -617,13 +626,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     continue
                 if edge.target.id <= node.id:
                     continue
-                # if (
-                #     not (node.id == 0 and edge.target.id == 50)
-                #     and not (node.id == 50 and edge.target.id == 76)
-                #     and not (node.id == 76 and edge.target.id == 129)
-                # ):
-                #     continue
-                # print(f"Exploring edge {node.id} -> {edge.target.id}")
 
                 frames: list[Any] = []
                 video_filename = ""
@@ -762,6 +764,21 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     num_steps += 1
 
                     if preimage == atoms:
+                        # Store the observed state for the target node
+                        target_id = edge.target.id
+                        if target_id not in self.observed_states:
+                            self.observed_states[target_id] = []
+                        is_duplicate = False
+                        for existing_obs in self.observed_states[target_id]:
+                            assert isinstance(existing_obs, np.ndarray) and isinstance(
+                                curr_raw_obs, np.ndarray
+                            ), "Expected obs as numpy arrays for comparison"
+                            if np.array_equal(existing_obs, curr_raw_obs):
+                                is_duplicate = True
+                                break
+                        if not is_duplicate:
+                            self.observed_states[target_id].append(curr_raw_obs)
+
                         path_str = (
                             "-".join(str(node_id) for node_id in path)
                             if path

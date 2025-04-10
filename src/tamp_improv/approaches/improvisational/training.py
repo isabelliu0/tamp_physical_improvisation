@@ -17,8 +17,10 @@ from tamp_improv.approaches.improvisational.graph_training import (
     collect_graph_based_training_data,
 )
 from tamp_improv.approaches.improvisational.policies.base import Policy, TrainingData
+from tamp_improv.approaches.pure_rl import PureRLApproach
 from tamp_improv.benchmarks.base import ImprovisationalTAMPSystem
 from tamp_improv.benchmarks.goal_wrapper import GoalConditionedWrapper
+from tamp_improv.benchmarks.wrappers import PureRLWrapper
 from tamp_improv.utils.gpu_utils import set_torch_seed
 
 ObsType = TypeVar("ObsType")
@@ -33,6 +35,7 @@ class TrainingConfig:
     seed: int = 42
     num_episodes: int = 50
     max_steps: int = 100
+    max_training_steps_per_shortcut: int = 50
 
     # Collection settings
     collect_episodes: int = 100
@@ -65,6 +68,9 @@ class TrainingConfig:
     success_threshold: float = 0.01
     success_reward: float = 10.0
     step_penalty: float = -0.5
+
+    # Action scaling
+    action_scale: float = 1.0
 
     def get_training_data_path(self, system_name: str) -> Path:
         """Get path for training data for specific system."""
@@ -144,6 +150,7 @@ def get_or_collect_training_data(
         num_rollouts_per_node=num_rollouts_per_node,
         max_steps_per_rollout=max_steps_per_rollout,
         shortcut_success_threshold=shortcut_success_threshold,
+        action_scale=config.action_scale,
         rng=rng,
     )
 
@@ -162,7 +169,9 @@ def get_or_collect_training_data(
 
 def run_evaluation_episode(
     system: ImprovisationalTAMPSystem[ObsType, ActType],
-    approach: ImprovisationalTAMPApproach[ObsType, ActType],
+    approach: (
+        ImprovisationalTAMPApproach[ObsType, ActType] | PureRLApproach[ObsType, ActType]
+    ),
     policy_name: str,
     config: TrainingConfig,
     is_loaded_policy: bool = False,
@@ -450,6 +459,94 @@ def train_and_evaluate_goal_conditioned(
             policy_name,
             config,
             is_loaded_policy="_Loaded" in policy_name,
+            episode_num=episode,
+        )
+        rewards.append(reward)
+        lengths.append(length)
+        successes.append(success)
+
+        print(f"Current Success Rate: {sum(successes)/(episode+1):.2%}")
+        print(f"Current Avg Episode Length: {np.mean(lengths):.2f}")
+        print(f"Current Avg Reward: {np.mean(rewards):.2f}")
+
+    total_time = time.time() - start_time
+    return Metrics(
+        success_rate=float(sum(successes) / len(successes)),
+        avg_episode_length=float(np.mean(lengths)),
+        avg_reward=float(np.mean(rewards)),
+        training_time=training_time,
+        total_time=total_time,
+    )
+
+
+def train_and_evaluate_pure_rl(
+    system: ImprovisationalTAMPSystem[ObsType, ActType],
+    policy_factory: Callable[[int], Policy[ObsType, ActType]],
+    config: TrainingConfig,
+    policy_name: str,
+) -> Metrics:
+    """Train and evaluate a pure RL policy on a system."""
+    print(f"\nInitializing pure RL baseline training for {system.name}...")
+    seed = config.seed
+    set_torch_seed(seed)
+
+    policy = policy_factory(seed)
+
+    obs, info = system.reset()
+    _, _, goal_atoms = system.perceiver.reset(obs, info)
+
+    pure_rl_env = PureRLWrapper(
+        env=system.env,
+        perceiver=system.perceiver,
+        goal_atoms=goal_atoms,
+        max_episode_steps=config.max_steps,
+        step_penalty=config.step_penalty,
+        achievement_bonus=config.success_reward,
+        action_scale=config.action_scale,
+    )
+
+    render_mode = getattr(pure_rl_env, "_render_mode", None)
+    can_render = render_mode is not None
+    if config.record_training and can_render:
+        video_folder = Path(f"videos/{system.name}_{policy_name}_train")
+        video_folder.mkdir(parents=True, exist_ok=True)
+        pure_rl_env = RecordVideo(
+            pure_rl_env,  # type: ignore[assignment]
+            str(video_folder),
+            episode_trigger=lambda x: x % config.training_record_interval == 0,
+            name_prefix="training",
+        )
+
+    # Initialize policy
+    policy.initialize(pure_rl_env)
+
+    # Train policy if needed
+    start_time = time.time()
+    if policy.requires_training:
+        print("\nTraining pure RL policy...")
+        policy.train(pure_rl_env, train_data=None)
+
+        save_path = Path(config.save_dir) / f"{system.name}_{policy_name}"
+        policy.save(str(save_path))
+
+    training_time = time.time() - start_time
+
+    approach = PureRLApproach(system, policy, seed)
+
+    # Run evaluation
+    print(f"\nEvaluating pure RL policy on {system.name}...")
+    rewards = []
+    lengths = []
+    successes = []
+
+    for episode in range(config.num_episodes):
+        print(f"\nEvaluation Episode {episode + 1}/{config.num_episodes}")
+        reward, length, success = run_evaluation_episode(
+            system,
+            approach,
+            policy_name,
+            config,
+            is_loaded_policy=False,
             episode_num=episode,
         )
         rewards.append(reward)
