@@ -116,36 +116,14 @@ class PlanningGraph:
 
         Preimage(j) := Preimage(j+1) + op(j)[preconditions] - op(j)[add
         effects]
+        Instead of the above definition, we use the set of atoms in the node directly.
         """
         self.preimages = {}
         self.goal_nodes = [node for node in self.nodes if goal.issubset(node.atoms)]
         assert self.goal_nodes, "No goal node found"
         print(f"Found {len(self.goal_nodes)} goal nodes")
-        for goal_node in self.goal_nodes:
-            self.preimages[goal_node] = set(goal)
-
-        # Initialize queue with all goal nodes
-        queue = []
-        for goal_node in self.goal_nodes:
-            self.preimages[goal_node] = set(goal)
-            queue.append(goal_node)
-
-        # Work backwards from the goals in (reverse) breadth-first order
-        while queue:
-            node = queue.pop(0)
-            assert node in self.preimages
-            incoming_edges = self.node_to_incoming_edges[node]
-            for edge in incoming_edges:
-                assert edge.operator and not edge.is_shortcut
-                source_preimage = self.preimages[node].copy()
-                source_preimage.difference_update(edge.operator.add_effects)
-                source_preimage.update(edge.operator.preconditions)
-                # NOTE: If several branches start from the same source node, we only
-                # define the preimage of the source node once when we first encounter
-                # it in reverse BFS.
-                if edge.source not in self.preimages:
-                    self.preimages[edge.source] = source_preimage
-                    queue.append(edge.source)
+        for node in self.nodes:
+            self.preimages[node] = set(node.atoms)
 
     def find_shortest_path(
         self, init_atoms: set[GroundAtom], goal: set[GroundAtom]
@@ -158,8 +136,6 @@ class PlanningGraph:
         initial_node = self.node_map[frozenset(init_atoms)]
         goal_nodes = [node for node in self.nodes if goal.issubset(node.atoms)]
         assert goal_nodes, "No goal node found"
-        assert len(goal_nodes) == 1, "No support for multiple goal nodes"
-        goal_node = goal_nodes[0]
 
         # Modified Dijkstra's algorithm that considers the path taken
         distances: dict[tuple[PlanningGraphNode, tuple[int, ...]], float] = {}
@@ -181,27 +157,41 @@ class PlanningGraph:
             (0, next(counter), start_state)
         ]  # (distance, counter, (node, path))
 
-        # Track visited states to avoid cycles
-        visited = set()
+        # Track best cost to each node, regardless of path
+        best_node_costs: dict[PlanningGraphNode, float] = {initial_node: 0.0}
 
+        reached_goal_nodes = set()
+        max_path_length = len(self.nodes) * 2
         while queue:
             # Get state with smallest distance
             current_dist, _, current_state = heapq.heappop(queue)
             current_node, current_path = current_state
-
-            if current_state in visited:
+            if len(current_path) > max_path_length:
                 continue
-            visited.add(current_state)
+            if current_dist > best_node_costs.get(current_node, float("inf")):
+                continue
 
-            if current_node == goal_node:
-                break
+            if current_node in goal_nodes:
+                reached_goal_nodes.add(current_node)
+                # If we reached all goal nodes, we can stop
+                if len(reached_goal_nodes) == len(goal_nodes) and all(
+                    best_node_costs.get(goal, float("inf")) <= current_dist
+                    for goal in goal_nodes
+                ):
+                    break
 
             # Check all outgoing edges
             for edge in [e for e in self.edges if e.source == current_node]:
                 edge_cost = edge.get_cost(current_path)
+                if edge_cost == float("inf"):
+                    continue
+
                 new_dist = current_dist + edge_cost
                 new_path = current_path + (current_node.id,)
                 new_state = (edge.target, new_path)
+
+                if new_dist < best_node_costs.get(edge.target, float("inf")):
+                    best_node_costs[edge.target] = new_dist
 
                 # If we found a better path, update
                 if new_state not in distances or new_dist < distances.get(
@@ -211,10 +201,21 @@ class PlanningGraph:
                     previous[new_state] = (current_state, edge)
                     heapq.heappush(queue, (new_dist, next(counter), new_state))
 
-        # Find the best goal state
-        goal_states = [(n, p) for (n, p) in distances if n == goal_node]
-        assert goal_states, "No goal state found"
-        best_goal_state = min(goal_states, key=lambda s: distances.get(s, float("inf")))
+        # Find the best goal state from each goal node
+        best_goal_states = {}
+        for goal_node in goal_nodes:
+            goal_states = [(n, p) for (n, p) in distances if n == goal_node]
+            if not goal_states:
+                continue
+            best_goal_states[goal_node] = min(
+                goal_states, key=lambda s: distances.get(s, float("inf"))
+            )
+
+        assert best_goal_states, "No goal state found"
+        best_goal_state = min(
+            best_goal_states.values(),
+            key=lambda s: distances.get(s, float("inf")),
+        )
 
         # Reconstruct path
         path = []
