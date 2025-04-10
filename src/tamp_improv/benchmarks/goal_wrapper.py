@@ -27,7 +27,7 @@ class GoalConditionedWrapper(gym.Wrapper):
     def __init__(
         self,
         env: gym.Env,
-        node_states: dict[int, ObsType],
+        node_states: dict[int, list[ObsType]],
         valid_shortcuts: list[tuple[int, int]],
         perceiver: Perceiver | None = None,
         node_preimages: dict[int, set[GroundAtom]] | None = None,
@@ -121,7 +121,9 @@ class GoalConditionedWrapper(gym.Wrapper):
 
         self._sample_valid_nodes()
         assert self.current_node_id in self.node_states, "Invalid source node ID"
-        current_state = self.node_states[self.current_node_id]
+        available_states = self.node_states[self.current_node_id]
+        random_idx = np.random.randint(0, len(available_states))
+        current_state = available_states[random_idx]
 
         # Reset with current state
         if hasattr(self.env, "reset_from_state"):
@@ -131,7 +133,7 @@ class GoalConditionedWrapper(gym.Wrapper):
                 "The environment does not have a 'reset_from_state' method."
             )
         assert self.current_node_id is not None and self.goal_node_id is not None
-        self.goal_state = self.node_states[self.goal_node_id]
+        self.goal_state = self.node_states[self.goal_node_id][0]
 
         info.update(
             {

@@ -14,7 +14,11 @@ from tamp_improv.approaches.improvisational.policies.base import (
     PolicyContext,
     TrainingData,
 )
-from tamp_improv.approaches.improvisational.policies.rl import RLConfig, RLPolicy
+from tamp_improv.approaches.improvisational.policies.rl import (
+    RLConfig,
+    RLPolicy,
+    TrainingProgressCallback,
+)
 
 ObsType = TypeVar("ObsType")
 ActType = TypeVar("ActType")
@@ -90,8 +94,9 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
 
         return self._policies[self._active_policy_key].get_action(obs)
 
-    def train(self, env: gym.Env, train_data: TrainingData) -> None:
+    def train(self, env: gym.Env, train_data: TrainingData | None) -> None:
         """Train multiple specialized policies."""
+        assert train_data is not None
         print("\n=== Training Multi-Policy RL ===")
         print(f"Total training examples: {len(train_data.states)}")
 
@@ -110,8 +115,15 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
             policy_env = copy.deepcopy(env)
             self._configure_env_recursively(policy_env, group_data)
 
-            # Train the policy with this subset of data
-            self._policies[policy_key].train(policy_env, group_data)
+            # Train the policy with this subset of data with the custom callback
+            callback = TrainingProgressCallback(
+                check_freq=train_data.config.get("training_record_interval", 100),
+                early_stopping=True,
+                early_stopping_patience=1,
+                early_stopping_threshold=0.8,
+                policy_key=policy_key,
+            )
+            self._policies[policy_key].train(policy_env, group_data, callback=callback)
 
         print(f"\nTrained {len(self._policies)} specialized policies")
 

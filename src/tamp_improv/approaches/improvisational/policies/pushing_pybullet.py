@@ -268,7 +268,7 @@ class PybulletPushingPolicy(Policy[NDArray[np.float32], NDArray[np.float32]]):
             current_joints = joint_state
         return actions
 
-    def train(self, env: gym.Env, train_data: TrainingData) -> None:
+    def train(self, env: gym.Env, train_data: TrainingData | None) -> None:
         """No training needed for hard-coded policy."""
 
     def save(self, path: str) -> None:
