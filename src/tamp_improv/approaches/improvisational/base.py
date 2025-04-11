@@ -168,6 +168,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self._current_operator: GroundOperator | None = None
         self._current_skill: Skill | None = None
         self._goal: set[GroundAtom] = set()
+        self._custom_goal: set[GroundAtom] = set()
 
         # Graph-based planning state
         self.planning_graph: PlanningGraph | None = None
@@ -180,21 +181,40 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         # Shortcut signatures for similarity matching
         self.trained_signatures: list[ShortcutSignature] = []
 
-    def reset(self, obs: ObsType, info: dict[str, Any]) -> ApproachStepResult[ActType]:
+    def reset(
+        self,
+        obs: ObsType,
+        info: dict[str, Any],
+        select_random_goal: bool = False,
+    ) -> ApproachStepResult[ActType]:
         """Reset approach with initial observation."""
         objects, atoms, goal = self.system.perceiver.reset(obs, info)
         self._goal = goal
+        self.observed_states = {}
 
         # Create planning graph
         self.planning_graph = self._create_planning_graph(objects, atoms)
+
+        # If random goal selection, pick a random node as goal
+        if select_random_goal:
+            initial_node = self.planning_graph.node_map[frozenset(atoms)]
+            higher_nodes = [
+                n for n in self.planning_graph.nodes if n.id > initial_node.id
+            ]
+            random_index = np.random.randint(0, len(higher_nodes))
+            goal_node = higher_nodes[random_index]
+            goal = set(goal_node.atoms)
+            print(
+                f"Selected random goal from node {goal_node.id} with atoms: {goal_node.atoms}"  # pylint: disable=line-too-long
+            )
+        self._custom_goal = goal
 
         # Compute preimages
         self.planning_graph.compute_preimages(goal)
 
         # Store initial state in observed states
         initial_node = self.planning_graph.node_map[frozenset(atoms)]
-        if initial_node.id not in self.observed_states:
-            self.observed_states[initial_node.id] = []
+        self.observed_states[initial_node.id] = []
         self.observed_states[initial_node.id].append(obs)
 
         # Try to add shortcuts
@@ -229,6 +249,13 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         using_goal_env, goal_env = self._using_goal_env(self.system.wrapped_env)
         target_preimage_vector = None
         current_preimage_vector = None
+
+        # Check if the custom goal (if any) has been achieved
+        if self._custom_goal and self._custom_goal.issubset(atoms):
+            print("Custom goal achieved!")
+            # Return a no-op action to indicate success
+            zero_action = np.zeros_like(self.system.wrapped_env.action_space.sample())
+            return ApproachStepResult(action=zero_action, terminate=True)
 
         # Check if policy achieved its goal
         if self.policy_active and self.planning_graph:

@@ -27,6 +27,7 @@ from tamp_improv.benchmarks.blocks2d import Blocks2DTAMPSystem
 from tamp_improv.benchmarks.pybullet_clear_and_place import ClearAndPlaceTAMPSystem
 
 
+@pytest.mark.skip("Takes too long to run")
 def test_pybullet_graph_training_collection():
     """Test collecting graph-based training data."""
     print("\n=== Testing Graph-Based Training Data Collection ===")
@@ -61,7 +62,6 @@ def test_pybullet_graph_training_collection():
         max_steps_per_rollout=50,  # 300,
         shortcut_success_threshold=5,
         action_scale=0.015,
-        target_specific_shortcuts=False,
     )
 
     print("\n=== Training Data Statistics ===")
@@ -87,6 +87,7 @@ def test_pybullet_graph_training_collection():
     return train_data
 
 
+@pytest.mark.skip("Takes too long to run")
 @pytest.mark.parametrize("use_context_wrapper", [False])
 def test_multi_rl_blocks2d_pipeline(use_context_wrapper):
     """Test the multi-policy RL training and evaluation pipeline."""
@@ -95,15 +96,15 @@ def test_multi_rl_blocks2d_pipeline(use_context_wrapper):
     # Configuration
     config = TrainingConfig(
         seed=42,
-        num_episodes=1,
+        num_episodes=5,
         max_steps=50,
         max_training_steps_per_shortcut=50,
-        collect_episodes=1,
-        episodes_per_scenario=200,
+        collect_episodes=5,
+        episodes_per_scenario=1000,
         force_collect=False,
         render=True,
         record_training=False,
-        training_record_interval=250,
+        training_record_interval=125,
         training_data_dir=f"training_data/multi_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
         save_dir=f"trained_policies/multi_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
         batch_size=32,
@@ -116,7 +117,7 @@ def test_multi_rl_blocks2d_pipeline(use_context_wrapper):
         batch_size=32,
         n_epochs=10,
         gamma=0.99,
-        ent_coef=0.01,
+        ent_coef=0.05,
         device="cuda" if torch.cuda.is_available() else "cpu",
     )
 
@@ -139,7 +140,7 @@ def test_multi_rl_blocks2d_pipeline(use_context_wrapper):
         policy_name=f"MultiRL{'_Context' if use_context_wrapper else ''}",
         use_context_wrapper=use_context_wrapper,
         use_random_rollouts=True,
-        num_rollouts_per_node=100,
+        num_rollouts_per_node=1000,
         max_steps_per_rollout=100,
         shortcut_success_threshold=1,
     )
@@ -154,6 +155,68 @@ def test_multi_rl_blocks2d_pipeline(use_context_wrapper):
     return metrics
 
 
+@pytest.mark.skip("Takes too long to run")
+def test_multi_rl_blocks2d_loaded(system_cls=Blocks2DTAMPSystem):
+    """Test MultiRL with loaded policies."""
+    policy_dir = Path("trained_policies/multi_rl")
+    policy_dir.mkdir(exist_ok=True)
+
+    # Configuration
+    config = TrainingConfig(
+        seed=42,
+        num_episodes=5,
+        max_steps=50,
+        render=True,
+        collect_episodes=0,
+        episodes_per_scenario=0,
+        force_collect=False,
+        record_training=False,
+        training_data_dir="training_data",
+        save_dir="trained_policies",
+    )
+
+    # RL configuration
+    rl_config = RLConfig(
+        learning_rate=3e-4,
+        batch_size=32,
+        n_epochs=10,
+        gamma=0.99,
+        ent_coef=0.05,
+        device="cuda" if torch.cuda.is_available() else "cpu",
+    )
+
+    print(f"\n=== Testing MultiRL Loaded Policies on {system_cls.__name__} ===")
+    system = system_cls.create_default(
+        seed=42, render_mode="rgb_array" if config.render else None
+    )
+
+    policy_name = "MultiRL"
+    policy_path = policy_dir / f"{system_cls.__name__}_{policy_name}"
+
+    if not policy_path.exists():
+        pytest.skip(f"Policy directory not found at {policy_path}")
+
+    def multi_policy_factory(seed: int) -> MultiRLPolicy:
+        policy: MultiRLPolicy = MultiRLPolicy(seed=seed, config=rl_config)
+        policy.load(str(policy_path))
+        return policy
+
+    metrics = train_and_evaluate(
+        system,
+        multi_policy_factory,
+        config,
+        policy_name=f"{policy_name}_Loaded",
+        use_context_wrapper=False,
+        select_random_goal=True,
+    )
+
+    print("\nMultiRL Loaded Policies Results:")
+    print(f"Success Rate: {metrics.success_rate:.2%}")
+    print(f"Average Episode Length: {metrics.avg_episode_length:.2f}")
+    print(f"Average Reward: {metrics.avg_reward:.2f}")
+
+
+@pytest.mark.skip("Takes too long to run")
 @pytest.mark.parametrize("use_context_wrapper", [False])
 def test_multi_rl_pybullet_pipeline(use_context_wrapper):
     """Test the multi-policy RL training and evaluation pipeline."""

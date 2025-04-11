@@ -53,6 +53,7 @@ class Blocks2DPredicates:
     def __init__(self, types: Blocks2DTypes) -> None:
         """Initialize predicates."""
         self.on = Predicate("On", [types.block, types.surface])
+        self.overlap = Predicate("Overlap", [types.block, types.surface])
         self.holding = Predicate("Holding", [types.robot, types.block])
         self.gripper_empty = Predicate("GripperEmpty", [types.robot])
         self.clear = Predicate("Clear", [types.surface])
@@ -67,6 +68,7 @@ class Blocks2DPredicates:
         """Convert to set of predicates."""
         return {
             self.on,
+            self.overlap,
             self.holding,
             self.gripper_empty,
             self.clear,
@@ -279,7 +281,7 @@ class Blocks2DPerceiver(Perceiver[NDArray[np.float32]]):
         # Check gripper status
         block1_held = False
         block2_held = False
-        if gripper_status > 0.0:
+        if gripper_status > 0.5:
             if np.isclose(block_1_x, robot_x, atol=1e-3) and np.isclose(
                 block_1_y, robot_y, atol=1e-3
             ):
@@ -307,6 +309,14 @@ class Blocks2DPerceiver(Perceiver[NDArray[np.float32]]):
             target_height,
         ):
             atoms.add(self.predicates["On"]([self._block_1, self._target_area]))
+            atoms.add(self.predicates["Overlap"]([self._block_1, self._target_area]))
+        elif not block1_held and self._is_target_area_blocked(
+            block_1_x,
+            block_width,
+            target_x,
+            target_width,
+        ):
+            atoms.add(self.predicates["Overlap"]([self._block_1, self._target_area]))
         elif not block1_held:
             atoms.add(self.predicates["On"]([self._block_1, self._table]))
 
@@ -322,6 +332,14 @@ class Blocks2DPerceiver(Perceiver[NDArray[np.float32]]):
             target_height,
         ):
             atoms.add(self.predicates["On"]([self._block_2, self._target_area]))
+            atoms.add(self.predicates["Overlap"]([self._block_2, self._target_area]))
+        elif not block2_held and self._is_target_area_blocked(
+            block_2_x,
+            block_width,
+            target_x,
+            target_width,
+        ):
+            atoms.add(self.predicates["Overlap"]([self._block_2, self._target_area]))
         elif not block2_held:
             atoms.add(self.predicates["On"]([self._block_2, self._table]))
 
@@ -456,7 +474,7 @@ class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.floa
                 [robot, block, surface],
                 preconditions={
                     predicates["GripperEmpty"]([robot]),
-                    predicates["On"]([block, surface]),
+                    predicates["Overlap"]([block, surface]),
                     predicates["IsTarget"]([surface]),
                 },
                 add_effects={
@@ -465,6 +483,7 @@ class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.floa
                 },
                 delete_effects={
                     predicates["GripperEmpty"]([robot]),
+                    predicates["Overlap"]([block, surface]),
                     predicates["On"]([block, surface]),
                 },
             ),
@@ -492,6 +511,7 @@ class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.floa
                 },
                 add_effects={
                     predicates["On"]([block, surface]),
+                    predicates["Overlap"]([block, surface]),
                     predicates["GripperEmpty"]([robot]),
                 },
                 delete_effects={

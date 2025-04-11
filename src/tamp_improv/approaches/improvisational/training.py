@@ -1,5 +1,6 @@
 """Training utilities for improvisational approaches."""
 
+import inspect
 import pickle
 import time
 from copy import deepcopy
@@ -176,6 +177,7 @@ def run_evaluation_episode(
     config: TrainingConfig,
     is_loaded_policy: bool = False,
     episode_num: int = 0,
+    select_random_goal: bool = False,
 ) -> tuple[float, int, bool]:
     """Run single evaluation episode."""
     # Set up rendering if available
@@ -199,35 +201,44 @@ def run_evaluation_episode(
         )
 
     obs, info = system.reset()
-    step_result = approach.reset(obs, info)
+    if (
+        hasattr(approach, "reset")
+        and "select_random_goal" in inspect.signature(approach.reset).parameters
+    ):
+        step_result = approach.reset(obs, info, select_random_goal=select_random_goal)  # type: ignore[call-arg]  # pylint: disable=line-too-long
+    else:
+        step_result = approach.reset(obs, info)
 
     total_reward = 0.0
-    # First step from reset
+    step_count = 0
+    success = False
+
+    # Execute first action from the reset
     obs, reward, terminated, truncated, info = system.env.step(step_result.action)
     total_reward += float(reward)
-    if terminated or truncated:
+    step_count += 1
+    if step_result.terminate or terminated or truncated:
+        success = step_result.terminate or terminated
         if config.render and can_render:
             cast(Any, system.env).close()
             system.env = recording_env
-        return total_reward, 1, terminated
+        return total_reward, step_count, success
 
     # Rest of steps
-    for step in range(1, config.max_steps):
+    for _ in range(1, config.max_steps):
         step_result = approach.step(obs, total_reward, False, False, info)
         obs, reward, terminated, truncated, info = system.env.step(step_result.action)
         total_reward += float(reward)
-
-        if terminated or truncated:
-            if config.render and can_render:
-                cast(Any, system.env).close()
-                system.env = recording_env
-            return total_reward, step + 1, terminated
+        step_count += 1
+        if step_result.terminate or terminated or truncated:
+            success = step_result.terminate or terminated
+            break
 
     if config.render and can_render:
         cast(Any, system.env).close()
         system.env = recording_env
 
-    return total_reward, config.max_steps, False
+    return total_reward, step_count, success
 
 
 def train_and_evaluate(
@@ -240,6 +251,7 @@ def train_and_evaluate(
     num_rollouts_per_node: int = 50,
     max_steps_per_rollout: int = 50,
     shortcut_success_threshold: int = 1,
+    select_random_goal: bool = False,
 ) -> Metrics:
     """Train and evaluate a policy on a system."""
     print(f"\nInitializing training for {system.name}...")
@@ -338,6 +350,7 @@ def train_and_evaluate(
             config,
             is_loaded_policy="_Loaded" in policy_name,
             episode_num=episode,
+            select_random_goal=select_random_goal,
         )
         rewards.append(reward)
         lengths.append(length)
