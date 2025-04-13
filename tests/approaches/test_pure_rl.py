@@ -68,7 +68,7 @@ def test_pure_rl_pybullet():
         num_episodes=1,
         max_steps=500,
         render=True,
-        record_training=True,
+        record_training=False,
         training_record_interval=200,
         device="cuda" if torch.cuda.is_available() else "cpu",
         step_penalty=-1.0,

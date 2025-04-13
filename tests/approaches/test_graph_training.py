@@ -27,7 +27,7 @@ from tamp_improv.benchmarks.blocks2d import Blocks2DTAMPSystem
 from tamp_improv.benchmarks.pybullet_clear_and_place import ClearAndPlaceTAMPSystem
 
 
-@pytest.mark.skip("Takes too long to run")
+@pytest.mark.skip("Takes too long to run.")
 def test_pybullet_graph_training_collection():
     """Test collecting graph-based training data."""
     print("\n=== Testing Graph-Based Training Data Collection ===")
@@ -58,10 +58,11 @@ def test_pybullet_graph_training_collection():
         approach,
         config,
         use_random_rollouts=True,
-        num_rollouts_per_node=1,  # 100,
-        max_steps_per_rollout=50,  # 300,
+        num_rollouts_per_node=100,
+        max_steps_per_rollout=300,
         shortcut_success_threshold=5,
         action_scale=0.015,
+        target_specific_shortcuts=False,
     )
 
     print("\n=== Training Data Statistics ===")
@@ -87,7 +88,7 @@ def test_pybullet_graph_training_collection():
     return train_data
 
 
-@pytest.mark.skip("Takes too long to run")
+@pytest.mark.skip("Takes too long to run.")
 @pytest.mark.parametrize("use_context_wrapper", [False])
 def test_multi_rl_blocks2d_pipeline(use_context_wrapper):
     """Test the multi-policy RL training and evaluation pipeline."""
@@ -155,7 +156,7 @@ def test_multi_rl_blocks2d_pipeline(use_context_wrapper):
     return metrics
 
 
-@pytest.mark.skip("Takes too long to run")
+@pytest.mark.skip("Takes too long to run.")
 def test_multi_rl_blocks2d_loaded(system_cls=Blocks2DTAMPSystem):
     """Test MultiRL with loaded policies."""
     policy_dir = Path("trained_policies/multi_rl")
@@ -226,10 +227,10 @@ def test_multi_rl_pybullet_pipeline(use_context_wrapper):
     config = TrainingConfig(
         seed=42,
         num_episodes=1,
-        max_steps=500,
+        max_steps=300,
         max_training_steps_per_shortcut=100,
         collect_episodes=1,
-        episodes_per_scenario=10,  # 1500,
+        episodes_per_scenario=1500,
         force_collect=False,
         render=True,
         record_training=False,
