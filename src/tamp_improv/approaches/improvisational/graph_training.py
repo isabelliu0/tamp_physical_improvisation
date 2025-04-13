@@ -596,6 +596,10 @@ def identify_promising_shortcuts_with_rollouts(
             f"\nPerforming {num_rollouts_per_node} rollouts from node {source_node_id}"
         )
 
+        # # DEBUG:
+        # if source_node_id != 0 and source_node_id != 1:
+        #     continue
+
         # Calculate rollouts per state to maintain roughly the same total
         rollouts_per_state = max(1, num_rollouts_per_node // len(source_states))
         print(
@@ -637,6 +641,10 @@ def identify_promising_shortcuts_with_rollouts(
                                 break
                         if has_direct_edge:
                             continue
+
+                        # # DEBUG:
+                        # if target_node.id != 50 and target_node.id != 76:
+                        #     continue
 
                         # Note: no need to stop this rollout when we reach a preimage
                         # since we want to explore all reachable preimages

@@ -249,7 +249,7 @@ class RLPolicy(Policy[ObsType, ActType]):
             "MlpPolicy",
             env,
             learning_rate=self.config.learning_rate,
-            n_steps=train_data.config.get("max_steps", 100),
+            n_steps=train_data.config.get("max_training_steps_per_shortcut", 100),
             batch_size=self.config.batch_size,
             n_epochs=self.config.n_epochs,
             gamma=self.config.gamma,
@@ -266,7 +266,7 @@ class RLPolicy(Policy[ObsType, ActType]):
 
         # Calculate total timesteps to ensure we see each scenario multiple times
         episodes_per_scenario = train_data.config.get("episodes_per_scenario", 2)
-        max_steps = train_data.config.get("max_steps", 100)
+        max_steps = train_data.config.get("max_training_steps_per_shortcut", 100)
         total_timesteps = len(train_data.states) * episodes_per_scenario * max_steps
 
         print("Training Settings:")
