@@ -62,7 +62,6 @@ def test_pybullet_graph_training_collection():
         max_steps_per_rollout=300,
         shortcut_success_threshold=5,
         action_scale=0.015,
-        target_specific_shortcuts=False,
     )
 
     print("\n=== Training Data Statistics ===")
@@ -109,7 +108,7 @@ def test_multi_rl_blocks2d_pipeline(use_context_wrapper):
         training_data_dir=f"training_data/multi_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
         save_dir=f"trained_policies/multi_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
         batch_size=32,
-        max_preimage_size=12,
+        max_preimage_size=14,
     )
 
     # RL configuration
@@ -156,9 +155,8 @@ def test_multi_rl_blocks2d_pipeline(use_context_wrapper):
     return metrics
 
 
-@pytest.mark.skip("Takes too long to run.")
 def test_multi_rl_blocks2d_loaded(system_cls=Blocks2DTAMPSystem):
-    """Test MultiRL with loaded policies."""
+    """Test MultiRL on Blocks2D with loaded policies."""
     policy_dir = Path("trained_policies/multi_rl")
     policy_dir.mkdir(exist_ok=True)
 
@@ -238,7 +236,7 @@ def test_multi_rl_pybullet_pipeline(use_context_wrapper):
         training_data_dir="training_data/graph_training_data",
         save_dir=f"trained_policies/multi_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
         batch_size=32,
-        max_preimage_size=12,
+        max_preimage_size=14,
         action_scale=0.015,
     )
 
@@ -284,6 +282,66 @@ def test_multi_rl_pybullet_pipeline(use_context_wrapper):
     print(f"Total Time: {metrics.total_time:.2f} seconds")
 
     return metrics
+
+
+def test_multi_rl_pybullet_loaded(system_cls=ClearAndPlaceTAMPSystem):
+    """Test MultiRL on Pybullet ClearAndPlace with loaded policies."""
+    policy_dir = Path("trained_policies/multi_rl")
+    policy_dir.mkdir(exist_ok=True)
+
+    # Configuration
+    config = TrainingConfig(
+        seed=42,
+        num_episodes=3,
+        max_steps=300,
+        render=True,
+        collect_episodes=0,
+        episodes_per_scenario=0,
+        force_collect=False,
+        record_training=False,
+        training_data_dir="training_data/graph_training_data",
+        save_dir="trained_policies/multi_rl",
+    )
+
+    # RL configuration
+    rl_config = RLConfig(
+        learning_rate=3e-4,
+        batch_size=32,
+        n_epochs=10,
+        gamma=0.99,
+        ent_coef=0.01,
+        device="cuda" if torch.cuda.is_available() else "cpu",
+    )
+
+    print(f"\n=== Testing MultiRL Loaded Policies on {system_cls.__name__} ===")
+    system = system_cls.create_default(
+        seed=42, render_mode="rgb_array" if config.render else None
+    )
+
+    policy_name = "MultiRL"
+    policy_path = policy_dir / f"{system_cls.__name__}_{policy_name}"
+
+    if not policy_path.exists():
+        pytest.skip(f"Policy directory not found at {policy_path}")
+
+    def multi_policy_factory(seed: int) -> MultiRLPolicy:
+        policy: MultiRLPolicy = MultiRLPolicy(seed=seed, config=rl_config)
+        policy.load(str(policy_path))
+        return policy
+
+    metrics = train_and_evaluate(
+        system,
+        multi_policy_factory,
+        config,
+        policy_name=f"{policy_name}_Loaded",
+        use_context_wrapper=False,
+        select_random_goal=False,
+    )
+
+    print("\nMultiRL Loaded Policies Results:")
+    print(f"Success Rate: {metrics.success_rate:.2%}")
+    print(f"Average Episode Length: {metrics.avg_episode_length:.2f}")
+    print(f"Average Reward: {metrics.avg_reward:.2f}")
 
 
 @pytest.mark.skip()

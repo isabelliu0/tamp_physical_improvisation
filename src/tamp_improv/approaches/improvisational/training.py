@@ -175,7 +175,6 @@ def run_evaluation_episode(
     ),
     policy_name: str,
     config: TrainingConfig,
-    is_loaded_policy: bool = False,
     episode_num: int = 0,
     select_random_goal: bool = False,
 ) -> tuple[float, int, bool]:
@@ -184,10 +183,7 @@ def run_evaluation_episode(
     render_mode = getattr(system.env, "render_mode", None)
     can_render = render_mode is not None
     if config.render and can_render:
-        if is_loaded_policy:
-            video_folder = Path(f"videos/{system.name}_(Loaded){policy_name}_eval")
-        else:
-            video_folder = Path(f"videos/{system.name}_{policy_name}_eval")
+        video_folder = Path(f"videos/{system.name}_{policy_name}_eval")
         video_folder.mkdir(parents=True, exist_ok=True)
 
         # Record only the base environment, not the planning environment
@@ -348,7 +344,6 @@ def train_and_evaluate(
             approach,
             policy_name,
             config,
-            is_loaded_policy="_Loaded" in policy_name,
             episode_num=episode,
             select_random_goal=select_random_goal,
         )
@@ -471,7 +466,6 @@ def train_and_evaluate_goal_conditioned(
             approach,
             policy_name,
             config,
-            is_loaded_policy="_Loaded" in policy_name,
             episode_num=episode,
         )
         rewards.append(reward)
@@ -559,7 +553,6 @@ def train_and_evaluate_pure_rl(
             approach,
             policy_name,
             config,
-            is_loaded_policy=False,
             episode_num=episode,
         )
         rewards.append(reward)

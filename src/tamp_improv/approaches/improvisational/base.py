@@ -207,7 +207,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             print(
                 f"Selected random goal from node {goal_node.id} with atoms: {goal_node.atoms}"  # pylint: disable=line-too-long
             )
-        self._custom_goal = goal
+            self._custom_goal = goal
 
         # Compute preimages
         self.planning_graph.compute_preimages(goal)
