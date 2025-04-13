@@ -189,7 +189,7 @@ class Policy(Generic[ObsType, ActType], ABC):
     def configure_context(self, context: PolicyContext[ObsType, ActType]) -> None:
         """Configure policy with context information."""
 
-    def train(self, env: gym.Env, train_data: TrainingData) -> None:
+    def train(self, env: gym.Env, train_data: TrainingData | None) -> None:
         """Train the policy if needed.
 
         Default implementation just initializes the policy and updates

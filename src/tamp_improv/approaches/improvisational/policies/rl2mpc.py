@@ -152,8 +152,9 @@ class RL2MPCPolicy(Policy[ObsType, ActType]):
                 )
             )
 
-    def train(self, env: gym.Env, train_data: TrainingData) -> None:
+    def train(self, env: gym.Env, train_data: TrainingData | None) -> None:
         """Train RL policy until threshold."""
+        assert train_data is not None
         # Create callback that will stop training at threshold
         callback = RL2MPCCallback(
             reward_threshold=self.config.reward_threshold,

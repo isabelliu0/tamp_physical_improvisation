@@ -148,4 +148,5 @@ class ClearAndPlaceTAMPSystem(
             perceiver=components.perceiver,
             step_penalty=-1.0,
             achievement_bonus=100.0,
+            action_scale=0.015,
         )

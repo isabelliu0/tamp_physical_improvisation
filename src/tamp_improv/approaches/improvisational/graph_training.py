@@ -4,6 +4,7 @@ from collections import defaultdict, deque
 from dataclasses import dataclass
 from typing import Any, TypeVar
 
+import gymnasium as gym
 import numpy as np
 from relational_structs import GroundAtom
 from tomsutils.utils import sample_seed_from_rng
@@ -230,8 +231,9 @@ def collect_graph_based_training_data(
     num_rollouts_per_node: int = 50,
     max_steps_per_rollout: int = 50,
     shortcut_success_threshold: int = 1,
+    action_scale: float = 1.0,
     rng: np.random.Generator | None = None,
-) -> tuple[TrainingData, dict[int, ObsType]]:
+) -> tuple[TrainingData, dict[int, list[ObsType]]]:
     """Collect training data by exploring the planning graph.
 
     This actively identifies potential shortcuts between nodes in the
@@ -266,10 +268,22 @@ def collect_graph_based_training_data(
         planning_graph = approach.planning_graph
         context_env = approach.context_env
 
-        # Proactively collect states for all nodes
-        observed_states: dict[int, Any] = collect_states_for_all_nodes(
-            system, planning_graph, max_attempts=3
-        )
+        if (
+            hasattr(approach, "observed_states")
+            and approach.observed_states is not None
+        ):
+            print("Using observed states already collected from approach")
+            observed_states = approach.observed_states
+        else:
+            print(
+                "Warning: No observed states found in approach. Falling back to another round of collection."  # pylint: disable=line-too-long
+            )
+            observed_states = collect_states_for_all_nodes(
+                system, planning_graph, max_attempts=3
+            )
+            observed_states = {
+                k: [v] for k, v in observed_states.items()
+            }  # multi-state format
 
         # Find potential shortcuts using the collected states
         print(f"\nIdentifying shortcuts using {len(observed_states)} observed states")
@@ -282,6 +296,7 @@ def collect_graph_based_training_data(
                 num_rollouts_per_node,
                 max_steps_per_rollout,
                 shortcut_success_threshold,
+                action_scale=action_scale,
                 random_seed=episode_seed,
             )
         else:
@@ -328,54 +343,51 @@ def collect_graph_based_training_data(
 
         print(f"Selected {len(selected_candidates)} shortcuts for training")
 
-        # Collect data (with augmented observations) for each selected shortcut
+        # Organize training data for each selected shortcut candidate
         for candidate in selected_candidates:
-            if approach.use_context_wrapper and context_env is not None:
-                context_env.set_context(
-                    candidate.source_atoms, candidate.target_preimage
-                )
-                augmented_obs = context_env.augment_observation(candidate.source_state)
-                training_states.append(augmented_obs)
-            else:
-                training_states.append(candidate.source_state)
-            current_atoms_list.append(candidate.source_atoms)
-            preimages_list.append(candidate.target_preimage)
+            source_id = candidate.source_node.id
+            if source_id in observed_states and observed_states[source_id] is not None:
+                for source_state in observed_states[source_id]:
+                    if approach.use_context_wrapper and context_env is not None:
+                        context_env.set_context(
+                            candidate.source_atoms, candidate.target_preimage
+                        )
+                        augmented_obs = context_env.augment_observation(source_state)
+                        training_states.append(augmented_obs)
+                    else:
+                        training_states.append(source_state)
+                    current_atoms_list.append(candidate.source_atoms)
+                    preimages_list.append(candidate.target_preimage)
 
-            # Record shortcut signature in the approach
-            signature = ShortcutSignature.from_context(
-                candidate.source_atoms,
-                candidate.target_preimage,
-            )
-            if signature not in approach.trained_signatures:
-                approach.trained_signatures.append(signature)
+                    # Store shortcut info (duplicate if needed)
+                    shortcut_info.append(
+                        {
+                            "source_node_id": candidate.source_node.id,
+                            "target_node_id": candidate.target_node.id,
+                            "source_atoms_count": len(candidate.source_atoms),
+                            "target_preimage_count": len(candidate.target_preimage),
+                        }
+                    )
+
+                # Record shortcut signature in the approach
+                signature = ShortcutSignature.from_context(
+                    candidate.source_atoms,
+                    candidate.target_preimage,
+                )
+                if signature not in approach.trained_signatures:
+                    approach.trained_signatures.append(signature)
+                    print(
+                        f"Recorded shortcut signature with predicates: {signature.source_predicates} -> {signature.target_predicates}"  # pylint: disable=line-too-long
+                    )
+
                 print(
-                    f"Recorded shortcut signature with predicates: {signature.source_predicates} -> {signature.target_predicates}"  # pylint: disable=line-too-long
+                    f"\nAdded shortcut to training data collection: Node {candidate.source_node.id} -> Node {candidate.target_node.id}"  # pylint: disable=line-too-long
                 )
+                print(f"  Source atoms: {len(candidate.source_atoms)}")
+                print(f"  Target preimage: {len(candidate.target_preimage)}")
 
-            # Store shortcut info
-            shortcut_info.append(
-                {
-                    "source_node_id": candidate.source_node.id,
-                    "target_node_id": candidate.target_node.id,
-                    "source_atoms_count": len(candidate.source_atoms),
-                    "target_preimage_count": len(candidate.target_preimage),
-                }
-            )
-
-            print(
-                f"\nAdded shortcut to training data collection: Node {candidate.source_node.id} -> Node {candidate.target_node.id}"  # pylint: disable=line-too-long
-            )
-            print(f"  Source atoms: {len(candidate.source_atoms)}")
-            print(f"  Target preimage: {len(candidate.target_preimage)}")
-
-        # If we've found both target shortcuts, we can stop collecting
-        if (
-            target_specific_shortcuts
-            and 1 in found_target_shortcuts
-            and 2 in found_target_shortcuts
-        ):
-            print("\nFound both target shortcuts, ending collection")
-            break
+            else:
+                print(f"Warning: No states found for source node {source_id}")
 
     print("\n=== Training Collection Summary ===")
     print(f"Collected {len(training_states)} examples from {collect_episodes} episodes")
@@ -477,7 +489,7 @@ def collect_goal_conditioned_training_data(
 
 def identify_shortcut_candidates(
     planning_graph: PlanningGraph,
-    observed_states: dict[int, ObsType],
+    observed_states: dict[int, list[ObsType]],
 ) -> list[ShortcutCandidate]:
     """Identify potential shortcuts in the planning graph.
 
@@ -496,7 +508,8 @@ def identify_shortcut_candidates(
         if source_node.id not in observed_states:
             continue
 
-        source_state = observed_states[source_node.id]
+        # Use the first state for the candidate (we'll expand later)
+        source_state = observed_states[source_node.id][0]
 
         for target_node in nodes:
             if source_node == target_node:
@@ -542,10 +555,11 @@ def identify_shortcut_candidates(
 def identify_promising_shortcuts_with_rollouts(
     system,
     planning_graph,
-    observed_states: dict[int, Any],
+    observed_states: dict[int, list[ObsType]],
     num_rollouts_per_node: int = 50,
     max_steps_per_rollout: int = 30,
     shortcut_success_threshold: int = 1,
+    action_scale: float = 1.0,
     random_seed: int = 42,
 ) -> list[ShortcutCandidate]:
     """Identify promising shortcuts by performing random rollouts from each
@@ -564,10 +578,15 @@ def identify_promising_shortcuts_with_rollouts(
 
     # Get the base environment for running rollouts
     raw_env = system.env
-    raw_env.action_space.seed(random_seed)
+    sampling_space = gym.spaces.Box(
+        low=raw_env.action_space.low * action_scale,
+        high=raw_env.action_space.high * action_scale,
+        dtype=raw_env.action_space.dtype,
+    )
+    sampling_space.seed(random_seed)
 
     # For each node with an observed state, perform random rollouts
-    for source_node_id, source_state in observed_states.items():
+    for source_node_id, source_states in observed_states.items():
         source_node = next(
             (n for n in planning_graph.nodes if n.id == source_node_id), None
         )
@@ -577,53 +596,73 @@ def identify_promising_shortcuts_with_rollouts(
             f"\nPerforming {num_rollouts_per_node} rollouts from node {source_node_id}"
         )
 
+        # # DEBUG:
+        # if source_node_id != 0 and source_node_id != 1:
+        #     continue
+
+        # Calculate rollouts per state to maintain roughly the same total
+        rollouts_per_state = max(1, num_rollouts_per_node // len(source_states))
+        print(
+            f"\nPerforming {rollouts_per_state} rollouts for each of {len(source_states)} state(s) from node {source_node_id}"  # pylint: disable=line-too-long
+        )
+
         # Track preimages reached from this source node
         reached_preimages: defaultdict[int, int] = defaultdict(
             int
         )  # target_node_id -> count
 
         # Perform random rollouts
-        for rollout_idx in range(num_rollouts_per_node):
-            if rollout_idx > 0 and rollout_idx % 100 == 0:
-                print(f"  Completed {rollout_idx}/{num_rollouts_per_node} rollouts")
+        for _, source_state in enumerate(source_states):
+            for rollout_idx in range(rollouts_per_state):
+                if rollout_idx > 0 and rollout_idx % 100 == 0:
+                    print(f"  Completed {rollout_idx}/{rollouts_per_state} rollouts")
 
-            # Reset the environment to source state
-            raw_env.reset_from_state(source_state)
-            curr_atoms = source_atoms.copy()
+                # Reset the environment to source state
+                raw_env.reset_from_state(source_state)
+                curr_atoms = source_atoms.copy()
 
-            # Execute random actions
-            for _ in range(max_steps_per_rollout):
-                action = raw_env.action_space.sample()
-                obs, _, terminated, truncated, _ = raw_env.step(action)
-                curr_atoms = system.perceiver.step(obs)
+                # Execute random actions
+                reached_in_this_rollout: set[int] = set()
+                for _ in range(max_steps_per_rollout):
+                    action = sampling_space.sample()
+                    obs, _, terminated, truncated, _ = raw_env.step(action)
+                    curr_atoms = system.perceiver.step(obs)
 
-                # Check if any preimage is reached
-                for target_node in planning_graph.nodes:
-                    if target_node.id <= source_node_id:
-                        continue
+                    # Check if any preimage is reached
+                    for target_node in planning_graph.nodes:
+                        if target_node.id <= source_node_id:
+                            continue
+                        has_direct_edge = False
+                        for edge in planning_graph.node_to_outgoing_edges.get(
+                            source_node, []
+                        ):
+                            if edge.target == target_node and not edge.is_shortcut:
+                                has_direct_edge = True
+                                break
+                        if has_direct_edge:
+                            continue
 
-                    has_direct_edge = False
-                    for edge in planning_graph.node_to_outgoing_edges.get(
-                        source_node, []
-                    ):
-                        if edge.target == target_node and not edge.is_shortcut:
-                            has_direct_edge = True
-                            break
-                    if has_direct_edge:
-                        continue
+                        # # DEBUG:
+                        # if target_node.id != 50 and target_node.id != 76:
+                        #     continue
 
-                    # Note: no need to stop this rollout when we reach a preimage
-                    # since we want to explore all reachable preimages
-                    if target_node in planning_graph.preimages:
-                        preimage = planning_graph.preimages[target_node]
-                        if preimage and preimage == curr_atoms:
-                            reached_preimages[target_node.id] += 1
-                            shortcut_success_counts[
-                                (source_node_id, target_node.id)
-                            ] += 1
+                        # Note: no need to stop this rollout when we reach a preimage
+                        # since we want to explore all reachable preimages
+                        if target_node in planning_graph.preimages:
+                            preimage = planning_graph.preimages[target_node]
+                            if (
+                                preimage
+                                and preimage == curr_atoms
+                                and target_node.id not in reached_in_this_rollout
+                            ):
+                                reached_preimages[target_node.id] += 1
+                                shortcut_success_counts[
+                                    (source_node_id, target_node.id)
+                                ] += 1
+                                reached_in_this_rollout.add(target_node.id)
 
-                if terminated or truncated:
-                    break
+                    if terminated or truncated:
+                        break
 
         if reached_preimages:
             print(f"  Preimages reached from node {source_node_id}:")
@@ -649,12 +688,14 @@ def identify_promising_shortcuts_with_rollouts(
 
             assert source_node is not None and target_node is not None
             print(f"  Node {source_id} → Node {target_id}: {count} successes")
+
+            source_state = observed_states[source_id][0]
             candidate = ShortcutCandidate(
                 source_node=source_node,
                 target_node=target_node,
                 source_atoms=set(source_node.atoms),
                 target_preimage=planning_graph.preimages.get(target_node, set()),
-                source_state=observed_states[source_id],
+                source_state=source_state,
             )
             promising_candidates.append(candidate)
 

@@ -33,7 +33,15 @@ class RLConfig:
 class TrainingProgressCallback(BaseCallback):
     """Callback to track training progress."""
 
-    def __init__(self, check_freq: int = 100, verbose: int = 1):
+    def __init__(
+        self,
+        check_freq: int = 100,
+        verbose: int = 1,
+        early_stopping: bool = False,
+        early_stopping_patience: int = 1,
+        early_stopping_threshold: float = 0.8,
+        policy_key: str | None = None,
+    ):
         super().__init__(verbose)
         self.check_freq = check_freq
         self.success_history: list[bool] = []
@@ -41,6 +49,14 @@ class TrainingProgressCallback(BaseCallback):
         self.episode_rewards: list[float] = []
         self.current_length = 0
         self.current_reward = 0.0
+
+        # Early stopping parameters
+        self.early_stopping = early_stopping
+        self.early_stopping_patience = early_stopping_patience
+        self.early_stopping_threshold = early_stopping_threshold
+        self.policy_key = policy_key
+        self.plateau_count: int = 0
+        self.success_rates: list[float] = []
 
     def _on_step(self) -> bool:
         self.current_length += 1
@@ -65,14 +81,35 @@ class TrainingProgressCallback(BaseCallback):
                 recent_successes = self.success_history[-self.check_freq :]
                 recent_lengths = self.episode_lengths[-self.check_freq :]
                 recent_rewards = self.episode_rewards[-self.check_freq :]
+                success_rate = sum(recent_successes) / len(recent_successes)
 
                 print("\nTraining Progress:")
                 print(f"Episodes: {n_episodes}")
-                print(
-                    f"Recent Success%: {sum(recent_successes)/len(recent_successes):.2%}"
-                )
+                print(f"Recent Success%: {success_rate:.2%}")
                 print(f"Recent Avg Episode Length: {np.mean(recent_lengths):.2f}")
                 print(f"Recent Avg Reward: {np.mean(recent_rewards):.2f}")
+
+                if self.early_stopping:
+                    self.success_rates.append(success_rate)
+                    if len(self.success_rates) >= 3:
+                        recent_rates = self.success_rates[-3:]
+
+                        if all(
+                            r >= self.early_stopping_threshold for r in recent_rates
+                        ):
+                            self.plateau_count += 1
+                            print(
+                                f"Plateau detected: {self.plateau_count}/{self.early_stopping_patience}"  # pylint: disable=line-too-long
+                            )
+
+                        if self.plateau_count >= self.early_stopping_patience:
+                            policy_info = (
+                                f" for {self.policy_key}" if self.policy_key else ""
+                            )
+                            print(
+                                f"Early stopping{policy_info}: Success rate consistently above {self.early_stopping_threshold:.0%}"  # pylint: disable=line-too-long
+                            )
+                            return False  # Stop training
 
         return True
 
@@ -83,6 +120,11 @@ class TrainingProgressCallback(BaseCallback):
             print(f"Overall Success Rate: {self._get_success_rate:.2%}")
             print(f"Overall Avg Episode Length: {self._get_avg_episode_length:.2f}")
             print(f"Overall Avg Reward: {self._get_avg_reward:.2f}")
+            if (
+                self.early_stopping
+                and self.plateau_count >= self.early_stopping_patience
+            ):
+                print("Training stopped early due to plateau in performance.")
         else:
             print("No episodes completed during training.")
 
@@ -155,10 +197,40 @@ class RLPolicy(Policy[ObsType, ActType]):
     def train(
         self,
         env: gym.Env,
-        train_data: TrainingData,
+        train_data: TrainingData | None,
         callback: BaseCallback | None = None,
     ) -> None:
         """Train policy."""
+        # Handle pure RL training without training data
+        if train_data is None:
+            print("\nTraining in pure RL mode with direct environment interaction")
+            if hasattr(env, "max_episode_steps"):
+                max_steps = env.max_episode_steps
+            elif hasattr(env, "env") and hasattr(env.env, "max_episode_steps"):
+                max_steps = env.env.max_episode_steps
+            else:
+                raise ValueError(
+                    "Environment does not have max_episode_steps attribute"
+                )
+            self.model = PPO(
+                "MlpPolicy",
+                env,
+                learning_rate=self.config.learning_rate,
+                n_steps=max_steps,
+                batch_size=self.config.batch_size,
+                n_epochs=self.config.n_epochs,
+                gamma=self.config.gamma,
+                ent_coef=self.config.ent_coef,
+                device=self.device_ctx.device,
+                seed=self._seed,
+                verbose=1,
+            )
+            if callback is None:
+                callback = TrainingProgressCallback()
+            total_timesteps = 1_000_000  # Adjust as needed
+            self.model.learn(total_timesteps=total_timesteps, callback=callback)
+            return
+
         # Call base class train to initialize and configure env
         super().train(env, train_data)
 
@@ -177,7 +249,7 @@ class RLPolicy(Policy[ObsType, ActType]):
             "MlpPolicy",
             env,
             learning_rate=self.config.learning_rate,
-            n_steps=train_data.config.get("max_steps", 100),
+            n_steps=train_data.config.get("max_training_steps_per_shortcut", 100),
             batch_size=self.config.batch_size,
             n_epochs=self.config.n_epochs,
             gamma=self.config.gamma,
@@ -194,7 +266,7 @@ class RLPolicy(Policy[ObsType, ActType]):
 
         # Calculate total timesteps to ensure we see each scenario multiple times
         episodes_per_scenario = train_data.config.get("episodes_per_scenario", 2)
-        max_steps = train_data.config.get("max_steps", 100)
+        max_steps = train_data.config.get("max_training_steps_per_shortcut", 100)
         total_timesteps = len(train_data.states) * episodes_per_scenario * max_steps
 
         print("Training Settings:")

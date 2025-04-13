@@ -3,6 +3,7 @@
 from typing import Any, TypeVar
 
 import gymnasium as gym
+import numpy as np
 from relational_structs import GroundAtom
 from task_then_motion_planning.structs import Perceiver
 
@@ -26,11 +27,21 @@ class ImprovWrapper(gym.Env):
         *,
         step_penalty: float = -0.1,
         achievement_bonus: float = 1.0,
+        action_scale: float = 1.0,
     ) -> None:
         """Initialize wrapper with environment and perceiver."""
         self.env = base_env
         self.observation_space = base_env.observation_space
-        self.action_space = base_env.action_space
+        self.action_scale = action_scale
+        if isinstance(base_env.action_space, gym.spaces.Box):
+            self.action_space = gym.spaces.Box(
+                low=base_env.action_space.low * action_scale,
+                high=base_env.action_space.high * action_scale,
+                dtype=np.float32,
+            )
+        else:
+            print("Warning: Action space is not Box, using original action space.")
+            self.action_space = base_env.action_space
         self.max_episode_steps = max_episode_steps
         self.steps = 0
         self.perceiver = perceiver
@@ -67,7 +78,7 @@ class ImprovWrapper(gym.Env):
 
         self.current_training_idx = 0
         self.max_episode_steps = training_data.config.get(
-            "max_steps", self.max_episode_steps
+            "max_training_steps_per_shortcut", self.max_episode_steps
         )
 
     def reset(
@@ -93,9 +104,6 @@ class ImprovWrapper(gym.Env):
             # Set up current training data
             self.current_atom_set = self.current_atoms_list[self.current_training_idx]
             self.current_preimage = self.preimages_list[self.current_training_idx]
-            print(f"Training episode {self.current_training_idx + 1}")
-            print(f"Current atoms: {self.current_atom_set}")
-            print(f"Preimage to achieve: {self.current_preimage}")
 
             # Reset with current state
             if hasattr(self.env, "reset_from_state"):
@@ -138,3 +146,61 @@ class ImprovWrapper(gym.Env):
     def render(self) -> Any:
         """Render the environment."""
         return self.env.render()
+
+
+class PureRLWrapper(gym.Wrapper):
+    """Wrapper for training pure RL baselines without TAMP structure."""
+
+    def __init__(
+        self,
+        env: gym.Env,
+        perceiver: Perceiver[ObsType],
+        goal_atoms: set[GroundAtom],
+        *,
+        max_episode_steps: int = 100,
+        step_penalty: float = -0.1,
+        achievement_bonus: float = 1.0,
+        action_scale: float = 1.0,
+    ) -> None:
+        """Initialize wrapper for pure RL training."""
+        super().__init__(env)
+        self.perceiver = perceiver
+        self.goal_atoms = goal_atoms
+        self.max_episode_steps = max_episode_steps
+        self.step_penalty = step_penalty
+        self.achievement_bonus = achievement_bonus
+        self.action_scale = action_scale
+        self.steps = 0
+        if isinstance(env.action_space, gym.spaces.Box):
+            self.action_space = gym.spaces.Box(
+                low=env.action_space.low * action_scale,
+                high=env.action_space.high * action_scale,
+                dtype=np.float32,
+            )
+        else:
+            print("Warning: Action space is not Box, using original action space.")
+            self.action_space = env.action_space
+        self._render_mode = getattr(env, "render_mode", None)
+
+    def reset(self, **kwargs) -> tuple[Any, dict[str, Any]]:
+        """Reset the environment."""
+        self.steps = 0
+        obs, info = self.env.reset(**kwargs)
+        return obs, info
+
+    def step(self, action: Any) -> tuple[Any, float, bool, bool, dict[str, Any]]:
+        """Take a step in the environment."""
+        obs, _, _, truncated, info = self.env.step(action)
+        self.steps += 1
+
+        current_atoms = self.perceiver.step(obs)
+        achieved = self.goal_atoms.issubset(current_atoms)
+
+        reward = self.step_penalty
+        if achieved:
+            reward += self.achievement_bonus
+
+        terminated = achieved
+        truncated = truncated or self.steps >= self.max_episode_steps
+
+        return obs, reward, terminated, truncated, info
