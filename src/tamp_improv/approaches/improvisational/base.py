@@ -181,6 +181,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         # Shortcut signatures for similarity matching
         self.trained_signatures: list[ShortcutSignature] = []
 
+        self.rng = np.random.default_rng(seed)
+
     def reset(
         self,
         obs: ObsType,
@@ -201,7 +203,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             higher_nodes = [
                 n for n in self.planning_graph.nodes if n.id > initial_node.id
             ]
-            random_index = np.random.randint(0, len(higher_nodes))
+            random_index = self.rng.integers(0, len(higher_nodes))
             goal_node = higher_nodes[random_index]
             goal = set(goal_node.atoms)
             print(

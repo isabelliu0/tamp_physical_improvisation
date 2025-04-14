@@ -158,7 +158,7 @@ def test_multi_rl_blocks2d_pipeline(use_context_wrapper):
 def test_multi_rl_blocks2d_loaded(system_cls=Blocks2DTAMPSystem):
     """Test MultiRL on Blocks2D with loaded policies."""
     policy_dir = Path("trained_policies/multi_rl")
-    policy_dir.mkdir(exist_ok=True)
+    policy_dir.mkdir(parents=True, exist_ok=True)
 
     # Configuration
     config = TrainingConfig(
@@ -287,7 +287,7 @@ def test_multi_rl_pybullet_pipeline(use_context_wrapper):
 def test_multi_rl_pybullet_loaded(system_cls=ClearAndPlaceTAMPSystem):
     """Test MultiRL on Pybullet ClearAndPlace with loaded policies."""
     policy_dir = Path("trained_policies/multi_rl")
-    policy_dir.mkdir(exist_ok=True)
+    policy_dir.mkdir(parents=True, exist_ok=True)
 
     # Configuration
     config = TrainingConfig(
