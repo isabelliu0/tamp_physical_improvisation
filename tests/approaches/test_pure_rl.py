@@ -20,7 +20,7 @@ def test_pure_rl_blocks2d():
         max_steps=100,
         render=True,
         record_training=False,
-        training_record_interval=500,
+        training_record_interval=100,
         device="cuda" if torch.cuda.is_available() else "cpu",
         step_penalty=-0.1,
         success_reward=10.0,

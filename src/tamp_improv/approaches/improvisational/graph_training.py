@@ -226,7 +226,6 @@ def collect_graph_based_training_data(
     approach: ImprovisationalTAMPApproach,
     config: dict[str, Any],
     max_shortcuts_per_graph: int = 100,
-    target_specific_shortcuts: bool = False,
     use_random_rollouts: bool = False,
     num_rollouts_per_node: int = 50,
     max_steps_per_rollout: int = 50,
@@ -252,9 +251,6 @@ def collect_graph_based_training_data(
     collect_episodes = config.get("collect_episodes", 10)
     seed = config.get("seed", 42)
     rng = np.random.default_rng(seed)
-
-    # Keep track of shortcuts we want to find
-    found_target_shortcuts = []
 
     for episode in range(collect_episodes):
         print(f"\n=== Building planning graph for episode {episode + 1} ===")
@@ -305,42 +301,11 @@ def collect_graph_based_training_data(
                 observed_states,
             )
 
-        print(f"Found {len(shortcut_candidates)} potential shortcut candidates")
-
-        # If targeting specific shortcuts, filter and prioritize them
-        if target_specific_shortcuts:
-            target_candidates = []
-
-            for candidate in shortcut_candidates:
-                # Check if this is one of our target shortcuts
-                if is_target_shortcut_1(candidate) and 1 not in found_target_shortcuts:
-                    print("Found TARGET SHORTCUT 1!")
-                    target_candidates.append(candidate)
-                    found_target_shortcuts.append(1)
-                elif (
-                    is_target_shortcut_2(candidate) and 2 not in found_target_shortcuts
-                ):
-                    print("Found TARGET SHORTCUT 2!")
-                    target_candidates.append(candidate)
-                    found_target_shortcuts.append(2)
-
-            if target_candidates:
-                print(f"Using {len(target_candidates)} targeted shortcuts")
-                selected_candidates = target_candidates
-            else:
-                print("No target shortcuts found, using regular selection")
-                selected_candidates = select_random_shortcuts(
-                    shortcut_candidates,
-                    max_shortcuts_per_graph,
-                    rng,
-                )
-        else:
-            selected_candidates = select_random_shortcuts(
-                shortcut_candidates,
-                max_shortcuts_per_graph,
-                rng,
-            )
-
+        selected_candidates = select_random_shortcuts(
+            shortcut_candidates,
+            max_shortcuts_per_graph,
+            rng,
+        )
         print(f"Selected {len(selected_candidates)} shortcuts for training")
 
         # Organize training data for each selected shortcut candidate
@@ -379,28 +344,10 @@ def collect_graph_based_training_data(
                     print(
                         f"Recorded shortcut signature with predicates: {signature.source_predicates} -> {signature.target_predicates}"  # pylint: disable=line-too-long
                     )
-
-                print(
-                    f"\nAdded shortcut to training data collection: Node {candidate.source_node.id} -> Node {candidate.target_node.id}"  # pylint: disable=line-too-long
-                )
-                print(f"  Source atoms: {len(candidate.source_atoms)}")
-                print(f"  Target preimage: {len(candidate.target_preimage)}")
-
             else:
                 print(f"Warning: No states found for source node {source_id}")
 
-    print("\n=== Training Collection Summary ===")
     print(f"Collected {len(training_states)} examples from {collect_episodes} episodes")
-
-    if target_specific_shortcuts:
-        print("Target shortcuts found:")
-        if 1 in found_target_shortcuts:
-            print("  - 1: Pushing block2 away from target area while holding block1")
-        if 2 in found_target_shortcuts:
-            print("  - 2: Pushing block2 away from target area with empty gripper")
-        if not found_target_shortcuts:
-            print("  - No target shortcuts found")
-
     approach.training_mode = False
 
     # Get the atom-to-index mapping from the context environment
@@ -592,8 +539,9 @@ def identify_promising_shortcuts_with_rollouts(
         )
         assert source_node is not None
         source_atoms = set(source_node.atoms)
+        rollouts_per_state = max(1, num_rollouts_per_node // len(source_states))
         print(
-            f"\nPerforming {num_rollouts_per_node} rollouts from node {source_node_id}"
+            f"\nPerforming {rollouts_per_state} rollouts for each of {len(source_states)} state(s) from node {source_node_id}"  # pylint: disable=line-too-long
         )
 
         # # DEBUG:
@@ -701,118 +649,6 @@ def identify_promising_shortcuts_with_rollouts(
 
     print(f"\nFound {len(promising_candidates)} promising shortcut candidates")
     return promising_candidates
-
-
-def is_target_shortcut_1(candidate: ShortcutCandidate) -> bool:
-    """Check if candidate matches target shortcut 1:
-    Pushing block2 away from target area while holding block1
-    """
-    source_atoms = candidate.source_atoms
-    target_atoms = candidate.target_preimage
-
-    # Check if source has the required atoms
-    has_holding_block1 = any(
-        atom.predicate.name == "Holding"
-        and len(atom.objects) == 2
-        and atom.objects[0].name == "robot"
-        and atom.objects[1].name == "block1"
-        for atom in source_atoms
-    )
-    has_block2_on_target = any(
-        atom.predicate.name == "On"
-        and len(atom.objects) == 2
-        and atom.objects[0].name == "block2"
-        and atom.objects[1].name == "target_area"
-        for atom in source_atoms
-    )
-    has_clear_table = any(
-        atom.predicate.name == "Clear"
-        and len(atom.objects) == 1
-        and atom.objects[0].name == "table"
-        for atom in source_atoms
-    )
-
-    # Check if target has the required atoms
-    has_target_clear_target = any(
-        atom.predicate.name == "Clear"
-        and len(atom.objects) == 1
-        and atom.objects[0].name == "target_area"
-        for atom in target_atoms
-    )
-    has_target_holding_block1 = any(
-        atom.predicate.name == "Holding"
-        and len(atom.objects) == 2
-        and atom.objects[0].name == "robot"
-        and atom.objects[1].name == "block1"
-        for atom in target_atoms
-    )
-
-    return (
-        has_holding_block1
-        and has_block2_on_target
-        and has_clear_table
-        and has_target_clear_target
-        and has_target_holding_block1
-    )
-
-
-def is_target_shortcut_2(candidate: ShortcutCandidate) -> bool:
-    """Check if candidate matches target shortcut 2:
-    Pushing block2 away from target area with empty gripper
-    """
-    source_atoms = candidate.source_atoms
-    target_atoms = candidate.target_preimage
-
-    # Check if source has the required atoms
-    has_block1_on_table = any(
-        atom.predicate.name == "On"
-        and len(atom.objects) == 2
-        and atom.objects[0].name == "block1"
-        and atom.objects[1].name == "table"
-        for atom in source_atoms
-    )
-    has_block2_on_target = any(
-        atom.predicate.name == "On"
-        and len(atom.objects) == 2
-        and atom.objects[0].name == "block2"
-        and atom.objects[1].name == "target_area"
-        for atom in source_atoms
-    )
-    has_gripper_empty = any(
-        atom.predicate.name == "GripperEmpty"
-        and len(atom.objects) == 1
-        and atom.objects[0].name == "robot"
-        for atom in source_atoms
-    )
-    has_clear_table = any(
-        atom.predicate.name == "Clear"
-        and len(atom.objects) == 1
-        and atom.objects[0].name == "table"
-        for atom in source_atoms
-    )
-
-    # Check if target has the required atoms
-    has_target_clear_target = any(
-        atom.predicate.name == "Clear"
-        and len(atom.objects) == 1
-        and atom.objects[0].name == "target_area"
-        for atom in target_atoms
-    )
-    has_target_gripper_empty = any(
-        atom.predicate.name == "GripperEmpty"
-        and len(atom.objects) == 1
-        and atom.objects[0].name == "robot"
-        for atom in target_atoms
-    )
-
-    return (
-        has_block1_on_table
-        and has_block2_on_target
-        and has_gripper_empty
-        and has_clear_table
-        and has_target_clear_target
-        and has_target_gripper_empty
-    )
 
 
 def select_random_shortcuts(

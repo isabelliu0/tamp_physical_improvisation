@@ -190,8 +190,6 @@ class GoalConditionedRLPolicy(Policy[ObsType, ActType]):
         self.node_states: dict[int, ObsType] = {}
         self.valid_shortcuts: list[tuple[int, int]] = []
         self.node_preimages: dict[int, set[GroundAtom]] = {}
-        self._current_context: PolicyContext | None = None
-        self._current_goal: ObsType | None = None
 
     @property
     def requires_training(self) -> bool:
@@ -203,18 +201,14 @@ class GoalConditionedRLPolicy(Policy[ObsType, ActType]):
 
     def can_initiate(self) -> bool:
         """Check whether the policy can be executed."""
-        return self.model is not None and self._current_goal is not None
+        return self.model is not None
 
     def configure_context(self, context: PolicyContext) -> None:
         """Configure policy with context information."""
-        self._current_context = context
-        target_node_id = context.info.get("target_node_id")
-        assert target_node_id is not None
-        self._current_goal = self.node_states[target_node_id]
 
     def get_action(self, obs: dict[str, np.ndarray[Any, Any]]) -> np.ndarray[Any, Any]:  # type: ignore[override] # pylint: disable=line-too-long
         """Get action from policy."""
-        assert self.model is not None and self._current_goal is not None
+        assert self.model is not None
         assert isinstance(
             obs, dict
         ), "Observation must be a dictionary, consistent with HER"

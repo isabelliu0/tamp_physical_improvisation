@@ -115,29 +115,20 @@ class Blocks2DEnv(gym.Env):
         return self.state.gripper_status
 
     def _get_default_state(self) -> Blocks2DState:
-        """Get default initial state with randomized block 2 position."""
-        # Target area properties are constant
+        """Get default initial state with randomized blocks' positions."""
         target_x = self._target_area["x"]
         target_width = self._target_area["width"]
-
-        # Calculate target area bounds
         target_left = target_x - target_width / 2
         target_right = target_x + target_width / 2
 
-        # Calculate valid range for block 2's x position to ensure it blocks target
-        min_overlap = 0  # adjustable
-        block_2_left_bound = target_left - (self._block_width / 2) + min_overlap
-        block_2_right_bound = target_right + (self._block_width / 2) - min_overlap
-
-        # Randomly position block 2 within valid range
-        _block_2_x = self.np_random.uniform(block_2_left_bound, block_2_right_bound)
+        # Position block 1 and 2 in random but hardest positions for the task
+        block_2_x = self.np_random.choice([target_left, target_x, target_right])
+        block_1_x = self.np_random.choice([0.0, 1.0])
 
         return Blocks2DState(
             robot_position=np.array([0.5, 1.0], dtype=np.float32),
-            block_1_position=np.array([0.0, 0.0], dtype=np.float32),
-            block_2_position=np.array(
-                [0.5, 0.0], dtype=np.float32
-            ),  # fixed block 2 position for testing
+            block_1_position=np.array([block_1_x, 0.0], dtype=np.float32),
+            block_2_position=np.array([block_2_x, 0.0], dtype=np.float32),
             gripper_status=0.0,
         )
 
@@ -264,8 +255,8 @@ class Blocks2DEnv(gym.Env):
         # Handle picking up and placing down a block
         picking_up_block1 = False
         picking_up_block2 = False
-        if self.gripper_status > 0.0 and block_held:  # Already holding a block
-            if new_gripper_status <= 0.0:  # Releasing grip
+        if block_held:  # Already holding a block
+            if new_gripper_status < -0.5:  # Releasing grip
                 if block1_held:
                     new_block_1_position = np.array(
                         [self.block_1_position[0], 0.0], dtype=np.float32
@@ -279,7 +270,7 @@ class Blocks2DEnv(gym.Env):
                     new_block_1_position = new_robot_position.copy()
                 elif block2_held:
                     new_block_2_position = new_robot_position.copy()
-        elif new_gripper_status > 0.0:  # Attempting to pick up
+        elif new_gripper_status > 0.5:  # Attempting to pick up
             # Calculate distances to blocks
             dist_to_block1 = np.linalg.norm(new_robot_position - self.block_1_position)
             dist_to_block2 = np.linalg.norm(new_robot_position - self.block_2_position)
