@@ -581,6 +581,10 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
                     print(f"Found similar shortcut with similarity {best_similarity}")
 
+                relevant_objects = self.identify_relevant_objects(
+                    source_atoms, target_preimage
+                )
+
                 # Configure context for environment and policy
                 if self.use_context_wrapper and self.context_env is not None:
                     self.context_env.set_context(source_atoms, target_preimage)
@@ -591,6 +595,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                         info={
                             "source_node_id": source_node.id,
                             "target_node_id": target_node.id,
+                            "relevant_objects": relevant_objects,
                         },
                     )
                 )
@@ -598,7 +603,11 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     print(
                         f"Trying to add shortcut: {source_node.id} to {target_node.id}"
                     )
-                    graph.add_edge(source_node, target_node, None, is_shortcut=True)
+                    print(f"Relevant objects: {relevant_objects}")
+                    edge = graph.add_edge(
+                        source_node, target_node, None, is_shortcut=True
+                    )
+                    edge.relevant_objects = relevant_objects
 
     def _compute_planning_graph_edge_costs(
         self,
@@ -854,6 +863,18 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 print(
                     f"Edge {edge.source.id}->{edge.target.id}: {', '.join(cost_details)}"
                 )
+
+    def identify_relevant_objects(
+        self, source_atoms: set[GroundAtom], target_atoms: set[GroundAtom]
+    ) -> set[Object]:
+        """Identify objects relevant to a shortcut based on atom changes."""
+        added_atoms = target_atoms - source_atoms
+        removed_atoms = source_atoms - target_atoms
+        changed_atoms = added_atoms | removed_atoms
+        relevant_objects = set()
+        for atom in changed_atoms:
+            relevant_objects.update(atom.objects)
+        return relevant_objects
 
     def _create_planning_env(self) -> gym.Env:
         """Create a separate environment instance for planning simulations."""

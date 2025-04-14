@@ -4,7 +4,7 @@ import heapq
 import itertools
 from dataclasses import dataclass, field
 
-from relational_structs import GroundAtom, GroundOperator
+from relational_structs import GroundAtom, GroundOperator, Object
 
 
 @dataclass
@@ -32,6 +32,7 @@ class PlanningGraphEdge:
     operator: GroundOperator | None = None
     cost: float = float("inf")
     is_shortcut: bool = False
+    relevant_objects: set[Object] = field(default_factory=set)
 
     # Store path-dependent costs: (path, source_node_id) -> cost
     # where path is a tuple of node IDs

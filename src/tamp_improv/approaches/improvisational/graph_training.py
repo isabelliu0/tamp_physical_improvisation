@@ -1,12 +1,12 @@
 """Graph-based training data collection for improvisational TAMP."""
 
 from collections import defaultdict, deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, TypeVar
 
 import gymnasium as gym
 import numpy as np
-from relational_structs import GroundAtom
+from relational_structs import GroundAtom, Object
 from tomsutils.utils import sample_seed_from_rng
 
 from tamp_improv.approaches.improvisational.base import (
@@ -35,7 +35,8 @@ class ShortcutCandidate:
     target_node: PlanningGraphNode
     source_atoms: set[GroundAtom]
     target_preimage: set[GroundAtom]
-    source_state: Any  # The actual environment state at the source node
+    source_state: Any
+    relevant_objects: set[Object] = field(default_factory=set)
 
 
 def collect_states_for_all_nodes(
@@ -311,6 +312,9 @@ def collect_graph_based_training_data(
         # Organize training data for each selected shortcut candidate
         for candidate in selected_candidates:
             source_id = candidate.source_node.id
+            candidate.relevant_objects = approach.identify_relevant_objects(
+                candidate.source_atoms, candidate.target_preimage
+            )
             if source_id in observed_states and observed_states[source_id] is not None:
                 for source_state in observed_states[source_id]:
                     if approach.use_context_wrapper and context_env is not None:
@@ -331,6 +335,9 @@ def collect_graph_based_training_data(
                             "target_node_id": candidate.target_node.id,
                             "source_atoms_count": len(candidate.source_atoms),
                             "target_preimage_count": len(candidate.target_preimage),
+                            "relevant_objects": [
+                                obj.name for obj in candidate.relevant_objects
+                            ],
                         }
                     )
 
