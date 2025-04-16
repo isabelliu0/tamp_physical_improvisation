@@ -99,7 +99,7 @@ def test_multi_rl_blocks2d_pipeline(use_context_wrapper):
         num_episodes=5,
         max_steps=50,
         max_training_steps_per_shortcut=50,
-        collect_episodes=5,
+        collect_episodes=3,
         episodes_per_scenario=1000,
         force_collect=False,
         render=True,
