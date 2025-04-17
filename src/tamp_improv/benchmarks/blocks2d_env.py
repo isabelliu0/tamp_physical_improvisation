@@ -6,7 +6,7 @@ from typing import Any, NamedTuple
 
 import gymnasium as gym
 import numpy as np
-from gymnasium.spaces import Box
+from gymnasium.spaces import Box, Graph, GraphInstance
 from matplotlib import pyplot as plt
 from numpy.typing import NDArray
 from tomsgeoms2d.structs import Rectangle
@@ -20,6 +20,44 @@ class Blocks2DState(NamedTuple):
     block_1_position: NDArray[np.float32]
     block_2_position: NDArray[np.float32]
     gripper_status: float
+    block_3_position: NDArray[np.float32] | None = None
+
+    def to_graph_observation(self) -> GraphInstance:
+        """Convert to graph observation."""
+        nodes = []
+
+        # Robot node: [type=0, x, y, width, height, gripper_status]
+        robot_node = np.zeros(6, dtype=np.float32)
+        robot_node[0] = 0
+        robot_node[1:3] = self.robot_position
+        robot_node[3:5] = [0.2, 0.2]
+        robot_node[5] = self.gripper_status
+        nodes.append(robot_node)
+
+        # Block nodes: [type=1, x, y, width, height, block_id]
+        block1_node = np.zeros(6, dtype=np.float32)
+        block1_node[0] = 1
+        block1_node[1:3] = self.block_1_position
+        block1_node[3:5] = [0.2, 0.2]
+        block1_node[5] = 1
+        nodes.append(block1_node)
+
+        block2_node = np.zeros(6, dtype=np.float32)
+        block2_node[0] = 1
+        block2_node[1:3] = self.block_2_position
+        block2_node[3:5] = [0.2, 0.2]
+        block2_node[5] = 2
+        nodes.append(block2_node)
+
+        if self.block_3_position is not None:
+            block3_node = np.zeros(6, dtype=np.float32)
+            block3_node[0] = 1
+            block3_node[1:3] = self.block_3_position
+            block3_node[3:5] = [0.2, 0.2]
+            block3_node[5] = 3
+            nodes.append(block3_node)
+
+        return GraphInstance(nodes=np.stack(nodes), edges=None, edge_links=None)
 
 
 def is_block_in_target_area(
@@ -49,6 +87,463 @@ def is_block_in_target_area(
         and target_bottom <= block_bottom
         and block_top <= target_top
     )
+
+
+class GraphBlocks2DEnv(gym.Env):
+    """A block environment in 2D with graph observation support and variable
+    number of blocks."""
+
+    metadata = {"render_modes": ["rgb_array"], "render_fps": 4}
+
+    def __init__(self, n_blocks: int = 2, render_mode: str | None = None) -> None:
+        assert n_blocks in (2, 3), "n_blocks must be either 2 or 3 given env constraint"
+        self.n_blocks = n_blocks
+        self.observation_space = Graph(
+            node_space=Box(low=-np.inf, high=np.inf, shape=(6,), dtype=np.float32),
+            edge_space=None,
+        )
+        self.action_space = Box(
+            low=np.array([-0.1, -0.1, -1.0]),
+            high=np.array([0.1, 0.1, 1.0]),
+            dtype=np.float32,
+        )
+
+        assert render_mode is None or render_mode in self.metadata["render_modes"]
+        self.render_mode = render_mode
+
+        self._robot_width = 0.2
+        self._robot_height = 0.2
+        self._block_width = 0.2
+        self._block_height = 0.2
+        self._target_area = {"x": 0.5, "y": 0.0, "width": 0.2, "height": 0.2}
+
+        self.block_positions: list[NDArray[np.float32]] = []
+
+        # Initialize state
+        self.state = self._get_default_state()
+
+    @property
+    def robot_position(self) -> NDArray[np.float32]:
+        """Get robot position."""
+        return self.state.robot_position
+
+    @property
+    def block_1_position(self) -> NDArray[np.float32]:
+        """Get block 1 position."""
+        return self.state.block_1_position
+
+    @property
+    def block_2_position(self) -> NDArray[np.float32]:
+        """Get block 2 position."""
+        return self.state.block_2_position
+
+    @property
+    def gripper_status(self) -> float:
+        """Get gripper status."""
+        return self.state.gripper_status
+
+    def _get_default_state(self) -> Blocks2DState:
+        """Get default initial state with randomized blocks' positions."""
+        target_x = self._target_area["x"]
+        target_width = self._target_area["width"]
+        target_left = target_x - target_width / 2
+        target_right = target_x + target_width / 2
+
+        # Position block 1 and 2 randomly but in the hardest positions for the task
+        block_2_x = self.np_random.choice([target_left, target_x, target_right])
+        block_1_x = self.np_random.choice([0.0, 1.0])
+        state = Blocks2DState(
+            robot_position=np.array([0.5, 1.0], dtype=np.float32),
+            block_1_position=np.array([block_1_x, 0.0], dtype=np.float32),
+            block_2_position=np.array([block_2_x, 0.0], dtype=np.float32),
+            gripper_status=0.0,
+        )
+        if self.n_blocks > 2:
+            block_3_x = (
+                np.random.uniform(0.9, 1.0)
+                if block_1_x == 0.0
+                else np.random.uniform(0.0, 0.2)
+            )
+            state = Blocks2DState(
+                robot_position=state.robot_position,
+                block_1_position=state.block_1_position,
+                block_2_position=state.block_2_position,
+                block_3_position=np.array([block_3_x, 0.0], dtype=np.float32),
+                gripper_status=0.0,
+            )
+
+        self.block_positions = [state.block_1_position, state.block_2_position]
+        if self.n_blocks > 2 and state.block_3_position is not None:
+            self.block_positions.append(state.block_3_position)
+
+        return state
+
+    def reset_from_state(
+        self,
+        state: Blocks2DState | GraphInstance,
+        *,
+        seed: int | None = None,
+    ) -> tuple[GraphInstance, dict[str, Any]]:
+        """Reset environment to specific state."""
+        super().reset(seed=seed)
+
+        if isinstance(state, GraphInstance):
+            # Rebuild state from graph
+            robot_pos = None
+            block_positions = {}
+            gripper_status = 0.0
+
+            for node in state.nodes:
+                node_type = int(node[0])
+                if node_type == 0:  # Robot
+                    robot_pos = node[1:3].copy()
+                    gripper_status = float(node[5])
+                elif node_type == 1:  # Block
+                    block_id = int(node[5])
+                    block_positions[block_id] = node[1:3].copy()
+
+            # Ensure all required nodes were found
+            assert robot_pos is not None, "Robot node not found"
+            assert 1 in block_positions, "Block 1 not found"
+            assert 2 in block_positions, "Block 2 not found"
+
+            # Build new state
+            if 3 in block_positions and self.n_blocks > 2:
+                self.state = Blocks2DState(
+                    robot_position=robot_pos,
+                    block_1_position=block_positions[1],
+                    block_2_position=block_positions[2],
+                    block_3_position=block_positions[3],
+                    gripper_status=gripper_status,
+                )
+                self.block_positions = [
+                    block_positions[1],
+                    block_positions[2],
+                    block_positions[3],
+                ]
+            else:
+                self.state = Blocks2DState(
+                    robot_position=robot_pos,
+                    block_1_position=block_positions[1],
+                    block_2_position=block_positions[2],
+                    gripper_status=gripper_status,
+                )
+                self.block_positions = [block_positions[1], block_positions[2]]
+        else:
+            self.state = state
+            self.block_positions = [state.block_1_position, state.block_2_position]
+            if state.block_3_position is not None:
+                self.block_positions.append(state.block_3_position)
+
+        return self._get_obs(), self._get_info()
+
+    def reset(
+        self,
+        *,
+        seed: int | None = None,
+        options: dict[str, Any] | None = None,
+    ) -> tuple[GraphInstance, dict[str, Any]]:
+        """Reset environment to default state."""
+        super().reset(seed=seed)
+
+        if options is None:
+            self.state = self._get_default_state()
+        else:
+            robot_pos = options.get(
+                "robot_pos", np.array([0.5, 1.0], dtype=np.float32)
+            ).copy()
+            block_1_pos = options.get(
+                "block_1_pos", np.array([0.0, 0.0], dtype=np.float32)
+            ).copy()
+            block_2_pos = options.get(
+                "block_2_pos", np.array([0.5, 0.0], dtype=np.float32)
+            ).copy()
+            block_3_pos = None
+            if self.n_blocks > 2:
+                block_3_pos = options.get(
+                    "block_3_pos", np.array([1.0, 0.0], dtype=np.float32)
+                ).copy()
+
+            self.block_positions = [block_1_pos, block_2_pos]
+            if self.n_blocks > 2 and block_3_pos is not None:
+                self.block_positions.append(block_3_pos)
+
+            self.state = Blocks2DState(
+                robot_position=robot_pos,
+                block_1_position=block_1_pos,
+                block_2_position=block_2_pos,
+                block_3_position=block_3_pos,
+                gripper_status=0.0,
+            )
+
+        return self._get_obs(), self._get_info()
+
+    def _get_obs(self) -> GraphInstance:
+        """Get observation from current state."""
+        return self.state.to_graph_observation()
+
+    def _get_info(self) -> dict[str, Any]:
+        """Get info from current state."""
+        return {
+            "distance_to_block1": np.linalg.norm(
+                self.robot_position - self.block_1_position
+            ),
+            "distance_to_block2": np.linalg.norm(
+                self.robot_position - self.block_2_position
+            ),
+        }
+
+    def step(
+        self,
+        action: NDArray[np.float32],
+    ) -> tuple[GraphInstance, float, bool, bool, dict[str, Any]]:
+        """Take environment step."""
+        dx, dy, gripper_action = action
+
+        # Save previous state
+        prev_state = self.state
+
+        # Update states
+        new_robot_position = np.array(
+            [
+                np.clip(self.robot_position[0] + dx, 0.0, 1.0),
+                np.clip(self.robot_position[1] + dy, 0.0, 1.0),
+            ],
+            dtype=np.float32,
+        )
+        new_block_positions = [pos.copy() for pos in self.block_positions]
+        new_gripper_status = float(gripper_action)
+
+        # Handle pushing for all blocks
+        pushed_blocks = set()
+        # First handle direct robot pushing
+        for i, block_pos in enumerate(self.block_positions):
+            if self._is_adjacent(self.robot_position, block_pos):
+                relative_pos = self.robot_position[0] - block_pos[0]
+                if relative_pos * dx < 0.0:  # Push
+                    new_block_positions[i][0] = np.clip(
+                        block_pos[0] + dx, 0.0, 1.0
+                    ).astype(np.float32)
+                    pushed_blocks.add(i)
+        # Then handle pushing (block-to-block)
+        push_chain_continues = True
+        while push_chain_continues:
+            push_chain_continues = False
+            for i in pushed_blocks.copy():
+                pushing_block_pos = self.block_positions[i]
+                for j, block_pos in enumerate(self.block_positions):
+                    if j not in pushed_blocks and self._is_adjacent(
+                        pushing_block_pos, block_pos
+                    ):
+                        relative_pos = pushing_block_pos[0] - block_pos[0]
+                        if relative_pos * dx < 0.0:
+                            new_block_positions[j][0] = np.clip(
+                                block_pos[0] + dx, 0.0, 1.0
+                            ).astype(np.float32)
+                            pushed_blocks.add(j)
+                            push_chain_continues = True
+
+        # Check if already holding a block
+        held_block_idx = -1
+        for i, block_pos in enumerate(self.block_positions):
+            if np.allclose(block_pos, self.robot_position, atol=1e-3):
+                held_block_idx = i
+                break
+
+        picking_up_block_idx = -1
+        # Handle picking up and placing down a block
+        if held_block_idx >= 0:  # Already holding a block
+            if new_gripper_status < -0.5:  # Releasing grip
+                new_block_positions[held_block_idx][1] = 0.0
+            else:  # Continuing to hold
+                new_block_positions[held_block_idx] = new_robot_position.copy()
+        elif new_gripper_status > 0.5:  # Attempting to pick up
+            for i, block_pos in enumerate(self.block_positions):
+                dist = np.linalg.norm(new_robot_position - block_pos)
+                if dist <= ((self._robot_width + self._block_width) / 2) + 1e-3:
+                    new_block_positions[i] = new_robot_position.copy()
+                    picking_up_block_idx = i
+                    break
+
+        # Update state
+        if self.n_blocks > 2:
+            new_state = Blocks2DState(
+                robot_position=new_robot_position,
+                block_1_position=new_block_positions[0],
+                block_2_position=new_block_positions[1],
+                block_3_position=new_block_positions[2],
+                gripper_status=new_gripper_status,
+            )
+        else:
+            new_state = Blocks2DState(
+                robot_position=new_robot_position,
+                block_1_position=new_block_positions[0],
+                block_2_position=new_block_positions[1],
+                gripper_status=new_gripper_status,
+            )
+        self.state = new_state
+        self.block_positions = new_block_positions
+
+        # Check for collisions - revert to previous state if collision
+        if self._check_collisions(held_block_idx, picking_up_block_idx):
+            self.state = prev_state
+            self.block_positions = [
+                prev_state.block_1_position,
+                prev_state.block_2_position,
+            ]
+            if self.n_blocks > 2 and prev_state.block_3_position is not None:
+                self.block_positions.append(prev_state.block_3_position)
+            obs = self._get_obs()
+            info = self._get_info()
+            return obs, -0.1, False, False, info
+
+        # Get observation
+        obs = self._get_obs()
+        info = self._get_info()
+
+        # Check if the goal is reached
+        goal_reached = is_block_in_target_area(
+            self.block_1_position[0],
+            self.block_1_position[1],
+            self._block_width,
+            self._block_height,
+            self._target_area["x"],
+            self._target_area["y"],
+            self._target_area["width"],
+            self._target_area["height"],
+        )
+
+        reward = 1.0 if goal_reached else 0.0
+        terminated = goal_reached
+
+        return obs, reward, terminated, False, info
+
+    def _check_collisions(self, held_block_idx, picking_up_block_idx) -> bool:
+        """Check for collisions between objects."""
+        # Check for collisions between blocks
+        for i in range(len(self.block_positions)):
+            for j in range(i + 1, len(self.block_positions)):
+                if self._check_collision_between(
+                    self.block_positions[i], self.block_positions[j]
+                ):
+                    return True
+
+        # Check collision between robot and blocks (except held block)
+        for i, block_pos in enumerate(self.block_positions):
+            if (
+                i != held_block_idx
+                and i != picking_up_block_idx
+                and self._check_collision_between(self.robot_position, block_pos)
+            ):
+                return True
+
+        return False
+
+    def _check_collision_between(
+        self,
+        pos1: NDArray[np.float32],
+        pos2: NDArray[np.float32],
+    ) -> bool:
+        """Check collision between two positions."""
+        dx = abs(pos1[0] - pos2[0])
+        dy = abs(pos1[1] - pos2[1])
+
+        width_sum = self._block_width - 1e-3
+        height_sum = self._block_height - 1e-3
+
+        if np.array_equal(pos1, self.robot_position) or np.array_equal(
+            pos2, self.robot_position
+        ):
+            width_sum = (self._robot_width + self._block_width) / 2 - 1e-3
+            height_sum = (self._robot_height + self._block_height) / 2 - 1e-3
+
+        return dx < width_sum and dy < height_sum
+
+    def _is_adjacent(
+        self,
+        robot_position: NDArray[np.float32],
+        block_position: NDArray[np.float32],
+    ) -> bool:
+        vertical_aligned = (
+            np.abs(robot_position[1] - block_position[1])
+            < (self._robot_height + self._block_height) / 4
+        )
+        horizontal_adjacent = np.isclose(
+            np.abs(robot_position[0] - block_position[0]),
+            (self._robot_width + self._block_width) / 2,
+            atol=2e-2,  # tolerance to make the task easier for RL agents
+        )
+        return vertical_aligned and horizontal_adjacent
+
+    def render(self) -> NDArray[np.uint8]:  # type: ignore
+        """Render the environment."""
+        fig, ax = plt.subplots(1, 1, figsize=(5, 5))
+        ax.set_xlim(
+            (
+                0.0 - max(self._robot_width / 2, self._block_width / 2),
+                1.0 + max(self._robot_width / 2, self._block_width / 2),
+            )
+        )
+        ax.set_ylim(
+            (
+                0.0 - max(self._robot_height / 2, self._block_height / 2),
+                1.0 + max(self._robot_height / 2, self._block_height / 2),
+            )
+        )
+
+        # Draw the target area
+        target_rect = Rectangle.from_center(
+            self._target_area["x"],
+            self._target_area["y"],
+            self._target_area["width"],
+            self._target_area["height"],
+            0.0,
+        )
+        target_rect.plot(ax, facecolor="green", edgecolor="red")
+
+        # Draw the robot.
+        robot_rect = Rectangle.from_center(
+            self.robot_position[0],
+            self.robot_position[1],
+            self._robot_width,
+            self._robot_height,
+            0.0,
+        )
+        robot_rect.plot(ax, facecolor="silver", edgecolor="black")
+
+        # Draw the blocks.
+        for i, block_position in enumerate(self.block_positions):
+            block_rect = Rectangle.from_center(
+                block_position[0],
+                block_position[1],
+                self._block_width,
+                self._block_height,
+                0.0,
+            )
+            block_rect.plot(ax, facecolor="blue", edgecolor="black")
+
+            if i == 0:
+                ax.text(
+                    block_position[0],
+                    block_position[1],
+                    "T",
+                    fontsize=20,
+                    ha="center",
+                    va="center",
+                    color="black",
+                )
+
+        img = fig2data(fig)
+        plt.close(fig)
+        return img
+
+    def clone(self) -> GraphBlocks2DEnv:
+        """Clone the environment."""
+        clone_env = GraphBlocks2DEnv(
+            n_blocks=self.n_blocks, render_mode=self.render_mode
+        )
+        clone_env.reset_from_state(self.state)
+        return clone_env
 
 
 class Blocks2DEnv(gym.Env):
@@ -418,7 +913,9 @@ class Blocks2DEnv(gym.Env):
         robot_rect.plot(ax, facecolor="silver", edgecolor="black")
 
         # Draw the blocks.
-        for block_position in [self.block_1_position, self.block_2_position]:
+        for i, block_position in enumerate(
+            [self.block_1_position, self.block_2_position]
+        ):
             block_rect = Rectangle.from_center(
                 block_position[0],
                 block_position[1],
@@ -427,6 +924,17 @@ class Blocks2DEnv(gym.Env):
                 0.0,
             )
             block_rect.plot(ax, facecolor="blue", edgecolor="black")
+
+            if i == 0:
+                ax.text(
+                    block_position[0],
+                    block_position[1],
+                    "T",
+                    fontsize=20,
+                    ha="center",
+                    va="center",
+                    color="black",
+                )
 
         img = fig2data(fig)
         plt.close(fig)

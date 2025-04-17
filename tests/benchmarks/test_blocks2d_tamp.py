@@ -1,17 +1,20 @@
 """Tests for Blocks2D environment with TAMP."""
 
+import pytest
 from gymnasium.wrappers import TimeLimit
 from task_then_motion_planning.planning import TaskThenMotionPlanner
 
 from tamp_improv.benchmarks.blocks2d import BaseBlocks2DTAMPSystem
+from tamp_improv.benchmarks.blocks2d_graph import BaseGraphBlocks2DTAMPSystem
 
 
-def test_blocks2d_tamp_system():
+@pytest.mark.parametrize(
+    "system_cls", [BaseBlocks2DTAMPSystem, BaseGraphBlocks2DTAMPSystem]
+)
+def test_blocks2d_tamp_system(system_cls):
     """Test Blocks2D environment with TAMP planner."""
     # Create TAMP system
-    tamp_system = BaseBlocks2DTAMPSystem.create_default(
-        render_mode="rgb_array", seed=42
-    )
+    tamp_system = system_cls.create_default(render_mode="rgb_array", seed=42)
 
     # Create environment with time limit
     env = TimeLimit(tamp_system.env, max_episode_steps=50)
