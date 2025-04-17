@@ -1,8 +1,7 @@
-"""Blocks2D environment implementation."""
+"""Blocks2D environment graph-based implementation."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, Sequence
 
 import gymnasium as gym
@@ -14,115 +13,28 @@ from relational_structs import (
     LiftedOperator,
     Object,
     PDDLDomain,
-    Predicate,
-    Type,
     Variable,
 )
-from task_then_motion_planning.structs import LiftedOperatorSkill, Perceiver
+from task_then_motion_planning.structs import Perceiver
 
 from tamp_improv.benchmarks.base import (
     BaseTAMPSystem,
     ImprovisationalTAMPSystem,
     PlanningComponents,
 )
+from tamp_improv.benchmarks.blocks2d import (
+    BaseBlocks2DSkill,
+    Blocks2DPredicates,
+    Blocks2DTypes,
+)
 from tamp_improv.benchmarks.blocks2d_env import (
-    Blocks2DEnv,
+    GraphBlocks2DEnv,
     is_block_in_target_area,
 )
 from tamp_improv.benchmarks.wrappers import ImprovWrapper
 
 
-@dataclass
-class Blocks2DTypes:
-    """Container for blocks2d types."""
-
-    def __init__(self) -> None:
-        """Initialize types."""
-        self.robot = Type("robot")
-        self.block = Type("block")
-        self.surface = Type("surface")
-
-    def as_set(self) -> set[Type]:
-        """Convert to set of types."""
-        return {self.robot, self.block, self.surface}
-
-
-@dataclass
-class Blocks2DPredicates:
-    """Container for blocks2d predicates."""
-
-    def __init__(self, types: Blocks2DTypes) -> None:
-        """Initialize predicates."""
-        self.on = Predicate("On", [types.block, types.surface])
-        self.overlap = Predicate("Overlap", [types.block, types.surface])
-        self.holding = Predicate("Holding", [types.robot, types.block])
-        self.gripper_empty = Predicate("GripperEmpty", [types.robot])
-        self.clear = Predicate("Clear", [types.surface])
-        self.is_target = Predicate("IsTarget", [types.surface])
-        self.not_is_target = Predicate("NotIsTarget", [types.surface])
-
-    def __getitem__(self, key: str) -> Predicate:
-        """Get predicate by name."""
-        return next(p for p in self.as_set() if p.name == key)
-
-    def as_set(self) -> set[Predicate]:
-        """Convert to set of predicates."""
-        return {
-            self.on,
-            self.overlap,
-            self.holding,
-            self.gripper_empty,
-            self.clear,
-            self.is_target,
-            self.not_is_target,
-        }
-
-
-class BaseBlocks2DSkill(
-    LiftedOperatorSkill[NDArray[np.float32] | GraphInstance, NDArray[np.float32]]
-):
-    """Base class for blocks2d environment skills."""
-
-    def __init__(
-        self, components: PlanningComponents[NDArray[np.float32] | GraphInstance]
-    ) -> None:
-        """Initialize skill."""
-        super().__init__()
-        self._components = components
-        self._lifted_operator = self._get_lifted_operator()
-
-    def _get_lifted_operator(self) -> LiftedOperator:
-        """Get the operator this skill implements."""
-        return next(
-            op
-            for op in self._components.operators
-            if op.name == self._get_operator_name()
-        )
-
-    def _get_operator_name(self) -> str:
-        """Get the name of the operator this skill implements."""
-        raise NotImplementedError
-
-    def _extract_positions_from_graph(
-        self, obs: GraphInstance
-    ) -> tuple[NDArray[np.float32], dict[int, NDArray[np.float32]], float]:
-        """Extract positions from graph observation."""
-        robot_pos = None
-        block_positions = {}
-        gripper_status = 0.0
-        for node in obs.nodes:
-            node_type = int(node[0])
-            if node_type == 0:  # Robot
-                robot_pos = node[1:3]
-                gripper_status = float(node[5])
-            elif node_type == 1:  # Block
-                block_id = int(node[5])
-                block_positions[block_id] = node[1:3]
-        assert robot_pos is not None
-        return robot_pos, block_positions, gripper_status
-
-
-class PickUpSkill(BaseBlocks2DSkill):
+class GraphPickUpSkill(BaseBlocks2DSkill):
     """Skill for picking up blocks from non-target surfaces."""
 
     def _get_operator_name(self) -> str:
@@ -131,55 +43,60 @@ class PickUpSkill(BaseBlocks2DSkill):
     def _get_action_given_objects(
         self,
         objects: Sequence[Object],
-        obs: NDArray[np.float32],  # type: ignore[override]
+        obs: GraphInstance,  # type: ignore[override]
     ) -> NDArray[np.float32]:
-        robot_x, robot_y = obs[0:2]
-        robot_width, robot_height = obs[2:4]
+        robot_pos, block_positions, _ = self._extract_positions_from_graph(obs)
+        robot_width, robot_height = 0.2, 0.2
+        block_width, block_height = 0.2, 0.2
 
-        # Get which block to pick up and positions
+        # Get which block to pick up
         block_obj = objects[1]
-        if block_obj.name == "block1":
-            block_x, block_y = obs[4:6]
-            other_block_x, other_block_y = obs[6:8]
-        else:
-            block_x, block_y = obs[6:8]
-            other_block_x, other_block_y = obs[4:6]
-        block_width, block_height = obs[8:10]
+        block_id = int(block_obj.name.replace("block", ""))
+        assert block_id in block_positions
+        block_pos = block_positions[block_id]
+
+        # Find the other blocks
+        other_block_positions = []
+        for other_id, other_pos in block_positions.items():
+            if other_id != block_id:
+                other_block_positions.append(other_pos)
 
         # If too close to the other block, move away first
-        if (
-            np.isclose(robot_y, other_block_y, atol=1e-3)
-            and abs(robot_x - other_block_x) < (robot_width + block_width) / 2
-            and not np.isclose(robot_x, other_block_x, atol=1e-3)
-        ):
-            dx = np.clip(robot_x - other_block_x, -0.1, 0.1)
-            return np.array([dx, 0.0, -1.0])
+        for other_block_pos in other_block_positions:
+            if (
+                np.isclose(robot_pos[1], other_block_pos[1], atol=1e-3)
+                and abs(robot_pos[0] - other_block_pos[0])
+                < (robot_width + block_width) / 2
+                and not np.isclose(robot_pos[0], other_block_pos[0], atol=1e-3)
+            ):
+                dx = np.clip(robot_pos[0] - other_block_pos[0], -0.1, 0.1)
+                return np.array([dx, 0.0, -1.0])
 
         # Target position above block
-        target_y = block_y + block_height / 2 + robot_height / 2
+        target_y = block_pos[1] + block_height / 2 + robot_height / 2
 
         # Move towards y-level of target position first
-        if not np.isclose(robot_y, target_y, atol=1e-3):
-            dy = np.clip(target_y - robot_y, -0.1, 0.1)
+        if not np.isclose(robot_pos[1], target_y, atol=1e-3):
+            dy = np.clip(target_y - robot_pos[1], -0.1, 0.1)
             return np.array([0.0, dy, -1.0])
 
         # Move towards x-level of target position next
-        if not np.isclose(robot_x, block_x, atol=1e-3):
-            dx = np.clip(block_x - robot_x, -0.1, 0.1)
+        if not np.isclose(robot_pos[0], block_pos[0], atol=1e-3):
+            dx = np.clip(block_pos[0] - robot_pos[0], -0.1, 0.1)
             return np.array([dx, 0.0, -1.0])
 
         # If aligned and not holding block, pick it up
         return np.array([0.0, 0.0, 1.0])
 
 
-class PickUpFromTargetSkill(PickUpSkill):
+class GraphPickUpFromTargetSkill(GraphPickUpSkill):
     """Skill for picking up blocks from target area."""
 
     def _get_operator_name(self) -> str:
         return "PickUpFromTarget"
 
 
-class PutDownSkill(BaseBlocks2DSkill):
+class GraphPutDownSkill(BaseBlocks2DSkill):
     """Skill for putting down blocks on non-target surfaces."""
 
     def _get_operator_name(self) -> str:
@@ -188,25 +105,23 @@ class PutDownSkill(BaseBlocks2DSkill):
     def _get_action_given_objects(
         self,
         objects: Sequence[Object],
-        obs: NDArray[np.float32],  # type: ignore[override]
+        obs: GraphInstance,  # type: ignore[override]
     ) -> NDArray[np.float32]:
-        robot_x, robot_y = obs[0:2]
-        robot_height = obs[3]
-        block_height = obs[9]
-        gripper_status = obs[10]
+        robot_pos, _, gripper_status = self._extract_positions_from_graph(obs)
+        robot_height = 0.2
+        block_height = 0.2
 
         # Get which surface to place on and its position
         surface_obj = objects[2]
         if surface_obj.name == "target_area":
-            target_x, target_y = obs[11:13]
+            target_x, target_y = 0.5, 0.0
         else:
             # Put on table (right of target area)
-            target_x = 0.7
-            target_y = 0.0
+            target_x, target_y = 0.7, 0.0
 
         # Check if block is already on the target surface
-        if np.isclose(robot_x, target_x, atol=1e-3) and np.isclose(
-            robot_y, target_y, atol=1e-3
+        if np.isclose(robot_pos[0], target_x, atol=1e-3) and np.isclose(
+            robot_pos[1], target_y, atol=1e-3
         ):
             if gripper_status > 0.0:
                 return np.array([0.0, 0.0, -1.0])
@@ -216,13 +131,13 @@ class PutDownSkill(BaseBlocks2DSkill):
         target_y = target_y + block_height / 2 + robot_height / 2
 
         # Move towards y-level of target position first
-        if not np.isclose(robot_y, target_y, atol=1e-3):
-            dy = np.clip(target_y - robot_y, -0.1, 0.1)
+        if not np.isclose(robot_pos[1], target_y, atol=1e-3):
+            dy = np.clip(target_y - robot_pos[1], -0.1, 0.1)
             return np.array([0.0, dy, gripper_status])
 
         # Move towards x-level of target position next
-        if not np.isclose(robot_x, target_x, atol=1e-3):
-            dx = np.clip(target_x - robot_x, -0.1, 0.1)
+        if not np.isclose(robot_pos[0], target_x, atol=1e-3):
+            dx = np.clip(target_x - robot_pos[0], -0.1, 0.1)
             return np.array([dx, 0.0, gripper_status])
 
         # If aligned and holding block, release it
@@ -232,25 +147,25 @@ class PutDownSkill(BaseBlocks2DSkill):
         return np.array([0.0, 0.0, 0.0])
 
 
-class PutDownOnTargetSkill(PutDownSkill):
+class GraphPutDownOnTargetSkill(GraphPutDownSkill):
     """Skill for putting down blocks in target area."""
 
     def _get_operator_name(self) -> str:
         return "PutDownOnTarget"
 
 
-class Blocks2DPerceiver(Perceiver[NDArray[np.float32]]):
+class GraphBlocks2DPerceiver(Perceiver[GraphInstance]):
     """Perceiver for blocks2d environment."""
 
-    def __init__(self, types: Blocks2DTypes) -> None:
+    def __init__(self, types: Blocks2DTypes, n_blocks: int = 2) -> None:
         """Initialize with required types."""
         self._robot = Object("robot", types.robot)
-        self._block_1 = Object("block1", types.block)
-        self._block_2 = Object("block2", types.block)
+        self._blocks = [Object(f"block{i+1}", types.block) for i in range(n_blocks)]
         self._table = Object("table", types.surface)
         self._target_area = Object("target_area", types.surface)
         self._predicates: Blocks2DPredicates | None = None
         self._types = types
+        self.n_blocks = n_blocks
 
     def initialize(self, predicates: Blocks2DPredicates) -> None:
         """Initialize predicates after environment creation."""
@@ -265,121 +180,107 @@ class Blocks2DPerceiver(Perceiver[NDArray[np.float32]]):
 
     def reset(
         self,
-        obs: NDArray[np.float32],
+        obs: GraphInstance,
         _info: dict[str, Any],
     ) -> tuple[set[Object], set[GroundAtom], set[GroundAtom]]:
         """Reset perceiver with observation and info."""
         objects = {
             self._robot,
-            self._block_1,
-            self._block_2,
             self._table,
             self._target_area,
         }
+        objects.update(self._blocks)
         atoms = self._get_atoms(obs)
         goal = {
-            self.predicates["On"]([self._block_1, self._target_area]),
+            self.predicates["On"]([self._blocks[0], self._target_area]),
             self.predicates["GripperEmpty"]([self._robot]),
         }
         return objects, atoms, goal
 
-    def step(self, obs: NDArray[np.float32]) -> set[GroundAtom]:
+    def step(self, obs: GraphInstance) -> set[GroundAtom]:
         """Step perceiver with observation."""
         return self._get_atoms(obs)
 
-    def _get_atoms(self, obs: NDArray[np.float32]) -> set[GroundAtom]:
+    def _get_atoms(self, obs: GraphInstance) -> set[GroundAtom]:
         atoms = set()
+        robot_pos = None
+        robot_gripper = None
+        block_positions = {}
 
-        # Get positions from observation
-        robot_x, robot_y = obs[0:2]
-        block_1_x, block_1_y = obs[4:6]
-        block_2_x, block_2_y = obs[6:8]
-        block_width, block_height = obs[8:10]
-        gripper_status = obs[10]
-        target_x, target_y, target_width, target_height = obs[11:15]
+        # Extract positions from graph observation
+        for node in obs.nodes:
+            node_type = int(node[0])
+            if node_type == 0:  # Robot
+                robot_pos = node[1:3]
+                robot_gripper = float(node[5])
+            elif node_type == 1:  # Block
+                block_id = int(node[5])
+                block_positions[block_id] = node[1:3]
+        assert robot_pos is not None
+        assert robot_gripper is not None
+
+        # Constants
+        target_x = 0.5
+        target_y = 0.0
+        target_width = 0.2
+        target_height = 0.2
+        block_width = 0.2
+        block_height = 0.2
 
         # Add target identification predicates
         atoms.add(self.predicates["IsTarget"]([self._target_area]))
         atoms.add(self.predicates["NotIsTarget"]([self._table]))
 
         # Check gripper status
-        block1_held = False
-        block2_held = False
-        if gripper_status > 0.5:
-            if np.isclose(block_1_x, robot_x, atol=1e-3) and np.isclose(
-                block_1_y, robot_y, atol=1e-3
-            ):
-                atoms.add(self.predicates["Holding"]([self._robot, self._block_1]))
-                block1_held = True
-            elif np.isclose(block_2_x, robot_x, atol=1e-3) and np.isclose(
-                block_2_y, robot_y, atol=1e-3
-            ):
-                atoms.add(self.predicates["Holding"]([self._robot, self._block_2]))
-                block2_held = True
-            else:
-                atoms.add(self.predicates["GripperEmpty"]([self._robot]))
-        else:
+        held_block_id = -1
+        if robot_gripper > 0.5:
+            for i in range(self.n_blocks):
+                block_id = i + 1
+                if block_id in block_positions and np.allclose(
+                    block_positions[block_id], robot_pos, atol=1e-3
+                ):
+                    atoms.add(
+                        self.predicates["Holding"]([self._robot, self._blocks[i]])
+                    )
+                    held_block_id = block_id
+                    break
+        if held_block_id == -1:
             atoms.add(self.predicates["GripperEmpty"]([self._robot]))
 
-        # Check block 1 target area status
-        if is_block_in_target_area(
-            block_1_x,
-            block_1_y,
-            block_width,
-            block_height,
-            target_x,
-            target_y,
-            target_width,
-            target_height,
-        ):
-            atoms.add(self.predicates["On"]([self._block_1, self._target_area]))
-            atoms.add(self.predicates["Overlap"]([self._block_1, self._target_area]))
-        elif not block1_held and self._is_target_area_blocked(
-            block_1_x,
-            block_width,
-            target_x,
-            target_width,
-        ):
-            atoms.add(self.predicates["Overlap"]([self._block_1, self._target_area]))
-        elif not block1_held:
-            atoms.add(self.predicates["On"]([self._block_1, self._table]))
+        overlapping_blocks = []
+        for i in range(self.n_blocks):
+            block_id = i + 1
+            assert block_id in block_positions
+            if is_block_in_target_area(
+                block_positions[block_id][0],
+                block_positions[block_id][1],
+                block_width,
+                block_height,
+                target_x,
+                target_y,
+                target_width,
+                target_height,
+            ):
+                overlapping_blocks.append(i)
+                atoms.add(self.predicates["On"]([self._blocks[i], self._target_area]))
+                atoms.add(
+                    self.predicates["Overlap"]([self._blocks[i], self._target_area])
+                )
+            elif block_id != held_block_id and self._is_target_area_blocked(
+                block_positions[block_id][0],
+                block_width,
+                target_x,
+                target_width,
+            ):
+                overlapping_blocks.append(i)
+                atoms.add(
+                    self.predicates["Overlap"]([self._blocks[i], self._target_area])
+                )
+            elif block_id != held_block_id:
+                atoms.add(self.predicates["On"]([self._blocks[i], self._table]))
 
-        # Check block 2 target area status
-        if is_block_in_target_area(
-            block_2_x,
-            block_2_y,
-            block_width,
-            block_height,
-            target_x,
-            target_y,
-            target_width,
-            target_height,
-        ):
-            atoms.add(self.predicates["On"]([self._block_2, self._target_area]))
-            atoms.add(self.predicates["Overlap"]([self._block_2, self._target_area]))
-        elif not block2_held and self._is_target_area_blocked(
-            block_2_x,
-            block_width,
-            target_x,
-            target_width,
-        ):
-            atoms.add(self.predicates["Overlap"]([self._block_2, self._target_area]))
-        elif not block2_held:
-            atoms.add(self.predicates["On"]([self._block_2, self._table]))
-
-        # Check if surface is clear
-        is_target_clear = (
-            block2_held
-            or not self._is_target_area_blocked(
-                block_2_x, block_width, target_x, target_width
-            )
-        ) and (
-            block1_held
-            or not self._is_target_area_blocked(
-                block_1_x, block_width, target_x, target_width
-            )
-        )
-        if is_target_clear:
+        # Check if target area is clear
+        if not overlapping_blocks:
             atoms.add(self.predicates["Clear"]([self._target_area]))
 
         # Table is always "clear" since we can place things on it
@@ -417,26 +318,28 @@ class Blocks2DPerceiver(Perceiver[NDArray[np.float32]]):
         return free_width < block_width
 
 
-class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.float32]]):
-    """Base TAMP system for 2D blocks environment."""
+class BaseGraphBlocks2DTAMPSystem(BaseTAMPSystem[GraphInstance, NDArray[np.float32]]):
+    """Base TAMP system for 2D blocks graph-based environment."""
 
     def __init__(
         self,
-        planning_components: PlanningComponents[NDArray[np.float32]],
+        planning_components: PlanningComponents[GraphInstance],
+        n_blocks: int = 2,
         seed: int | None = None,
         render_mode: str | None = None,
     ) -> None:
-        """Initialize Blocks2D TAMP system."""
+        """Initialize graph-based Blocks2D TAMP system."""
+        self.n_blocks = n_blocks
         self._render_mode = render_mode
-        super().__init__(planning_components, name="Blocks2DTAMPSystem", seed=seed)
+        super().__init__(planning_components, name="GraphBlocks2DTAMPSystem", seed=seed)
 
     def _create_env(self) -> gym.Env:
         """Create base environment."""
-        return Blocks2DEnv(render_mode=self._render_mode)
+        return GraphBlocks2DEnv(n_blocks=self.n_blocks, render_mode=self._render_mode)
 
     def _get_domain_name(self) -> str:
         """Get domain name."""
-        return "blocks2d-domain"
+        return "graphblocks2d-domain"
 
     def get_domain(self) -> PDDLDomain:
         """Get domain."""
@@ -448,12 +351,16 @@ class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.floa
         )
 
     @classmethod
-    def _create_planning_components(cls) -> PlanningComponents[NDArray[np.float32]]:
-        """Create planning components for Blocks2D system."""
+    def _create_planning_components(
+        cls, n_blocks: int = 2
+    ) -> PlanningComponents[GraphInstance]:
+        """Create planning components for graph-based Blocks2D system."""
         types_container = Blocks2DTypes()
         types_set = types_container.as_set()
+
         predicates = Blocks2DPredicates(types_container)
-        perceiver = Blocks2DPerceiver(types_container)
+
+        perceiver = GraphBlocks2DPerceiver(types_container, n_blocks)
         perceiver.initialize(predicates)
 
         robot = Variable("?robot", types_container.robot)
@@ -541,46 +448,60 @@ class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.floa
     @classmethod
     def create_default(
         cls,
+        n_blocks: int = 2,
         seed: int | None = None,
         render_mode: str | None = None,
-    ) -> BaseBlocks2DTAMPSystem:
+    ) -> BaseGraphBlocks2DTAMPSystem:
         """Factory method for creating system with default components."""
-        planning_components = cls._create_planning_components()
+        planning_components = cls._create_planning_components(n_blocks=n_blocks)
         system = cls(
             planning_components,
+            n_blocks=n_blocks,
             seed=seed,
             render_mode=render_mode,
         )
         skills = {
-            PickUpSkill(system.components),  # type: ignore[arg-type]
-            PickUpFromTargetSkill(system.components),  # type: ignore[arg-type]
-            PutDownSkill(system.components),  # type: ignore[arg-type]
-            PutDownOnTargetSkill(system.components),  # type: ignore[arg-type]
+            GraphPickUpSkill(system.components),  # type: ignore[arg-type]
+            GraphPickUpFromTargetSkill(system.components),  # type: ignore[arg-type]
+            GraphPutDownSkill(system.components),  # type: ignore[arg-type]
+            GraphPutDownOnTargetSkill(system.components),  # type: ignore[arg-type]
         }
         system.components.skills.update(skills)
         return system
 
 
-class Blocks2DTAMPSystem(
-    ImprovisationalTAMPSystem[NDArray[np.float32], NDArray[np.float32]],
-    BaseBlocks2DTAMPSystem,
+class GraphBlocks2DTAMPSystem(
+    ImprovisationalTAMPSystem[GraphInstance, NDArray[np.float32]],
+    BaseGraphBlocks2DTAMPSystem,
 ):
-    """TAMP system for 2D blocks environment with improvisational policy
-    learning enabled."""
+    """TAMP system for 2D blocks graph-based environment with improvisational
+    policy learning enabled."""
 
     def __init__(
         self,
-        planning_components: PlanningComponents[NDArray[np.float32]],
+        planning_components: PlanningComponents[GraphInstance],
         n_blocks: int = 2,
         seed: int | None = None,
         render_mode: str | None = None,
     ) -> None:
-        """Initialize Blocks2D TAMP system."""
+        """Initialize graph-based Blocks2D TAMP system."""
         self.n_blocks = n_blocks
-        super().__init__(planning_components, seed=seed, render_mode=render_mode)
+        BaseGraphBlocks2DTAMPSystem.__init__(
+            self,
+            planning_components,
+            n_blocks=n_blocks,
+            seed=seed,
+            render_mode=render_mode,
+        )
+        ImprovisationalTAMPSystem.__init__(
+            self,
+            planning_components,
+            seed=seed,
+            render_mode=render_mode,
+        )
 
     def _create_wrapped_env(
-        self, components: PlanningComponents[NDArray[np.float32]]
+        self, components: PlanningComponents[GraphInstance]
     ) -> gym.Env:
         """Create wrapped environment for training."""
         return ImprovWrapper(
@@ -593,22 +514,24 @@ class Blocks2DTAMPSystem(
     @classmethod
     def create_default(
         cls,
+        n_blocks: int = 2,
         seed: int | None = None,
         render_mode: str | None = None,
-    ) -> Blocks2DTAMPSystem:
+    ) -> GraphBlocks2DTAMPSystem:
         """Factory method for creating improvisational system with default
         components."""
-        planning_components = cls._create_planning_components()
-        system = cls(
+        planning_components = cls._create_planning_components(n_blocks=n_blocks)
+        system = GraphBlocks2DTAMPSystem(
             planning_components,
+            n_blocks=n_blocks,
             seed=seed,
             render_mode=render_mode,
         )
         skills = {
-            PickUpSkill(system.components),  # type: ignore[arg-type]
-            PickUpFromTargetSkill(system.components),  # type: ignore[arg-type]
-            PutDownSkill(system.components),  # type: ignore[arg-type]
-            PutDownOnTargetSkill(system.components),  # type: ignore[arg-type]
+            GraphPickUpSkill(system.components),  # type: ignore[arg-type]
+            GraphPickUpFromTargetSkill(system.components),  # type: ignore[arg-type]
+            GraphPutDownSkill(system.components),  # type: ignore[arg-type]
+            GraphPutDownOnTargetSkill(system.components),  # type: ignore[arg-type]
         }
         system.components.skills.update(skills)
         return system
