@@ -417,6 +417,33 @@ class GraphBlocks2DEnv(gym.Env):
         terminated = goal_reached
 
         return obs, reward, terminated, False, info
+    
+    def extract_relevant_object_features(self, obs, relevant_object_names):
+        """Extract features from relevant objects in the observation."""
+        if not hasattr(obs, "nodes"):
+            return obs  # Not a graph observation
+
+        nodes = obs.nodes
+        robot_node = None
+        block_nodes = {}
+        for node in nodes:
+            node_type = int(node[0])
+            if node_type == 0:  # Robot
+                robot_node = node
+            elif node_type == 1:  # Block
+                block_id = int(node[5])
+                block_name = f"block{block_id}"
+                if block_name in relevant_object_names:
+                    block_nodes[block_name] = node
+        
+        features = []
+        assert robot_node is not None
+        features.extend(robot_node)
+        for block_name in sorted(relevant_object_names):
+            if block_name in block_nodes:
+                features.extend(block_nodes[block_name])
+        
+        return np.array(features, dtype=np.float32)
 
     def _check_collisions(self, held_block_idx, picking_up_block_idx) -> bool:
         """Check for collisions between objects."""

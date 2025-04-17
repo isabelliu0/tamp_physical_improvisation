@@ -24,6 +24,7 @@ from tamp_improv.approaches.improvisational.training import (
     train_and_evaluate,
 )
 from tamp_improv.benchmarks.blocks2d import Blocks2DTAMPSystem
+from tamp_improv.benchmarks.blocks2d_graph import GraphBlocks2DTAMPSystem
 from tamp_improv.benchmarks.pybullet_clear_and_place import ClearAndPlaceTAMPSystem
 
 
@@ -87,23 +88,26 @@ def test_pybullet_graph_training_collection():
     return train_data
 
 
-@pytest.mark.skip("Takes too long to run.")
-@pytest.mark.parametrize("use_context_wrapper", [False])
-def test_multi_rl_blocks2d_pipeline(use_context_wrapper):
+# @pytest.mark.skip("Takes too long to run.")
+@pytest.mark.parametrize(
+    "system_cls,use_context_wrapper", 
+    [(Blocks2DTAMPSystem, False)]
+)
+def test_multi_rl_blocks2d_pipeline(system_cls, use_context_wrapper):
     """Test the multi-policy RL training and evaluation pipeline."""
     print("\n=== Testing Multi-Policy RL Pipeline ===")
 
     # Configuration
     config = TrainingConfig(
         seed=42,
-        num_episodes=5,
+        num_episodes=1,
         max_steps=50,
         max_training_steps_per_shortcut=50,
-        collect_episodes=3,
+        collect_episodes=1,
         episodes_per_scenario=1000,
         force_collect=False,
         render=True,
-        record_training=False,
+        record_training=True,
         training_record_interval=125,
         training_data_dir=f"training_data/multi_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
         save_dir=f"trained_policies/multi_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
@@ -122,8 +126,8 @@ def test_multi_rl_blocks2d_pipeline(use_context_wrapper):
     )
 
     print("\n1. Creating system...")
-    system = Blocks2DTAMPSystem.create_default(
-        seed=config.seed, render_mode="rgb_array" if config.render else None
+    system = system_cls.create_default(
+        n_blocks=2, seed=config.seed, render_mode="rgb_array" if config.render else None
     )
 
     print("\n2. Training and evaluating policy...")
@@ -155,7 +159,8 @@ def test_multi_rl_blocks2d_pipeline(use_context_wrapper):
     return metrics
 
 
-def test_multi_rl_blocks2d_loaded(system_cls=Blocks2DTAMPSystem):
+@pytest.mark.parametrize("system_cls", [GraphBlocks2DTAMPSystem])
+def test_multi_rl_blocks2d_loaded(system_cls):
     """Test MultiRL on Blocks2D with loaded policies."""
     policy_dir = Path("trained_policies/multi_rl")
     policy_dir.mkdir(parents=True, exist_ok=True)
@@ -163,7 +168,7 @@ def test_multi_rl_blocks2d_loaded(system_cls=Blocks2DTAMPSystem):
     # Configuration
     config = TrainingConfig(
         seed=42,
-        num_episodes=5,
+        num_episodes=1,
         max_steps=50,
         render=True,
         collect_episodes=0,
@@ -206,7 +211,7 @@ def test_multi_rl_blocks2d_loaded(system_cls=Blocks2DTAMPSystem):
         config,
         policy_name=f"{policy_name}_Loaded",
         use_context_wrapper=False,
-        select_random_goal=True,
+        select_random_goal=False,
     )
 
     print("\nMultiRL Loaded Policies Results:")

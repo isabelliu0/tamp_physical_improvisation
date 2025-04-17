@@ -428,10 +428,12 @@ class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.floa
     ) -> None:
         """Initialize Blocks2D TAMP system."""
         self._render_mode = render_mode
+        import ipdb; ipdb.set_trace()
         super().__init__(planning_components, name="Blocks2DTAMPSystem", seed=seed)
 
     def _create_env(self) -> gym.Env:
         """Create base environment."""
+        import ipdb; ipdb.set_trace()
         return Blocks2DEnv(render_mode=self._render_mode)
 
     def _get_domain_name(self) -> str:
@@ -577,6 +579,7 @@ class Blocks2DTAMPSystem(
     ) -> None:
         """Initialize Blocks2D TAMP system."""
         self.n_blocks = n_blocks
+        self._render_mode = render_mode
         super().__init__(planning_components, seed=seed, render_mode=render_mode)
 
     def _create_wrapped_env(
@@ -593,11 +596,13 @@ class Blocks2DTAMPSystem(
     @classmethod
     def create_default(
         cls,
+        n_blocks: int = 2,
         seed: int | None = None,
         render_mode: str | None = None,
     ) -> Blocks2DTAMPSystem:
         """Factory method for creating improvisational system with default
         components."""
+        import ipdb; ipdb.set_trace()
         planning_components = cls._create_planning_components()
         system = cls(
             planning_components,

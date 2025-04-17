@@ -308,6 +308,7 @@ def train_and_evaluate(
             if hasattr(system.wrapped_env, "configure_training"):
                 system.wrapped_env.configure_training(train_data)
 
+            import ipdb; ipdb.set_trace()
             if config.record_training and can_render:
                 video_folder = Path(f"videos/{system.name}_{policy_name}_train")
                 video_folder.mkdir(parents=True, exist_ok=True)
