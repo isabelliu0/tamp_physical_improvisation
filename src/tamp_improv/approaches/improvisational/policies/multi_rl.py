@@ -9,8 +9,8 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, TypeVar
 
-import numpy as np
 import gymnasium as gym
+import numpy as np
 from gymnasium.spaces import Box
 from relational_structs import GroundAtom, Object, Predicate
 
@@ -36,8 +36,8 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
     def __init__(self, seed: int, config: RLConfig | None = None) -> None:
         """Initialize with a seed and optional config."""
         super().__init__(seed)
-        self.env: gym.Env | None = None
-        self.base_env: gym.Env | None = None
+        self.env: gym.Env
+        self.base_env: gym.Env
         self.config = config or RLConfig()
         self._policies: dict[str, RLPolicy] = {}
         self._active_policy_key: str | None = None
@@ -73,30 +73,35 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
         return self._find_matching_policy(self._current_context) is not None
 
     def get_action(self, obs: ObsType) -> ActType:
-        """Get action from the appropriate policy with selective feature extraction."""
+        """Get action from the appropriate policy with selective feature
+        extraction."""
         if not self._active_policy_key or self._active_policy_key not in self._policies:
             raise ValueError("No active policy for current context")
-        
+
         # For graph observations, extract fixed vector of relevant object features
         if hasattr(obs, "nodes"):
             pattern = self._policy_patterns.get(self._active_policy_key, {})
-            relevant_objects = set()
-            for atom in pattern.get("added_atoms", set()).union(pattern.get("deleted_atoms", set())):
+            relevant_objects: set[str] = set()
+            for atom in pattern.get("added_atoms", set()).union(
+                pattern.get("deleted_atoms", set())
+            ):
                 for obj in atom.objects:
                     relevant_objects.add(obj.name)
-            
+
             assert self._current_substitution is not None
-            mapped_objects = set()
-            for obj in relevant_objects:
+            mapped_objects: set[str] = set()
+            for obj_name in relevant_objects:
                 for orig, subst in self._current_substitution.items():
-                    if orig.name == obj:
+                    if orig.name == obj_name:
                         mapped_objects.add(subst.name)
             assert mapped_objects is not None
-            
+
             assert hasattr(self.base_env, "extract_relevant_object_features")
-            feature_vector = self.base_env.extract_relevant_object_features(obs, mapped_objects)
+            feature_vector = self.base_env.extract_relevant_object_features(
+                obs, mapped_objects
+            )
             return self._policies[self._active_policy_key].get_action(feature_vector)
-        
+
         # For non-graph observations, use the original observation
         return self._policies[self._active_policy_key].get_action(obs)
 
@@ -112,7 +117,9 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
         # Check if we're dealing with graph observations
         is_graph_based = hasattr(train_data.states[0], "nodes")
         if is_graph_based:
-            print("Detected graph-based observations - will extract fixed-size vectors for each policy")
+            print(
+                "Detected graph-based observations - will extract fixed-size vectors for each policy"  # pylint:disable=line-too-long
+            )
 
         # Train a policy for each group
         for policy_key, group_data in grouped_data.items():
@@ -122,25 +129,30 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
             if policy_key not in self._policies:
                 self._policies[policy_key] = RLPolicy(self._seed, self.config)
 
-            # For graph observations, preprocess the training data to extract fixed vectors
+            # For graph observations, process the training data to extract fixed vectors
             if is_graph_based:
                 pattern = self._policy_patterns[policy_key]
                 relevant_objects = set()
-                for atom in pattern.get("added_atoms", set()).union(pattern.get("deleted_atoms", set())):
+                for atom in pattern.get("added_atoms", set()).union(
+                    pattern.get("deleted_atoms", set())
+                ):
                     for obj in atom.objects:
                         relevant_objects.add(obj.name)
                 if hasattr(env, "set_relevant_objects"):
                     env.set_relevant_objects(relevant_objects)
                 base_env = self._get_base_env(env)
-                
+
                 # Wrap the environment to use the right observation space
                 assert hasattr(base_env, "extract_relevant_object_features")
                 sample_state = group_data.states[0]
-                sample_features = base_env.extract_relevant_object_features(sample_state, relevant_objects)
+                sample_features = base_env.extract_relevant_object_features(
+                    sample_state, relevant_objects
+                )
                 custom_obs_space = Box(
-                    low=-np.inf, high=np.inf, 
-                    shape=sample_features.shape, 
-                    dtype=np.float32
+                    low=-np.inf,
+                    high=np.inf,
+                    shape=sample_features.shape,
+                    dtype=np.float32,
                 )
                 policy_env = copy.deepcopy(env)
                 policy_env.observation_space = custom_obs_space
@@ -197,8 +209,11 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
         key = self._get_policy_key(context)
         if key in self._policies:
             relevant_objects = set()
-            for atom in self._policy_patterns[key].get("added_atoms", set()).union(
-                    self._policy_patterns[key].get("deleted_atoms", set())):
+            for atom in (
+                self._policy_patterns[key]
+                .get("added_atoms", set())
+                .union(self._policy_patterns[key].get("deleted_atoms", set()))
+            ):
                 relevant_objects.update(atom.objects)
             self._current_substitution = {obj: obj for obj in relevant_objects}
             return key
@@ -226,6 +241,9 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
             )
             if match_found:
                 self._current_substitution = substitution
+                print(
+                    f"Found structural match for policy key: {policy_key}. Substitution: {substitution}. Context: {context.info}"  # pylint:disable=line-too-long
+                )
                 return policy_key
 
         return None
@@ -301,7 +319,7 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
             env.configure_training(training_data)
         if hasattr(env, "env"):
             self._configure_env_recursively(env.env, training_data)
-    
+
     def _get_base_env(self, env: gym.Env | None = None) -> gym.Env:
         """Get the base environment."""
         if env is not None:

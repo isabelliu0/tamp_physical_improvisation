@@ -88,10 +88,10 @@ def test_pybullet_graph_training_collection():
     return train_data
 
 
-# @pytest.mark.skip("Takes too long to run.")
+@pytest.mark.skip("Takes too long to run.")
 @pytest.mark.parametrize(
-    "system_cls,use_context_wrapper", 
-    [(Blocks2DTAMPSystem, False)]
+    "system_cls,use_context_wrapper",
+    [(Blocks2DTAMPSystem, False), (GraphBlocks2DTAMPSystem, False)],
 )
 def test_multi_rl_blocks2d_pipeline(system_cls, use_context_wrapper):
     """Test the multi-policy RL training and evaluation pipeline."""
@@ -100,14 +100,14 @@ def test_multi_rl_blocks2d_pipeline(system_cls, use_context_wrapper):
     # Configuration
     config = TrainingConfig(
         seed=42,
-        num_episodes=1,
+        num_episodes=5,
         max_steps=50,
         max_training_steps_per_shortcut=50,
-        collect_episodes=1,
-        episodes_per_scenario=1000,
+        collect_episodes=3,
+        episodes_per_scenario=2000,
         force_collect=False,
         render=True,
-        record_training=True,
+        record_training=False,
         training_record_interval=125,
         training_data_dir=f"training_data/multi_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
         save_dir=f"trained_policies/multi_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
@@ -159,7 +159,7 @@ def test_multi_rl_blocks2d_pipeline(system_cls, use_context_wrapper):
     return metrics
 
 
-@pytest.mark.parametrize("system_cls", [GraphBlocks2DTAMPSystem])
+@pytest.mark.parametrize("system_cls", [Blocks2DTAMPSystem, GraphBlocks2DTAMPSystem])
 def test_multi_rl_blocks2d_loaded(system_cls):
     """Test MultiRL on Blocks2D with loaded policies."""
     policy_dir = Path("trained_policies/multi_rl")
@@ -168,7 +168,7 @@ def test_multi_rl_blocks2d_loaded(system_cls):
     # Configuration
     config = TrainingConfig(
         seed=42,
-        num_episodes=1,
+        num_episodes=5,
         max_steps=50,
         render=True,
         collect_episodes=0,

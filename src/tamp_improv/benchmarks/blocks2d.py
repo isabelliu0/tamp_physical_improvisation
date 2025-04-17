@@ -427,13 +427,11 @@ class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.floa
         render_mode: str | None = None,
     ) -> None:
         """Initialize Blocks2D TAMP system."""
-        self._render_mode = render_mode
-        import ipdb; ipdb.set_trace()
         super().__init__(planning_components, name="Blocks2DTAMPSystem", seed=seed)
+        self._render_mode = render_mode
 
     def _create_env(self) -> gym.Env:
         """Create base environment."""
-        import ipdb; ipdb.set_trace()
         return Blocks2DEnv(render_mode=self._render_mode)
 
     def _get_domain_name(self) -> str:
@@ -543,6 +541,7 @@ class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.floa
     @classmethod
     def create_default(
         cls,
+        n_blocks: int = 2,  # pylint:disable=unused-argument
         seed: int | None = None,
         render_mode: str | None = None,
     ) -> BaseBlocks2DTAMPSystem:
@@ -602,7 +601,6 @@ class Blocks2DTAMPSystem(
     ) -> Blocks2DTAMPSystem:
         """Factory method for creating improvisational system with default
         components."""
-        import ipdb; ipdb.set_trace()
         planning_components = cls._create_planning_components()
         system = cls(
             planning_components,

@@ -329,9 +329,9 @@ class BaseGraphBlocks2DTAMPSystem(BaseTAMPSystem[GraphInstance, NDArray[np.float
         render_mode: str | None = None,
     ) -> None:
         """Initialize graph-based Blocks2D TAMP system."""
+        super().__init__(planning_components, name="GraphBlocks2DTAMPSystem", seed=seed)
         self.n_blocks = n_blocks
         self._render_mode = render_mode
-        super().__init__(planning_components, name="GraphBlocks2DTAMPSystem", seed=seed)
 
     def _create_env(self) -> gym.Env:
         """Create base environment."""
@@ -486,6 +486,7 @@ class GraphBlocks2DTAMPSystem(
     ) -> None:
         """Initialize graph-based Blocks2D TAMP system."""
         self.n_blocks = n_blocks
+        self._render_mode = render_mode
         BaseGraphBlocks2DTAMPSystem.__init__(
             self,
             planning_components,

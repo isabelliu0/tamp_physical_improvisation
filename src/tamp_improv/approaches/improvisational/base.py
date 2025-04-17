@@ -777,7 +777,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                         if hasattr(curr_raw_obs, "nodes"):
                             for existing_obs in self.observed_states[target_id]:
                                 assert hasattr(existing_obs, "nodes")
-                                if np.array_equal(existing_obs.nodes, curr_raw_obs.nodes):
+                                if np.array_equal(
+                                    existing_obs.nodes, curr_raw_obs.nodes
+                                ):
                                     is_duplicate = True
                                     break
                         elif isinstance(curr_raw_obs, np.ndarray):
@@ -787,7 +789,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                                     is_duplicate = True
                                     break
                         else:
-                            raise TypeError("Unsupported observation type for duplicate check")
+                            raise TypeError(
+                                "Unsupported observation type for duplicate check"
+                            )
                         if not is_duplicate:
                             self.observed_states[target_id].append(curr_raw_obs)
 

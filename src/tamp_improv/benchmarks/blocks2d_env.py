@@ -417,7 +417,7 @@ class GraphBlocks2DEnv(gym.Env):
         terminated = goal_reached
 
         return obs, reward, terminated, False, info
-    
+
     def extract_relevant_object_features(self, obs, relevant_object_names):
         """Extract features from relevant objects in the observation."""
         if not hasattr(obs, "nodes"):
@@ -435,14 +435,14 @@ class GraphBlocks2DEnv(gym.Env):
                 block_name = f"block{block_id}"
                 if block_name in relevant_object_names:
                     block_nodes[block_name] = node
-        
+
         features = []
         assert robot_node is not None
         features.extend(robot_node)
         for block_name in sorted(relevant_object_names):
             if block_name in block_nodes:
                 features.extend(block_nodes[block_name])
-        
+
         return np.array(features, dtype=np.float32)
 
     def _check_collisions(self, held_block_idx, picking_up_block_idx) -> bool:

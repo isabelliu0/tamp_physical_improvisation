@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any, Generic, TypeVar
 
 import gymnasium as gym
-import numpy as np
 from relational_structs import GroundAtom
 
 ObsType = TypeVar("ObsType")
