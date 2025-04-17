@@ -63,7 +63,7 @@ class TrainingConfig:
     shortcut_info: list[dict[str, Any]] = field(default_factory=list)
 
     # Context size for augmenting observations
-    max_preimage_size: int = 12
+    max_atom_size: int = 12
 
     # Goal-conditioned training settings
     success_threshold: float = 0.01
@@ -281,7 +281,7 @@ def train_and_evaluate(
         system,
         policy,
         seed=config.seed,
-        max_preimage_size=config.max_preimage_size,
+        max_atom_size=config.max_atom_size,
         use_context_wrapper=use_context_wrapper,
     )
 
@@ -370,7 +370,7 @@ def train_and_evaluate_goal_conditioned(
     policy_factory: Callable[[int], Policy[ObsType, ActType]],
     config: TrainingConfig,
     policy_name: str,
-    use_preimages: bool = True,
+    use_atom_as_obs: bool = True,
     use_random_rollouts: bool = False,
     num_rollouts_per_node: int = 50,
     max_steps_per_rollout: int = 50,
@@ -393,7 +393,7 @@ def train_and_evaluate_goal_conditioned(
         system,
         policy,
         seed=config.seed,
-        max_preimage_size=config.max_preimage_size,
+        max_atom_size=config.max_atom_size,
     )
 
     # Collect goal-conditioned training data
@@ -418,10 +418,10 @@ def train_and_evaluate_goal_conditioned(
                 env=system.env,  # access base env, not wrapped env
                 node_states=train_data.node_states,
                 valid_shortcuts=train_data.valid_shortcuts,
-                perceiver=system.perceiver if use_preimages else None,
-                node_preimages=train_data.node_preimages if use_preimages else None,
-                use_preimages=use_preimages,
-                max_preimage_size=config.max_preimage_size,
+                perceiver=system.perceiver if use_atom_as_obs else None,
+                node_atoms=train_data.node_atoms if use_atom_as_obs else None,
+                use_atom_as_obs=use_atom_as_obs,
+                max_atom_size=config.max_atom_size,
                 success_threshold=config.success_threshold,
                 success_reward=config.success_reward,
                 step_penalty=config.step_penalty,

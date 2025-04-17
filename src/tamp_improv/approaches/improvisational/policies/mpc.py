@@ -172,13 +172,13 @@ class MPCPolicy(Policy[ObsType, ActType]):
             raise ValueError("Policy not initialized")
         self._current_context = context
         if hasattr(self.env, "set_context"):
-            self.env.set_context(context.current_atoms, context.preimage)
+            self.env.set_context(context.current_atoms, context.goal_atoms)
         if hasattr(self.env, "configure_training"):
             self.env.configure_training(
                 TrainingData(
                     states=[],  # MPC doesn't need example states
                     current_atoms=[context.current_atoms],
-                    preimages=[context.preimage],
+                    goal_atoms=[context.goal_atoms],
                     config={"max_steps": self.config.horizon},
                 )
             )

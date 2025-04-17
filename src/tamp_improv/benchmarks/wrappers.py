@@ -16,7 +16,7 @@ ActType = TypeVar("ActType")
 class ImprovWrapper(gym.Env):
     """General wrapper for training improvisational policies.
 
-    Handles preimage achievement during training.
+    Handles goal atoms achievement during training.
     """
 
     def __init__(
@@ -53,9 +53,9 @@ class ImprovWrapper(gym.Env):
         # Training state tracking
         self.training_states: list[ObsType] = []
         self.current_atoms_list: list[set[GroundAtom]] = []
-        self.preimages_list: list[set[GroundAtom]] = []
+        self.goal_atoms_list: list[set[GroundAtom]] = []
         self.current_atom_set: set[GroundAtom] = set()
-        self.current_preimage: set[GroundAtom] = set()
+        self.goal_atom_set: set[GroundAtom] = set()
         self.current_training_idx: int = 0
 
         self.render_mode = base_env.render_mode
@@ -68,13 +68,12 @@ class ImprovWrapper(gym.Env):
         print(f"Configuring environment with {len(training_data)} training scenarios")
         self.training_states = training_data.states
 
-        # Set up preimage-based training data
         self.current_atoms_list = training_data.current_atoms
-        self.preimages_list = training_data.preimages
+        self.goal_atoms_list = training_data.goal_atoms
         self.current_atom_set = (
             self.current_atoms_list[0] if self.current_atoms_list else set()
         )
-        self.current_preimage = self.preimages_list[0] if self.preimages_list else set()
+        self.goal_atom_set = self.goal_atoms_list[0] if self.goal_atoms_list else set()
 
         self.current_training_idx = 0
         self.max_episode_steps = training_data.config.get(
@@ -95,7 +94,7 @@ class ImprovWrapper(gym.Env):
         self.steps = 0
 
         if self.training_states:
-            # Get current training scenario and store current atoms/preimage
+            # Get current training scenario and store current/goal atoms
             self.current_training_idx = self.current_training_idx % len(
                 self.training_states
             )
@@ -103,7 +102,7 @@ class ImprovWrapper(gym.Env):
 
             # Set up current training data
             self.current_atom_set = self.current_atoms_list[self.current_training_idx]
-            self.current_preimage = self.preimages_list[self.current_training_idx]
+            self.goal_atom_set = self.goal_atoms_list[self.current_training_idx]
 
             # Reset with current state
             if hasattr(self.env, "reset_from_state"):
@@ -129,8 +128,8 @@ class ImprovWrapper(gym.Env):
         self.steps += 1
         current_atoms = self.perceiver.step(obs)
 
-        # Check achievement of preimage
-        achieved = self.current_preimage == current_atoms
+        # Check achievement of goal atoms
+        achieved = self.goal_atom_set == current_atoms
 
         # Calculate reward
         reward = self.step_penalty

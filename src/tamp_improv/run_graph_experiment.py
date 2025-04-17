@@ -53,7 +53,7 @@ class ExperimentConfig:
     record_training: bool = False
     training_record_interval: int = 50
     batch_size: int = 32
-    max_preimage_size: int = 12
+    max_atom_size: int = 12
     action_scale: float = 1.0
 
     # Output settings
@@ -117,7 +117,7 @@ class ExperimentConfig:
             training_data_dir=str(self.training_data_dir),
             save_dir=str(self.save_dir),
             batch_size=self.batch_size,
-            max_preimage_size=self.max_preimage_size,
+            max_atom_size=self.max_atom_size,
             action_scale=env_params.action_scale,
         )
 

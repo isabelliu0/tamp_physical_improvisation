@@ -81,7 +81,6 @@ class PlanningGraph:
             PlanningGraphNode, list[PlanningGraphEdge]
         ] = {}
         self.node_map: dict[frozenset[GroundAtom], PlanningGraphNode] = {}
-        self.preimages: dict[PlanningGraphNode, set[GroundAtom]] = {}
         self.goal_nodes: list[PlanningGraphNode] = []
 
     def add_node(self, atoms: set[GroundAtom]) -> PlanningGraphNode:
@@ -110,20 +109,6 @@ class PlanningGraph:
         self.node_to_incoming_edges[edge.target].append(edge)
         self.node_to_outgoing_edges[edge.source].append(edge)
         return edge
-
-    def compute_preimages(self, goal: set[GroundAtom]) -> None:
-        """Compute self.preimages for all nodes.
-
-        Preimage(j) := Preimage(j+1) + op(j)[preconditions] - op(j)[add
-        effects]
-        Instead of the above definition, we use the set of atoms in the node directly.
-        """
-        self.preimages = {}
-        self.goal_nodes = [node for node in self.nodes if goal.issubset(node.atoms)]
-        assert self.goal_nodes, "No goal node found"
-        print(f"Found {len(self.goal_nodes)} goal nodes")
-        for node in self.nodes:
-            self.preimages[node] = set(node.atoms)
 
     def find_shortest_path(
         self, init_atoms: set[GroundAtom], goal: set[GroundAtom]

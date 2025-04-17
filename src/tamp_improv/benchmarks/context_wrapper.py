@@ -15,14 +15,17 @@ class ContextAwareWrapper(gym.Wrapper):
     """Wrapper that augments observations with context information."""
 
     def __init__(
-        self, env: gym.Env, perceiver: Perceiver[ObsType], max_preimage_size: int = 12
+        self,
+        env: gym.Env,
+        perceiver: Perceiver[ObsType],
+        max_atom_size: int = 12,
     ) -> None:
         super().__init__(env)
         self.perceiver: Perceiver[ObsType] = perceiver
-        self.current_preimage: set[GroundAtom] = set()
+        self.goal_atoms: set[GroundAtom] = set()
         self.current_atoms: set[GroundAtom] = set()
 
-        self.num_context_features = max_preimage_size
+        self.num_context_features = max_atom_size
         # Add context features to observation space
         if isinstance(env.observation_space, gym.spaces.Box):
             self.observation_space = gym.spaces.Box(
@@ -46,8 +49,8 @@ class ContextAwareWrapper(gym.Wrapper):
         """Reset environment and augment observation."""
         obs, info = self.env.reset(**kwargs)
         self.current_atoms = self.perceiver.step(obs)
-        if hasattr(self.env, "current_preimage"):
-            self.current_preimage = self.env.current_preimage
+        if hasattr(self.env, "goal_atoms"):
+            self.goal_atoms = self.env.goal_atoms
         return self.augment_observation(obs), info
 
     def step(
@@ -56,8 +59,8 @@ class ContextAwareWrapper(gym.Wrapper):
         """Take a step and augment observation."""
         obs, reward, terminated, truncated, info = self.env.step(action)
         self.current_atoms = self.perceiver.step(obs)
-        if hasattr(self.env, "current_preimage"):
-            self.current_preimage = self.env.current_preimage
+        if hasattr(self.env, "goal_atoms"):
+            self.goal_atoms = self.env.goal_atoms
         return (
             self.augment_observation(obs),
             float(reward),
@@ -67,25 +70,25 @@ class ContextAwareWrapper(gym.Wrapper):
         )
 
     def augment_observation(self, obs: ObsType) -> ObsType:
-        """Augment observation with multi-hot vector for preimage atoms."""
+        """Augment observation with multi-hot vector for atoms."""
         context = np.zeros(self.num_context_features, dtype=np.float32)
-        if not self.current_preimage:
+        if not self.goal_atoms:
             return cast(ObsType, np.concatenate([obs, context]))
-        for atom in self.current_preimage:
+        for atom in self.goal_atoms:
             idx = self._get_atom_index(str(atom))
             context[idx] = 1.0
         return cast(ObsType, np.concatenate([obs, context]))
 
     def set_context(
-        self, current_atoms: set[GroundAtom], preimage: set[GroundAtom]
+        self, current_atoms: set[GroundAtom], goal_atoms: set[GroundAtom]
     ) -> None:
         """Set current context for augmentation."""
         self.current_atoms = current_atoms
-        self.current_preimage = preimage
+        self.goal_atoms = goal_atoms
         assert (
-            len(preimage) <= self.num_context_features
-        ), "Preimage bigger than context size"
-        for atom in current_atoms.union(preimage):
+            len(goal_atoms) <= self.num_context_features
+        ), "Number of atoms is larger than context size"
+        for atom in current_atoms.union(goal_atoms):
             self._get_atom_index(str(atom))
 
     def configure_training(self, train_data: TrainingData) -> None:
@@ -106,8 +109,8 @@ class ContextAwareWrapper(gym.Wrapper):
             for atoms_set in train_data.current_atoms:
                 for atom in atoms_set:
                     unique_atoms.add(str(atom))
-            for preimage in train_data.preimages:
-                for atom in preimage:
+            for goal_atoms in train_data.goal_atoms:
+                for atom in goal_atoms:
                     unique_atoms.add(str(atom))
 
             for atom_str in unique_atoms:
@@ -124,7 +127,7 @@ class ContextAwareWrapper(gym.Wrapper):
             return self._atom_to_index[atom_str]
         assert (
             self._next_index < self.num_context_features
-        ), "No more space for new atoms. Increase max_preimage_size"
+        ), "No more space for new atoms. Increase max_atom_size"
         idx = self._next_index
         self._atom_to_index[atom_str] = idx
         self._next_index += 1
