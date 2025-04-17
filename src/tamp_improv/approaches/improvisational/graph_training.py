@@ -34,7 +34,7 @@ class ShortcutCandidate:
     source_node: PlanningGraphNode
     target_node: PlanningGraphNode
     source_atoms: set[GroundAtom]
-    target_preimage: set[GroundAtom]
+    target_atoms: set[GroundAtom]
     source_state: Any
 
 
@@ -236,15 +236,15 @@ def collect_graph_based_training_data(
     """Collect training data by exploring the planning graph.
 
     This actively identifies potential shortcuts between nodes in the
-    planning graph and collects the low-level states and goal preimages
-    for these shortcuts.
+    planning graph and collects the low-level states and goal atoms for
+    these shortcuts.
     """
     print("\n=== Collecting Training Data by Exploring Planning Graphs ===")
     approach.training_mode = True
 
     training_states = []
     current_atoms_list = []
-    preimages_list = []
+    goal_atoms_list = []
     shortcut_info = []
 
     # settings from config
@@ -315,14 +315,14 @@ def collect_graph_based_training_data(
                 for source_state in observed_states[source_id]:
                     if approach.use_context_wrapper and context_env is not None:
                         context_env.set_context(
-                            candidate.source_atoms, candidate.target_preimage
+                            candidate.source_atoms, candidate.target_atoms
                         )
                         augmented_obs = context_env.augment_observation(source_state)
                         training_states.append(augmented_obs)
                     else:
                         training_states.append(source_state)
                     current_atoms_list.append(candidate.source_atoms)
-                    preimages_list.append(candidate.target_preimage)
+                    goal_atoms_list.append(candidate.target_atoms)
 
                     # Store shortcut info (duplicate if needed)
                     shortcut_info.append(
@@ -330,14 +330,14 @@ def collect_graph_based_training_data(
                             "source_node_id": candidate.source_node.id,
                             "target_node_id": candidate.target_node.id,
                             "source_atoms_count": len(candidate.source_atoms),
-                            "target_preimage_count": len(candidate.target_preimage),
+                            "target_atoms_count": len(candidate.target_atoms),
                         }
                     )
 
                 # Record shortcut signature in the approach
                 signature = ShortcutSignature.from_context(
                     candidate.source_atoms,
-                    candidate.target_preimage,
+                    candidate.target_atoms,
                 )
                 if signature not in approach.trained_signatures:
                     approach.trained_signatures.append(signature)
@@ -363,7 +363,7 @@ def collect_graph_based_training_data(
         TrainingData(
             states=training_states,
             current_atoms=current_atoms_list,
-            preimages=preimages_list,
+            goal_atoms=goal_atoms_list,
             config={
                 **config,
                 "shortcut_info": shortcut_info,
@@ -393,7 +393,7 @@ def collect_goal_conditioned_training_data(
     print("\n=== Collecting Training Data for Goal-Conditioned Learning ===")
     node_states: dict[int, Any] = {}
     valid_shortcuts: list[tuple[int, int]] = []
-    node_preimages: dict[int, set[GroundAtom]] = {}
+    node_atoms: dict[int, set[GroundAtom]] = {}
 
     train_data, node_states = collect_graph_based_training_data(
         system,
@@ -414,14 +414,14 @@ def collect_goal_conditioned_training_data(
         assert source_id is not None and target_id is not None
         valid_shortcuts.append((source_id, target_id))
     for node in planning_graph.nodes:
-        if node.id in node_states and node in planning_graph.preimages:
-            node_preimages[node.id] = planning_graph.preimages[node]
+        if node.id in node_states:
+            node_atoms[node.id] = set(node.atoms)
 
     # Create goal-conditioned training data
     goal_train_data = GoalConditionedTrainingData(
         states=train_data.states,
         current_atoms=train_data.current_atoms,
-        preimages=train_data.preimages,
+        goal_atoms=train_data.goal_atoms,
         config={
             **train_data.config,
             "node_state_count": len(node_states),
@@ -429,7 +429,7 @@ def collect_goal_conditioned_training_data(
         },
         node_states=node_states,
         valid_shortcuts=valid_shortcuts,
-        node_preimages=node_preimages,
+        node_atoms=node_atoms,
     )
     return goal_train_data
 
@@ -461,8 +461,6 @@ def identify_shortcut_candidates(
         for target_node in nodes:
             if source_node == target_node:
                 continue
-            if target_node not in planning_graph.preimages:
-                continue
             if target_node.id <= source_node.id:
                 continue
 
@@ -491,7 +489,7 @@ def identify_shortcut_candidates(
                     source_node=source_node,
                     target_node=target_node,
                     source_atoms=set(source_node.atoms),
-                    target_preimage=planning_graph.preimages.get(target_node, set()),
+                    target_atoms=set(target_node.atoms),
                     source_state=source_state,
                 )
             )
@@ -513,7 +511,7 @@ def identify_promising_shortcuts_with_rollouts(
     node.
 
     This function runs random rollouts from each source node in the planning graph
-    and tracks which preimages/nodes are reached during exploration. Shortcuts that
+    and tracks which nodes' atoms are reached during exploration. Shortcuts that
     are reached at least `shortcut_success_threshold` times through random exploration
     are considered promising candidates for training.
     """
@@ -554,8 +552,8 @@ def identify_promising_shortcuts_with_rollouts(
             f"\nPerforming {rollouts_per_state} rollouts for each of {len(source_states)} state(s) from node {source_node_id}"  # pylint: disable=line-too-long
         )
 
-        # Track preimages reached from this source node
-        reached_preimages: defaultdict[int, int] = defaultdict(
+        # Track other nodes reached from this source node
+        reached_nodes: defaultdict[int, int] = defaultdict(
             int
         )  # target_node_id -> count
 
@@ -576,7 +574,7 @@ def identify_promising_shortcuts_with_rollouts(
                     obs, _, terminated, truncated, _ = raw_env.step(action)
                     curr_atoms = system.perceiver.step(obs)
 
-                    # Check if any preimage is reached
+                    # Check if any node is reached
                     for target_node in planning_graph.nodes:
                         if target_node.id <= source_node_id:
                             continue
@@ -594,32 +592,27 @@ def identify_promising_shortcuts_with_rollouts(
                         # if target_node.id != 50 and target_node.id != 76:
                         #     continue
 
-                        # Note: no need to stop this rollout when we reach a preimage
-                        # since we want to explore all reachable preimages
-                        if target_node in planning_graph.preimages:
-                            preimage = planning_graph.preimages[target_node]
-                            if (
-                                preimage
-                                and preimage == curr_atoms
-                                and target_node.id not in reached_in_this_rollout
-                            ):
-                                reached_preimages[target_node.id] += 1
-                                shortcut_success_counts[
-                                    (source_node_id, target_node.id)
-                                ] += 1
-                                reached_in_this_rollout.add(target_node.id)
+                        # Note: no need to stop this rollout when we reach a node
+                        # since we want to explore all reachable nodes
+                        if (
+                            set(target_node.atoms) == curr_atoms
+                            and target_node.id not in reached_in_this_rollout
+                        ):
+                            reached_nodes[target_node.id] += 1
+                            shortcut_success_counts[
+                                (source_node_id, target_node.id)
+                            ] += 1
+                            reached_in_this_rollout.add(target_node.id)
 
                     if terminated or truncated:
                         break
 
-        if reached_preimages:
-            print(f"  Preimages reached from node {source_node_id}:")
-            for target_id, count in sorted(
-                reached_preimages.items(), key=lambda x: -x[1]
-            ):
+        if reached_nodes:
+            print(f"  Nodes whose atoms are reached from node {source_node_id}:")
+            for target_id, count in sorted(reached_nodes.items(), key=lambda x: -x[1]):
                 print(f"    → Node {target_id}: {count}/{num_rollouts_per_node} times")
         else:
-            print(f"  No preimages reached from node {source_node_id}")
+            print(f"  No nodes whose atoms are reached from node {source_node_id}")
 
     # Collect promising shortcut candidates
     print("\nShortcuts reaching success threshold:")
@@ -642,7 +635,7 @@ def identify_promising_shortcuts_with_rollouts(
                 source_node=source_node,
                 target_node=target_node,
                 source_atoms=set(source_node.atoms),
-                target_preimage=planning_graph.preimages.get(target_node, set()),
+                target_atoms=set(target_node.atoms),
                 source_state=source_state,
             )
             promising_candidates.append(candidate)

@@ -30,9 +30,9 @@ class GoalConditionedWrapper(gym.Wrapper):
         node_states: dict[int, list[ObsType]],
         valid_shortcuts: list[tuple[int, int]],
         perceiver: Perceiver | None = None,
-        node_preimages: dict[int, set[GroundAtom]] | None = None,
-        max_preimage_size: int = 12,
-        use_preimages: bool = True,
+        node_atoms: dict[int, set[GroundAtom]] | None = None,
+        max_atom_size: int = 12,
+        use_atom_as_obs: bool = True,
         success_threshold: float = 0.01,
         success_reward: float = 10.0,
         step_penalty: float = -0.5,
@@ -43,36 +43,36 @@ class GoalConditionedWrapper(gym.Wrapper):
         self.node_states = node_states
         self.valid_shortcuts = valid_shortcuts or []
         self.perceiver = perceiver
-        self.node_preimages = node_preimages or {}
-        self.use_preimages = use_preimages
-        self.max_preimage_size = max_preimage_size
+        self.node_atoms = node_atoms or {}
+        self.use_atom_as_obs = use_atom_as_obs
+        self.max_atom_size = max_atom_size
         self.success_threshold = success_threshold
         self.success_reward = success_reward
         self.step_penalty = step_penalty
         self.max_episode_steps = max_episode_steps
         self.steps = 0
 
-        if self.use_preimages and self.node_preimages is not None:
+        if self.use_atom_as_obs and self.node_atoms is not None:
             assert (
                 self.perceiver is not None
-            ), "Perceiver must be provided when using preimages"
+            ), "Perceiver must be provided when using atoms as observations"
             self.atom_to_index: dict[str, int] = {}
             self._next_index = 0
 
-            # Create multi-hot vectors for all preimages
-            self.preimage_vectors: dict[int, np.ndarray] = {}
-            for node_id, preimage in self.node_preimages.items():
-                self.preimage_vectors[node_id] = self.create_preimage_vector(preimage)
+            # Create multi-hot vectors for all node atoms
+            self.atom_vectors: dict[int, np.ndarray] = {}
+            for node_id, atoms in self.node_atoms.items():
+                self.atom_vectors[node_id] = self.create_atom_vector(atoms)
 
-            # Observation space with preimage vectors
+            # Observation space with atom vectors
             self.observation_space = gym.spaces.Dict(
                 {
                     "observation": env.observation_space,
                     "achieved_goal": gym.spaces.Box(
-                        0, 1, shape=(max_preimage_size,), dtype=np.float32
+                        0, 1, shape=(max_atom_size,), dtype=np.float32
                     ),
                     "desired_goal": gym.spaces.Box(
-                        0, 1, shape=(max_preimage_size,), dtype=np.float32
+                        0, 1, shape=(max_atom_size,), dtype=np.float32
                     ),
                 }
             )
@@ -90,7 +90,7 @@ class GoalConditionedWrapper(gym.Wrapper):
         self.current_node_id: int | None = None
         self.goal_node_id: int | None = None
         self.goal_state: ObsType | None = None
-        self.goal_preimage_vector: np.ndarray | None = None
+        self.goal_atom_vector: np.ndarray | None = None
         self.node_ids = sorted(list(node_states.keys()))
 
     def configure_training(self, train_data: GoalConditionedTrainingData) -> None:
@@ -102,9 +102,9 @@ class GoalConditionedWrapper(gym.Wrapper):
         )
         self.node_states = train_data.node_states
         self.valid_shortcuts = train_data.valid_shortcuts
-        self.node_preimages = train_data.node_preimages or {}
+        self.node_atoms = train_data.node_atoms or {}
         print(
-            f"Updated {len(self.node_states)} node states, {len(self.valid_shortcuts)} valid shortcuts, and {len(self.node_preimages)}  node preimages from training data"  # pylint: disable=line-too-long
+            f"Updated {len(self.node_states)} node states, {len(self.valid_shortcuts)} valid shortcuts, and {len(self.node_atoms)}  node atoms from training data"  # pylint: disable=line-too-long
         )
         self.max_episode_steps = train_data.config.get(
             "max_steps", self.max_episode_steps
@@ -142,13 +142,13 @@ class GoalConditionedWrapper(gym.Wrapper):
             }
         )
 
-        if self.use_preimages:
-            self.goal_preimage_vector = self.preimage_vectors[self.goal_node_id]
-            current_preimage_vector = self._get_current_preimage_vector(obs)
+        if self.use_atom_as_obs:
+            self.goal_atom_vector = self.atom_vectors[self.goal_node_id]
+            current_atom_vector = self._get_current_atom_vector(obs)
             dict_obs = {
                 "observation": obs,
-                "achieved_goal": current_preimage_vector,
-                "desired_goal": self.goal_preimage_vector,
+                "achieved_goal": current_atom_vector,
+                "desired_goal": self.goal_atom_vector,
             }
         else:
             dict_obs = {
@@ -166,14 +166,14 @@ class GoalConditionedWrapper(gym.Wrapper):
         next_obs, _, terminated, truncated, info = self.env.step(action)
         self.steps += 1
 
-        if self.use_preimages and self.goal_preimage_vector is not None:
-            current_preimage_vector = self._get_current_preimage_vector(next_obs)
-            goal_indices = np.where(self.goal_preimage_vector > 0.5)[0]
-            goal_achieved = np.all(current_preimage_vector[goal_indices] > 0.5)
-            preimage_distance = np.sum(current_preimage_vector[goal_indices] < 0.5)
+        if self.use_atom_as_obs and self.goal_atom_vector is not None:
+            current_atom_vector = self._get_current_atom_vector(next_obs)
+            goal_indices = np.where(self.goal_atom_vector > 0.5)[0]
+            goal_achieved = np.all(current_atom_vector[goal_indices] > 0.5)
+            atoms_distance = np.sum(current_atom_vector[goal_indices] < 0.5)
             info.update(
                 {
-                    "preimage_distance": preimage_distance,
+                    "atoms_distance": atoms_distance,
                     "is_success": goal_achieved,
                     "source_node_id": self.current_node_id,
                     "goal_node_id": self.goal_node_id,
@@ -181,8 +181,8 @@ class GoalConditionedWrapper(gym.Wrapper):
             )
             dict_obs = {
                 "observation": next_obs,
-                "achieved_goal": current_preimage_vector,
-                "desired_goal": self.goal_preimage_vector,
+                "achieved_goal": current_atom_vector,
+                "desired_goal": self.goal_atom_vector,
             }
         else:
             goal_distance = np.linalg.norm(next_obs - self.goal_state)
@@ -214,7 +214,7 @@ class GoalConditionedWrapper(gym.Wrapper):
         _indices: list[int] | None = None,
     ) -> np.ndarray:
         """Compute the reward for achieving a given goal."""
-        if self.use_preimages:
+        if self.use_atom_as_obs:
             assert hasattr(achieved_goal, "shape")
             assert hasattr(
                 desired_goal, "__getitem__"
@@ -284,23 +284,23 @@ class GoalConditionedWrapper(gym.Wrapper):
         if atom_str in self.atom_to_index:
             return self.atom_to_index[atom_str]
         assert (
-            self._next_index < self.max_preimage_size
-        ), "No more space for new atoms. Increase max_preimage_size"
+            self._next_index < self.max_atom_size
+        ), "No more space for new atoms. Increase max_atom_size."
         idx = self._next_index
         self.atom_to_index[atom_str] = idx
         self._next_index += 1
         return idx
 
-    def create_preimage_vector(self, atoms: set[GroundAtom]) -> np.ndarray:
-        """Create a multi-hot vector representation of the preimage."""
-        vector = np.zeros(self.max_preimage_size, dtype=np.float32)
+    def create_atom_vector(self, atoms: set[GroundAtom]) -> np.ndarray:
+        """Create a multi-hot vector representation of the set of atoms."""
+        vector = np.zeros(self.max_atom_size, dtype=np.float32)
         for atom in atoms:
             idx = self._get_atom_index(str(atom))
             vector[idx] = 1.0
         return vector
 
-    def _get_current_preimage_vector(self, obs: np.ndarray) -> np.ndarray:
-        """Get the multi-hot vector for the current observation's preimage."""
+    def _get_current_atom_vector(self, obs: np.ndarray) -> np.ndarray:
+        """Get the multi-hot vector for the current atoms."""
         assert self.perceiver is not None
         atoms = self.perceiver.step(obs)
-        return self.create_preimage_vector(atoms)
+        return self.create_atom_vector(atoms)

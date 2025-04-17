@@ -74,8 +74,8 @@ def test_pybullet_graph_training_collection():
         for atom in sorted(train_data.current_atoms[i], key=str):
             print(f"  - {atom}")
 
-        print("Target preimage:")
-        for atom in sorted(train_data.preimages[i], key=str):
+        print("Target atoms:")
+        for atom in sorted(train_data.goal_atoms[i], key=str):
             print(f"  - {atom}")
 
     save_dir = Path(config["training_data_dir"])
@@ -108,7 +108,7 @@ def test_multi_rl_blocks2d_pipeline(use_context_wrapper):
         training_data_dir=f"training_data/multi_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
         save_dir=f"trained_policies/multi_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
         batch_size=32,
-        max_preimage_size=14,
+        max_atom_size=14,
     )
 
     # RL configuration
@@ -236,7 +236,7 @@ def test_multi_rl_pybullet_pipeline(use_context_wrapper):
         training_data_dir="training_data/graph_training_data",
         save_dir=f"trained_policies/multi_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
         batch_size=32,
-        max_preimage_size=14,
+        max_atom_size=14,
         action_scale=0.015,
     )
 

@@ -49,11 +49,11 @@ def test_goal_conditioned_data_collection():
 
     assert hasattr(train_data, "node_states"), "No node states in training data"
     assert hasattr(train_data, "valid_shortcuts"), "No valid shortcuts in training data"
-    assert hasattr(train_data, "node_preimages"), "No node preimages in training data"
+    assert hasattr(train_data, "node_atoms"), "No node atoms in training data"
 
     print(f"Collected states for {len(train_data.node_states)} nodes")
     print(f"Found {len(train_data.valid_shortcuts)} valid shortcuts")
-    print(f"Collected {len(train_data.node_preimages)} node preimages")
+    print(f"Collected {len(train_data.node_atoms)} node atoms")
 
     save_dir = Path(config["training_data_dir"])
     save_dir.mkdir(parents=True, exist_ok=True)
@@ -66,9 +66,9 @@ def test_goal_conditioned_data_collection():
     assert len(loaded_data.valid_shortcuts) == len(
         train_data.valid_shortcuts
     ), "Valid shortcuts not preserved"
-    assert len(loaded_data.node_preimages) == len(
-        train_data.node_preimages
-    ), "Node preimages not preserved"
+    assert len(loaded_data.node_atoms) == len(
+        train_data.node_atoms
+    ), "Node atoms not preserved"
 
     return train_data
 
@@ -83,9 +83,9 @@ def test_goal_wrapper():
         node_states=train_data.node_states,
         valid_shortcuts=train_data.valid_shortcuts,
         perceiver=system.perceiver,
-        node_preimages=train_data.node_preimages,
-        max_preimage_size=14,
-        use_preimages=True,
+        node_atoms=train_data.node_atoms,
+        max_atom_size=14,
+        use_atom_as_obs=True,
         success_threshold=0.01,
         success_reward=10.0,
         step_penalty=-0.5,
@@ -103,9 +103,7 @@ def test_goal_wrapper():
     action = goal_env.action_space.sample()
     next_obs, reward, _, _, step_info = goal_env.step(action)
     assert isinstance(next_obs, dict), "Step should return a Dict observation"
-    print(
-        f"Step reward: {reward}, preimage distance: {step_info['preimage_distance']:.3f}"
-    )
+    print(f"Step reward: {reward}, atoms distance: {step_info['atoms_distance']:.3f}")
 
     return goal_env
 
@@ -121,9 +119,9 @@ def test_goal_conditioned_rl(algorithm):
         node_states=train_data.node_states,
         valid_shortcuts=train_data.valid_shortcuts,
         perceiver=system.perceiver,
-        node_preimages=train_data.node_preimages,
-        max_preimage_size=14,
-        use_preimages=True,
+        node_atoms=train_data.node_atoms,
+        max_atom_size=14,
+        use_atom_as_obs=True,
         success_threshold=0.01,
         success_reward=10.0,
         step_penalty=-0.5,
@@ -139,7 +137,7 @@ def test_goal_conditioned_rl(algorithm):
     # Set node states and valid shortcuts
     policy.node_states = train_data.node_states
     policy.valid_shortcuts = train_data.valid_shortcuts
-    policy.node_preimages = train_data.node_preimages
+    policy.node_atoms = train_data.node_atoms
 
     # Train the policy
     train_data.config["max_steps"] = 50
@@ -149,7 +147,7 @@ def test_goal_conditioned_rl(algorithm):
     if train_data.valid_shortcuts:
         source_id, target_id = train_data.valid_shortcuts[0]
         context = PolicyContext(
-            preimage=set(),
+            goal_atoms=set(),
             current_atoms=set(),
             info={"source_node_id": source_id, "target_node_id": target_id},
         )
@@ -199,7 +197,7 @@ def test_goal_conditioned_training_pipeline(algorithm):
         training_record_interval=100,
         training_data_dir="training_data/test_goal_pipeline",
         save_dir="trained_policies/test_goal_pipeline",
-        max_preimage_size=14,
+        max_atom_size=14,
         success_threshold=0.01,
         success_reward=10.0,
         step_penalty=-0.5,
@@ -227,7 +225,7 @@ def test_goal_conditioned_training_pipeline(algorithm):
         policy_factory,
         config,
         policy_name=f"Test_Goal_{algorithm}",
-        use_preimages=True,
+        use_atom_as_obs=True,
     )
     print(f"Success rate: {metrics.success_rate:.2%}")
     print(f"Average episode length: {metrics.avg_episode_length:.2f}")
@@ -259,7 +257,7 @@ def test_goal_conditioned_rl_rollouts(
         training_record_interval=100,
         training_data_dir="training_data/test_goal_rollouts",
         save_dir="trained_policies/test_goal_rollouts",
-        max_preimage_size=14,
+        max_atom_size=14,
         success_threshold=0.01,
         success_reward=10.0,
         step_penalty=-0.5,
@@ -287,7 +285,7 @@ def test_goal_conditioned_rl_rollouts(
         policy_factory,
         config,
         policy_name=f"Goal_{algorithm}_rollouts",
-        use_preimages=True,
+        use_atom_as_obs=True,
         use_random_rollouts=use_random_rollouts,
         num_rollouts_per_node=num_rollouts_per_node,
         max_steps_per_rollout=max_steps_per_rollout,

@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, TypeVar
 
 import gymnasium as gym
-from relational_structs import GroundAtom, Object
+from relational_structs import GroundAtom, Object, Predicate
 
 from tamp_improv.approaches.improvisational.policies.base import (
     Policy,
@@ -110,7 +110,7 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
         """Create a unique key for a policy based on the context."""
         # Get ground atoms as strings to preserve object information
         source_atoms_str = sorted([str(atom) for atom in context.current_atoms])
-        target_atoms_str = sorted([str(atom) for atom in context.preimage])
+        target_atoms_str = sorted([str(atom) for atom in context.goal_atoms])
 
         # Create hash of the source and target atoms
         source_hash = hashlib.md5("|".join(source_atoms_str).encode()).hexdigest()[:8]
@@ -127,9 +127,16 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
     def _find_matching_policy(self, context: PolicyContext) -> str | None:
         """Find a matching policy based on relevant atoms of the shortcut."""
         source_atoms = context.current_atoms
-        target_atoms = context.preimage
+        target_atoms = context.goal_atoms
         added_atoms = target_atoms - source_atoms
         deleted_atoms = source_atoms - target_atoms
+
+        # Transform atoms to explicitly mark additions and deletions
+        transformed_test_atoms = set()
+        for atom in added_atoms:
+            transformed_test_atoms.add(self._transform_atom(atom, "ADD"))
+        for atom in deleted_atoms:
+            transformed_test_atoms.add(self._transform_atom(atom, "DEL"))
 
         # Try exact key match first
         key = self._get_policy_key(context)
@@ -138,34 +145,29 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
 
         # Try structural matching
         for policy_key, pattern_info in self._policy_patterns.items():
-            train_added = pattern_info["added_atoms"]
-            train_deleted = pattern_info["deleted_atoms"]
+            transformed_train_atoms = set()
+            if "transformed_atoms" in pattern_info:
+                transformed_train_atoms = pattern_info["transformed_atoms"]
+            else:
+                for atom in pattern_info["added_atoms"]:
+                    transformed_train_atoms.add(self._transform_atom(atom, "ADD"))
+                for atom in pattern_info["deleted_atoms"]:
+                    transformed_train_atoms.add(self._transform_atom(atom, "DEL"))
 
-            # Check predicate subsets
-            if not self._check_predicate_subset(added_atoms, train_added):
+            # Check predicate subsets with transformed predicates
+            train_predicates = {atom.predicate.name for atom in transformed_train_atoms}
+            test_predicates = {atom.predicate.name for atom in transformed_test_atoms}
+            if not train_predicates.issubset(test_predicates):
                 continue
-            if not self._check_predicate_subset(deleted_atoms, train_deleted):
-                continue
-
-            # Pool atoms together for substitution finding
-            test_atoms = added_atoms.union(deleted_atoms)
-            train_atoms = set(train_added).union(train_deleted)
 
             # Find substitution
-            match_found, _ = find_atom_substitution(train_atoms, test_atoms)
+            match_found, _ = find_atom_substitution(
+                transformed_train_atoms, transformed_test_atoms
+            )
             if match_found:
                 return policy_key
 
         return None
-
-    def _check_predicate_subset(
-        self, test_atoms: set[GroundAtom], train_atoms: set[GroundAtom]
-    ) -> bool:
-        """Check if predicate names in train_atoms are a subset of those in
-        test_atoms."""
-        test_predicates = {atom.predicate.name for atom in test_atoms}
-        train_predicates = {atom.predicate.name for atom in train_atoms}
-        return train_predicates.issubset(test_predicates)
 
     def _group_training_data(self, train_data: TrainingData) -> dict[str, TrainingData]:
         """Group training data by shortcut signature."""
@@ -174,14 +176,22 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
 
         for i in range(len(train_data)):
             current_atoms = train_data.current_atoms[i]
-            preimage = train_data.preimages[i]
+            goal_atoms = train_data.goal_atoms[i]
+            added_atoms = goal_atoms - current_atoms
+            deleted_atoms = current_atoms - goal_atoms
+            transformed_atoms = set()
+            for atom in added_atoms:
+                transformed_atoms.add(self._transform_atom(atom, "ADD"))
+            for atom in deleted_atoms:
+                transformed_atoms.add(self._transform_atom(atom, "DEL"))
+
             info = {}
             if i < len(shortcut_info):
                 info = shortcut_info[i]
 
-            # Create a context and get the key
+            # Create a context and get policy key
             context: PolicyContext[ObsType, ActType] = PolicyContext(
-                current_atoms=current_atoms, preimage=preimage, info=info
+                current_atoms=current_atoms, goal_atoms=goal_atoms, info=info
             )
             policy_key = self._get_policy_key(context)
 
@@ -189,16 +199,17 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
                 grouped[policy_key] = {
                     "states": [],
                     "current_atoms": [],
-                    "preimages": [],
+                    "goal_atoms": [],
                     "pattern": {
-                        "added_atoms": preimage - current_atoms,
-                        "deleted_atoms": current_atoms - preimage,
+                        "added_atoms": added_atoms,
+                        "deleted_atoms": deleted_atoms,
+                        "transformed_atoms": transformed_atoms,
                     },
                 }
 
             grouped[policy_key]["states"].append(train_data.states[i])
             grouped[policy_key]["current_atoms"].append(current_atoms)
-            grouped[policy_key]["preimages"].append(preimage)
+            grouped[policy_key]["goal_atoms"].append(goal_atoms)
 
         # Convert grouped data to TrainingData objects
         result = {}
@@ -206,11 +217,19 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
             result[key] = TrainingData(
                 states=group["states"],
                 current_atoms=group["current_atoms"],
-                preimages=group["preimages"],
+                goal_atoms=group["goal_atoms"],
                 config=train_data.config,
             )
             self._policy_patterns[key] = group["pattern"]
         return result
+
+    def _transform_atom(self, atom: GroundAtom, prefix: str) -> GroundAtom:
+        """Create a transformed atom with prefixed predicate name."""
+        transformed_pred = Predicate(
+            name=f"{prefix}-{atom.predicate.name}",
+            types=atom.predicate.types,
+        )
+        return transformed_pred(atom.objects)
 
     def _configure_env_recursively(
         self, env: gym.Env, training_data: TrainingData

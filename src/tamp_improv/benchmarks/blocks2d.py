@@ -127,9 +127,10 @@ class PickUpSkill(BaseBlocks2DSkill):
         if (
             np.isclose(robot_y, other_block_y, atol=1e-3)
             and abs(robot_x - other_block_x) < (robot_width + block_width) / 2
+            and not np.isclose(robot_x, other_block_x, atol=1e-3)
         ):
             dx = np.clip(robot_x - other_block_x, -0.1, 0.1)
-            return np.array([dx, 0.0, 0.0])
+            return np.array([dx, 0.0, -1.0])
 
         # Target position above block
         target_y = block_y + block_height / 2 + robot_height / 2
@@ -137,12 +138,12 @@ class PickUpSkill(BaseBlocks2DSkill):
         # Move towards y-level of target position first
         if not np.isclose(robot_y, target_y, atol=1e-3):
             dy = np.clip(target_y - robot_y, -0.1, 0.1)
-            return np.array([0.0, dy, 0.0])
+            return np.array([0.0, dy, -1.0])
 
         # Move towards x-level of target position next
         if not np.isclose(robot_x, block_x, atol=1e-3):
             dx = np.clip(block_x - robot_x, -0.1, 0.1)
-            return np.array([dx, 0.0, 0.0])
+            return np.array([dx, 0.0, -1.0])
 
         # If aligned and not holding block, pick it up
         return np.array([0.0, 0.0, 1.0])

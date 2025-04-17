@@ -43,7 +43,7 @@ class PybulletPushingPolicy(Policy[NDArray[np.float32], NDArray[np.float32]]):
         self._wrapped_env: gym.Env | None = None
         self._planning_env: ClearAndPlacePyBulletBlocksEnv | None = None
         self._current_atoms: set[GroundAtom] | None = None
-        self._target_preimage: set[GroundAtom] | None = None
+        self._goal_atoms: set[GroundAtom] | None = None
         self._context: PolicyContext | None = None
 
         # Push state tracking
@@ -100,7 +100,7 @@ class PybulletPushingPolicy(Policy[NDArray[np.float32], NDArray[np.float32]]):
     def can_initiate(self) -> bool:
         """Check if conditions are right for pushing blocks out of the target
         area."""
-        assert self._current_atoms is not None and self._target_preimage is not None
+        assert self._current_atoms is not None and self._goal_atoms is not None
         source_node_id = None
         target_node_id = None
         if hasattr(self, "_context") and self._context and self._context.info:
@@ -121,7 +121,7 @@ class PybulletPushingPolicy(Policy[NDArray[np.float32], NDArray[np.float32]]):
             GroundAtom(On, [obstacle_c, obstacle_b]),
             GroundAtom(On, [target_block, table]),
         }
-        preimage_conditions = {
+        goal_conditions = {
             GroundAtom(GripperEmpty, [robot]),
             GroundAtom(NothingOn, [target_area]),
             GroundAtom(NothingOn, [target_block]),
@@ -129,12 +129,12 @@ class PybulletPushingPolicy(Policy[NDArray[np.float32], NDArray[np.float32]]):
         }
         atoms_conditions_met = current_conditions.issubset(
             self._current_atoms
-        ) and preimage_conditions.issubset(self._target_preimage)
+        ) and goal_conditions.issubset(self._goal_atoms)
         return specific_transition and atoms_conditions_met
 
     def configure_context(self, context: PolicyContext) -> None:
         self._current_atoms = context.current_atoms
-        self._target_preimage = context.preimage
+        self._goal_atoms = context.goal_atoms
         self._context = context
 
     def get_action(self, obs: NDArray[np.float32]) -> NDArray[np.float32]:

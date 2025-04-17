@@ -189,7 +189,7 @@ class GoalConditionedRLPolicy(Policy[ObsType, ActType]):
         self.model: SAC | TD3 | None = None
         self.node_states: dict[int, ObsType] = {}
         self.valid_shortcuts: list[tuple[int, int]] = []
-        self.node_preimages: dict[int, set[GroundAtom]] = {}
+        self.node_atoms: dict[int, set[GroundAtom]] = {}
 
     @property
     def requires_training(self) -> bool:
@@ -225,23 +225,23 @@ class GoalConditionedRLPolicy(Policy[ObsType, ActType]):
 
         self.node_states = train_data.node_states
         self.valid_shortcuts = train_data.valid_shortcuts
-        self.node_preimages = train_data.node_preimages
+        self.node_atoms = train_data.node_atoms
         print(
-            f"Using {len(self.node_states)} node states, {len(self.valid_shortcuts)} valid shortcuts, and {len(self.node_preimages)} node preimages from training data"  # pylint: disable=line-too-long
+            f"Using {len(self.node_states)} node states, {len(self.valid_shortcuts)} valid shortcuts, and {len(self.node_atoms)} node atoms from training data"  # pylint: disable=line-too-long
         )
         goal_env = self._get_goal_env(env)
-        use_preimages = goal_env.use_preimages
+        use_atom_as_obs = goal_env.use_atom_as_obs
 
         # Use our custom buffer with node states
         replay_buffer_kwargs = {
             "node_states": self.node_states,
             "valid_shortcuts": self.valid_shortcuts,
             "n_sampled_goal": self.config.n_sampled_goal,
-            "using_preimages": use_preimages,
+            "using_atom_as_obs": use_atom_as_obs,
         }
-        if use_preimages:
+        if use_atom_as_obs:
             replay_buffer_kwargs["atom_to_index"] = goal_env.atom_to_index
-            replay_buffer_kwargs["preimage_vectors"] = goal_env.preimage_vectors
+            replay_buffer_kwargs["atom_vectors"] = goal_env.atom_vectors
 
         # Initialize model based on algorithm
         if self.config.algorithm == "SAC":

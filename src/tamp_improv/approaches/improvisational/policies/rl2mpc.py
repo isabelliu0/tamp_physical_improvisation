@@ -147,7 +147,7 @@ class RL2MPCPolicy(Policy[ObsType, ActType]):
                 TrainingData(
                     states=[],
                     current_atoms=[self._current_context.current_atoms],
-                    preimages=[self._current_context.preimage],
+                    goal_atoms=[self._current_context.goal_atoms],
                     config={"max_steps": self.mpc_policy.config.horizon},
                 )
             )
@@ -224,7 +224,7 @@ class RL2MPCPolicy(Policy[ObsType, ActType]):
         # Set context for trajectory environment
         if context_env is not None and self._current_context is not None:
             context_env.set_context(  # type: ignore
-                self._current_context.current_atoms, self._current_context.preimage
+                self._current_context.current_atoms, self._current_context.goal_atoms
             )
 
         # Generate trajectory

@@ -26,9 +26,9 @@ class NodeBasedHerBuffer(HerReplayBuffer):
         action_space: spaces.Space,
         node_states: dict[int, ObsType],
         valid_shortcuts: list[tuple[int, int]],
-        using_preimages: bool,
+        using_atom_as_obs: bool,
         atom_to_index: dict[str, int] | None = None,
-        preimage_vectors: dict[int, np.ndarray] | None = None,
+        atom_vectors: dict[int, np.ndarray] | None = None,
         device: Union[torch.device, str] = "cuda",
         n_sampled_goal: int = 4,
         **kwargs,
@@ -37,9 +37,9 @@ class NodeBasedHerBuffer(HerReplayBuffer):
         self.node_states = node_states or {}
         self.valid_shortcuts = valid_shortcuts or []
         self.node_ids = sorted(list(node_states.keys()))
-        self.using_preimages = using_preimages
+        self.using_atom_as_obs = using_atom_as_obs
         self.atom_to_index = atom_to_index or {}
-        self.preimage_vectors = preimage_vectors or {}
+        self.atom_vectors = atom_vectors or {}
         self.n_sampled_goal = n_sampled_goal
         self.n_envs = kwargs.get("n_envs", 1)
 
@@ -126,8 +126,8 @@ class NodeBasedHerBuffer(HerReplayBuffer):
         if source_node_id in self.valid_targets and self.valid_targets[source_node_id]:
             goal_id = np.random.choice(self.valid_targets[source_node_id])
             return (
-                np.array(self.preimage_vectors[goal_id])
-                if self.using_preimages
+                np.array(self.atom_vectors[goal_id])
+                if self.using_atom_as_obs
                 else np.array(self.node_states[goal_id])
             )
         raise ValueError(f"No valid targets for source node {source_node_id}!")

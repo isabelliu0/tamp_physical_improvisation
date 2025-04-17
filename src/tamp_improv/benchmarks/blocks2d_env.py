@@ -33,10 +33,10 @@ def is_block_in_target_area(
     target_height: float,
 ) -> bool:
     """Check if block is completely in target area."""
-    target_left = target_x - target_width / 2
-    target_right = target_x + target_width / 2
-    target_bottom = target_y - target_height / 2
-    target_top = target_y + target_height / 2
+    target_left = target_x - target_width / 2 - 1e-4
+    target_right = target_x + target_width / 2 + 1e-4
+    target_bottom = target_y - target_height / 2 - 1e-4
+    target_top = target_y + target_height / 2 + 1e-4
 
     block_left = block_x - block_width / 2
     block_right = block_x + block_width / 2

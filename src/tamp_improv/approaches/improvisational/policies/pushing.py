@@ -20,7 +20,7 @@ class PushingPolicy(Policy[NDArray[np.float32], NDArray[np.float32]]):
         super().__init__(seed)
         self._env: gym.Env | None = None
         self._current_atoms: set[GroundAtom] | None = None
-        self._target_preimage: set[GroundAtom] | None = None
+        self._goal_atoms: set[GroundAtom] | None = None
 
     @property
     def requires_training(self) -> bool:
@@ -39,14 +39,12 @@ class PushingPolicy(Policy[NDArray[np.float32], NDArray[np.float32]]):
         init = {GroundAtom(On, [block2, target_area])}
         goal = {GroundAtom(Clear, [target_area])}
         assert self._current_atoms is not None
-        assert self._target_preimage is not None
-        return init.issubset(self._current_atoms) and goal.issubset(
-            self._target_preimage
-        )
+        assert self._goal_atoms is not None
+        return init.issubset(self._current_atoms) and goal.issubset(self._goal_atoms)
 
     def configure_context(self, context: PolicyContext) -> None:
         self._current_atoms = context.current_atoms
-        self._target_preimage = context.preimage
+        self._goal_atoms = context.goal_atoms
 
     def get_action(self, obs: NDArray[np.float32]) -> NDArray[np.float32]:
         """Get action for pushing block 2 out of the way."""
