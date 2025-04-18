@@ -198,7 +198,7 @@ class PutDownSkill(BaseBlocks2DSkill):
         # Get which surface to place on and its position
         surface_obj = objects[2]
         if surface_obj.name == "target_area":
-            target_x, target_y = obs[11:13]
+            target_x, target_y = 0.5, 0.0
         else:
             # Put on table (right of target area)
             target_x = 0.7
@@ -296,7 +296,7 @@ class Blocks2DPerceiver(Perceiver[NDArray[np.float32]]):
         block_2_x, block_2_y = obs[6:8]
         block_width, block_height = obs[8:10]
         gripper_status = obs[10]
-        target_x, target_y, target_width, target_height = obs[11:15]
+        target_x, target_y, target_width, target_height = 0.5, 0.0, 0.2, 0.2
 
         # Add target identification predicates
         atoms.add(self.predicates["IsTarget"]([self._target_area]))

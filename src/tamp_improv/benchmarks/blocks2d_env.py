@@ -596,7 +596,7 @@ class Blocks2DEnv(gym.Env):
     metadata = {"render_modes": ["rgb_array"], "render_fps": 4}
 
     def __init__(self, render_mode: str | None = None) -> None:
-        self.observation_space = Box(low=0, high=1, shape=(15,), dtype=np.float32)
+        self.observation_space = Box(low=0, high=1, shape=(11,), dtype=np.float32)
         self.action_space = Box(
             low=np.array([-0.1, -0.1, -1.0]),
             high=np.array([0.1, 0.1, 1.0]),
@@ -718,10 +718,10 @@ class Blocks2DEnv(gym.Env):
                 self._block_width,
                 self._block_height,
                 self.gripper_status,
-                self._target_area["x"],
-                self._target_area["y"],
-                self._target_area["width"],
-                self._target_area["height"],
+                # self._target_area["x"],
+                # self._target_area["y"],
+                # self._target_area["width"],
+                # self._target_area["height"],
             ],
             dtype=np.float32,
         )
