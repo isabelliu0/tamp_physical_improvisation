@@ -57,6 +57,13 @@ class Blocks2DState(NamedTuple):
             block3_node[5] = 3
             nodes.append(block3_node)
 
+        # # Target area node: [type=2, x, y, width, height, padding]
+        # target_node = np.zeros(6, dtype=np.float32)
+        # target_node[0] = 2
+        # target_node[1:5] = 0.5, 0.0, 0.2, 0.2
+        # target_node[5] = 0
+        # nodes.append(target_node)
+
         return GraphInstance(nodes=np.stack(nodes), edges=None, edge_links=None)
 
 
@@ -201,11 +208,14 @@ class GraphBlocks2DEnv(gym.Env):
                 elif node_type == 1:  # Block
                     block_id = int(node[5])
                     block_positions[block_id] = node[1:3].copy()
+                # elif node_type == 2:  # Target area
+                #     target_pos = node[1:3].copy()
 
             # Ensure all required nodes were found
             assert robot_pos is not None, "Robot node not found"
             assert 1 in block_positions, "Block 1 not found"
             assert 2 in block_positions, "Block 2 not found"
+            # assert target_pos is not None, "Target area node not found"
 
             # Build new state
             if 3 in block_positions and self.n_blocks > 2:
@@ -435,6 +445,8 @@ class GraphBlocks2DEnv(gym.Env):
                 block_name = f"block{block_id}"
                 if block_name in relevant_object_names:
                     block_nodes[block_name] = node
+            # elif node_type == 2:  # Target area
+            #     target_node = node
 
         features = []
         assert robot_node is not None
@@ -442,6 +454,8 @@ class GraphBlocks2DEnv(gym.Env):
         for block_name in sorted(relevant_object_names):
             if block_name in block_nodes:
                 features.extend(block_nodes[block_name])
+        # if "target_area" in relevant_object_names:
+        #     features.extend(target_node)
 
         return np.array(features, dtype=np.float32)
 

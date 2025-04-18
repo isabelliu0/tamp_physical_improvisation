@@ -88,10 +88,10 @@ def test_pybullet_graph_training_collection():
     return train_data
 
 
-@pytest.mark.skip("Takes too long to run.")
+# @pytest.mark.skip("Takes too long to run.")
 @pytest.mark.parametrize(
     "system_cls,use_context_wrapper",
-    [(Blocks2DTAMPSystem, False), (GraphBlocks2DTAMPSystem, False)],
+    [(Blocks2DTAMPSystem, False)],
 )
 def test_multi_rl_blocks2d_pipeline(system_cls, use_context_wrapper):
     """Test the multi-policy RL training and evaluation pipeline."""
@@ -104,8 +104,8 @@ def test_multi_rl_blocks2d_pipeline(system_cls, use_context_wrapper):
         max_steps=50,
         max_training_steps_per_shortcut=50,
         collect_episodes=3,
-        episodes_per_scenario=2000,
-        force_collect=False,
+        episodes_per_scenario=1000,
+        force_collect=True,
         render=True,
         record_training=False,
         training_record_interval=125,
@@ -159,7 +159,7 @@ def test_multi_rl_blocks2d_pipeline(system_cls, use_context_wrapper):
     return metrics
 
 
-@pytest.mark.parametrize("system_cls", [Blocks2DTAMPSystem, GraphBlocks2DTAMPSystem])
+@pytest.mark.parametrize("system_cls", [GraphBlocks2DTAMPSystem])
 def test_multi_rl_blocks2d_loaded(system_cls):
     """Test MultiRL on Blocks2D with loaded policies."""
     policy_dir = Path("trained_policies/multi_rl")
@@ -191,7 +191,7 @@ def test_multi_rl_blocks2d_loaded(system_cls):
 
     print(f"\n=== Testing MultiRL Loaded Policies on {system_cls.__name__} ===")
     system = system_cls.create_default(
-        seed=42, render_mode="rgb_array" if config.render else None
+        n_blocks=3, seed=42, render_mode="rgb_array" if config.render else None
     )
 
     policy_name = "MultiRL"
