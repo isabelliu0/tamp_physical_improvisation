@@ -163,7 +163,7 @@ def test_goal_conditioned_rl(algorithm):
         ), f"Wrong action shape: {action.shape}"
 
     # Test save/load
-    save_dir = Path("test_data")
+    save_dir = Path("trained_policies")
     save_dir.mkdir(exist_ok=True)
     save_path = str(save_dir / "test_goal_policy")
 
