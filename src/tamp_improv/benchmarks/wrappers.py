@@ -58,6 +58,8 @@ class ImprovWrapper(gym.Env):
         self.goal_atom_set: set[GroundAtom] = set()
         self.current_training_idx: int = 0
 
+        # Relevant objects for the environment
+        self.relevant_objects = None
         self.render_mode = base_env.render_mode
 
     def configure_training(
@@ -79,6 +81,10 @@ class ImprovWrapper(gym.Env):
         self.max_episode_steps = training_data.config.get(
             "max_training_steps_per_shortcut", self.max_episode_steps
         )
+
+    def set_relevant_objects(self, objects):
+        """Set relevant objects for observation extraction."""
+        self.relevant_objects = objects
 
     def reset(
         self,
@@ -112,9 +118,14 @@ class ImprovWrapper(gym.Env):
                     "The environment does not have a 'reset_from_state' method."
                 )
 
-            # Update index cyclically
-            self.current_training_idx += 1
+            # Process observation if needed for the policy
+            if self.relevant_objects is not None:
+                assert hasattr(self.env, "extract_relevant_object_features")  # type: ignore[unreachable]   # pylint: disable=line-too-long
+                obs = self.env.extract_relevant_object_features(
+                    obs, self.relevant_objects
+                )
 
+            self.current_training_idx += 1
             return obs, info
 
         return self.env.reset(seed=seed, options=options)
@@ -127,6 +138,11 @@ class ImprovWrapper(gym.Env):
         obs, _, _, truncated, info = self.env.step(action)
         self.steps += 1
         current_atoms = self.perceiver.step(obs)
+
+        # Process observation if needed
+        if self.relevant_objects is not None:
+            assert hasattr(self.env, "extract_relevant_object_features")  # type: ignore[unreachable]   # pylint: disable=line-too-long
+            obs = self.env.extract_relevant_object_features(obs, self.relevant_objects)
 
         # Check achievement of goal atoms
         achieved = self.goal_atom_set == current_atoms

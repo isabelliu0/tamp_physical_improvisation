@@ -774,13 +774,24 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                         if target_id not in self.observed_states:
                             self.observed_states[target_id] = []
                         is_duplicate = False
-                        for existing_obs in self.observed_states[target_id]:
-                            assert isinstance(existing_obs, np.ndarray) and isinstance(
-                                curr_raw_obs, np.ndarray
-                            ), "Expected obs as numpy arrays for comparison"
-                            if np.array_equal(existing_obs, curr_raw_obs):
-                                is_duplicate = True
-                                break
+                        if hasattr(curr_raw_obs, "nodes"):
+                            for existing_obs in self.observed_states[target_id]:
+                                assert hasattr(existing_obs, "nodes")
+                                if np.array_equal(
+                                    existing_obs.nodes, curr_raw_obs.nodes
+                                ):
+                                    is_duplicate = True
+                                    break
+                        elif isinstance(curr_raw_obs, np.ndarray):
+                            for existing_obs in self.observed_states[target_id]:
+                                assert isinstance(existing_obs, np.ndarray)
+                                if np.array_equal(existing_obs, curr_raw_obs):
+                                    is_duplicate = True
+                                    break
+                        else:
+                            raise TypeError(
+                                "Unsupported observation type for duplicate check"
+                            )
                         if not is_duplicate:
                             self.observed_states[target_id].append(curr_raw_obs)
 

@@ -541,6 +541,7 @@ class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.floa
     @classmethod
     def create_default(
         cls,
+        n_blocks: int = 2,  # pylint:disable=unused-argument
         seed: int | None = None,
         render_mode: str | None = None,
     ) -> BaseBlocks2DTAMPSystem:
@@ -577,6 +578,7 @@ class Blocks2DTAMPSystem(
     ) -> None:
         """Initialize Blocks2D TAMP system."""
         self.n_blocks = n_blocks
+        self._render_mode = render_mode
         super().__init__(planning_components, seed=seed, render_mode=render_mode)
 
     def _create_wrapped_env(
@@ -593,6 +595,7 @@ class Blocks2DTAMPSystem(
     @classmethod
     def create_default(
         cls,
+        n_blocks: int = 2,
         seed: int | None = None,
         render_mode: str | None = None,
     ) -> Blocks2DTAMPSystem:

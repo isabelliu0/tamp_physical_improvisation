@@ -52,6 +52,7 @@ class BaseTAMPSystem(Generic[ObsType, ActType], ABC):
         planning_components: PlanningComponents[ObsType],
         name: str = "TAMPSystem",
         seed: int | None = None,
+        render_mode: str | None = None,
     ) -> None:
         """Initialize TAMP system.
 
@@ -64,6 +65,7 @@ class BaseTAMPSystem(Generic[ObsType, ActType], ABC):
         self.env = self._create_env()
         if seed is not None:
             self.env.reset(seed=seed)
+        self._render_mode = render_mode
 
     @property
     def types(self) -> set[Type]:
@@ -119,7 +121,7 @@ class ImprovisationalTAMPSystem(BaseTAMPSystem[ObsType, ActType], ABC):
     ) -> None:
         """Initialize improvisational TAMP system."""
         self._render_mode = render_mode
-        super().__init__(planning_components, seed=seed)
+        super().__init__(planning_components, seed=seed, render_mode=render_mode)
         self.wrapped_env = self._create_wrapped_env(planning_components)
         if seed is not None:
             self.wrapped_env.reset(seed=seed)

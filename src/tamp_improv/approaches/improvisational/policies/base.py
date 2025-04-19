@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any, Generic, TypeVar
 
 import gymnasium as gym
-import numpy as np
 from relational_structs import GroundAtom
 
 ObsType = TypeVar("ObsType")
@@ -33,9 +32,10 @@ class TrainingData:
         """Save training data to disk."""
         path.mkdir(parents=True, exist_ok=True)
 
-        # Save states as numpy array
-        states_path = path / "states.npy"
-        np.save(states_path, np.array(self.states))
+        # Save states
+        states_path = path / "states.pkl"
+        with open(states_path, "wb") as f:
+            pickle.dump(self.states, f)
 
         # Save current atoms and goal atoms as pickle
         data_paths = {
@@ -65,8 +65,9 @@ class TrainingData:
     def load(cls, path: Path) -> TrainingData:
         """Load training data from disk."""
         # Load states
-        states_path = path / "states.npy"
-        states = list(np.load(states_path))
+        states_path = path / "states.pkl"
+        with open(states_path, "rb") as f:
+            states = pickle.load(f)
 
         # Load current atoms and goal atoms
         data = {}
