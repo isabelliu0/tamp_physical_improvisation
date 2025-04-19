@@ -427,8 +427,8 @@ class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.floa
         render_mode: str | None = None,
     ) -> None:
         """Initialize Blocks2D TAMP system."""
-        super().__init__(planning_components, name="Blocks2DTAMPSystem", seed=seed)
         self._render_mode = render_mode
+        super().__init__(planning_components, name="Blocks2DTAMPSystem", seed=seed)
 
     def _create_env(self) -> gym.Env:
         """Create base environment."""

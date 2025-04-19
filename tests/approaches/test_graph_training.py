@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 import torch
 
@@ -26,6 +27,114 @@ from tamp_improv.approaches.improvisational.training import (
 from tamp_improv.benchmarks.blocks2d import Blocks2DTAMPSystem
 from tamp_improv.benchmarks.blocks2d_graph import GraphBlocks2DTAMPSystem
 from tamp_improv.benchmarks.pybullet_clear_and_place import ClearAndPlaceTAMPSystem
+
+
+def run_multi_seed_experiment(system_cls, use_context_wrapper, seeds):
+    """Run the experiment with multiple seeds and return aggregated results."""
+    all_metrics = []
+
+    # RL configuration
+    rl_config = RLConfig(
+        learning_rate=3e-4,
+        batch_size=32,
+        n_epochs=10,
+        gamma=0.99,
+        ent_coef=0.05,
+        device="cuda" if torch.cuda.is_available() else "cpu",
+    )
+
+    for seed in seeds:
+        print(f"\n\n=== Running experiment with seed {seed} ===")
+
+        # Configuration with current seed
+        config = TrainingConfig(
+            seed=seed,
+            num_episodes=5,
+            max_steps=50,
+            max_training_steps_per_shortcut=50,
+            collect_episodes=3,
+            episodes_per_scenario=1000,
+            force_collect=False,
+            render=False,
+            record_training=False,
+            training_record_interval=125,
+            training_data_dir=f"training_data/multi_rl{'_context' if use_context_wrapper else ''}/seed_{seed}",  # pylint: disable=line-too-long
+            save_dir=f"trained_policies/multi_rl{'_context' if use_context_wrapper else ''}/seed_{seed}",  # pylint: disable=line-too-long
+            batch_size=32,
+            max_atom_size=14,
+        )
+
+        print(f"\n1. Creating system for seed {seed}...")
+        system = system_cls.create_default(
+            n_blocks=2, seed=config.seed, render_mode=None
+        )
+
+        print(f"\n2. Training and evaluating policy for seed {seed}...")
+
+        # Define policy factory
+        def policy_factory(seed_val: int) -> MultiRLPolicy:
+            return MultiRLPolicy(seed=seed_val, config=rl_config)
+
+        # Train and evaluate with graph-based collection
+        metrics = train_and_evaluate(
+            system,
+            policy_factory,
+            config,
+            policy_name=f"MultiRL{'_Context' if use_context_wrapper else ''}_Seed{seed}",
+            use_context_wrapper=use_context_wrapper,
+            use_random_rollouts=True,
+            num_rollouts_per_node=1000,
+            max_steps_per_rollout=100,
+            shortcut_success_threshold=1,
+        )
+
+        all_metrics.append(metrics)
+
+    # Calculate aggregate statistics
+    success_rates = [m.success_rate for m in all_metrics]
+    episode_lengths = [m.avg_episode_length for m in all_metrics]
+    rewards = [m.avg_reward for m in all_metrics]
+    training_times = [m.training_time for m in all_metrics]
+
+    print("\n\n=== Aggregated Results Across All Seeds ===")
+    print(
+        f"Success Rate: Mean = {np.mean(success_rates):.2%}, Std = {np.std(success_rates):.2%}"  # pylint: disable=line-too-long
+    )
+    print(
+        f"Average Episode Length: Mean = {np.mean(episode_lengths):.2f}, Std = {np.std(episode_lengths):.2f}"  # pylint: disable=line-too-long
+    )
+    print(f"Average Reward: Mean = {np.mean(rewards):.2f}, Std = {np.std(rewards):.2f}")
+    print(
+        f"Training Time: Mean = {np.mean(training_times):.2f}s, Std = {np.std(training_times):.2f}s"  # pylint: disable=line-too-long
+    )
+
+    # Per-seed details
+    print("\n=== Per-Seed Results ===")
+    for seed, metrics in zip(seeds, all_metrics):
+        print(f"Seed {seed}:")
+        print(f"  Success Rate: {metrics.success_rate:.2%}")
+        print(f"  Average Episode Length: {metrics.avg_episode_length:.2f}")
+        print(f"  Average Reward: {metrics.avg_reward:.2f}")
+        print(f"  Training Time: {metrics.training_time:.2f} seconds")
+
+    return {
+        "all_metrics": all_metrics,
+        "summary": {
+            "success_rate": {
+                "mean": np.mean(success_rates),
+                "std": np.std(success_rates),
+            },
+            "episode_length": {
+                "mean": np.mean(episode_lengths),
+                "std": np.std(episode_lengths),
+            },
+            "reward": {"mean": np.mean(rewards), "std": np.std(rewards)},
+            "training_time": {
+                "mean": np.mean(training_times),
+                "std": np.std(training_times),
+            },
+        },
+    }
 
 
 @pytest.mark.skip("Takes too long to run.")
@@ -88,10 +197,10 @@ def test_pybullet_graph_training_collection():
     return train_data
 
 
-# @pytest.mark.skip("Takes too long to run.")
+@pytest.mark.skip("Takes too long to run.")
 @pytest.mark.parametrize(
     "system_cls,use_context_wrapper",
-    [(Blocks2DTAMPSystem, False)],
+    [(GraphBlocks2DTAMPSystem, False), (Blocks2DTAMPSystem, False)],
 )
 def test_multi_rl_blocks2d_pipeline(system_cls, use_context_wrapper):
     """Test the multi-policy RL training and evaluation pipeline."""
@@ -105,7 +214,7 @@ def test_multi_rl_blocks2d_pipeline(system_cls, use_context_wrapper):
         max_training_steps_per_shortcut=50,
         collect_episodes=3,
         episodes_per_scenario=1000,
-        force_collect=True,
+        force_collect=False,
         render=True,
         record_training=False,
         training_record_interval=125,
@@ -159,7 +268,20 @@ def test_multi_rl_blocks2d_pipeline(system_cls, use_context_wrapper):
     return metrics
 
 
-@pytest.mark.parametrize("system_cls", [GraphBlocks2DTAMPSystem])
+@pytest.mark.skip("Takes too long to run.")
+def test_multi_rl_blocks2d_pipeline_multi_seed():
+    """Test the multi-policy RL training and evaluation pipeline with multiple
+    seeds."""
+    print("\n=== Testing Multi-Policy RL Pipeline with Multiple Seeds ===")
+    results = run_multi_seed_experiment(
+        system_cls=GraphBlocks2DTAMPSystem,
+        use_context_wrapper=False,
+        seeds=[42, 43, 44, 45, 46],
+    )
+    return results
+
+
+@pytest.mark.parametrize("system_cls", [GraphBlocks2DTAMPSystem, Blocks2DTAMPSystem])
 def test_multi_rl_blocks2d_loaded(system_cls):
     """Test MultiRL on Blocks2D with loaded policies."""
     policy_dir = Path("trained_policies/multi_rl")

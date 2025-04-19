@@ -95,7 +95,6 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
                     if orig.name == obj_name:
                         mapped_objects.add(subst.name)
             assert mapped_objects is not None
-
             assert hasattr(self.base_env, "extract_relevant_object_features")
             feature_vector = self.base_env.extract_relevant_object_features(
                 obs, mapped_objects
@@ -241,9 +240,6 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
             )
             if match_found:
                 self._current_substitution = substitution
-                print(
-                    f"Found structural match for policy key: {policy_key}. Substitution: {substitution}. Context: {context.info}"  # pylint:disable=line-too-long
-                )
                 return policy_key
 
         return None
