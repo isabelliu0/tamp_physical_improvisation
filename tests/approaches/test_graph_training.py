@@ -27,6 +27,9 @@ from tamp_improv.approaches.improvisational.training import (
 from tamp_improv.benchmarks.blocks2d import Blocks2DTAMPSystem
 from tamp_improv.benchmarks.blocks2d_graph import GraphBlocks2DTAMPSystem
 from tamp_improv.benchmarks.pybullet_clear_and_place import ClearAndPlaceTAMPSystem
+from tamp_improv.benchmarks.pybullet_clear_and_place_graph import (
+    GraphClearAndPlaceTAMPSystem,
+)
 
 
 def run_multi_seed_experiment(system_cls, use_context_wrapper, seeds):
@@ -39,7 +42,7 @@ def run_multi_seed_experiment(system_cls, use_context_wrapper, seeds):
         batch_size=32,
         n_epochs=10,
         gamma=0.99,
-        ent_coef=0.05,
+        ent_coef=0.01,
         device="cuda" if torch.cuda.is_available() else "cpu",
     )
 
@@ -49,25 +52,25 @@ def run_multi_seed_experiment(system_cls, use_context_wrapper, seeds):
         # Configuration with current seed
         config = TrainingConfig(
             seed=seed,
-            num_episodes=5,
-            max_steps=50,
-            max_training_steps_per_shortcut=50,
-            collect_episodes=3,
-            episodes_per_scenario=1000,
+            num_episodes=1,
+            max_steps=300,
+            max_training_steps_per_shortcut=100,
+            collect_episodes=1,
+            episodes_per_scenario=1500,
             force_collect=False,
             render=False,
             record_training=False,
-            training_record_interval=125,
-            training_data_dir=f"training_data/multi_rl{'_context' if use_context_wrapper else ''}/seed_{seed}",  # pylint: disable=line-too-long
+            training_record_interval=100,
+            # training_data_dir=f"training_data/multi_rl{'_context' if use_context_wrapper else ''}/seed_{seed}",  # pylint: disable=line-too-long
+            training_data_dir="training_data/graph_training_data",
             save_dir=f"trained_policies/multi_rl{'_context' if use_context_wrapper else ''}/seed_{seed}",  # pylint: disable=line-too-long
             batch_size=32,
             max_atom_size=14,
+            action_scale=0.015,
         )
 
         print(f"\n1. Creating system for seed {seed}...")
-        system = system_cls.create_default(
-            n_blocks=2, seed=config.seed, render_mode=None
-        )
+        system = system_cls.create_default(seed=config.seed, render_mode=None)
 
         print(f"\n2. Training and evaluating policy for seed {seed}...")
 
@@ -83,9 +86,9 @@ def run_multi_seed_experiment(system_cls, use_context_wrapper, seeds):
             policy_name=f"MultiRL{'_Context' if use_context_wrapper else ''}_Seed{seed}",
             use_context_wrapper=use_context_wrapper,
             use_random_rollouts=True,
-            num_rollouts_per_node=1000,
-            max_steps_per_rollout=100,
-            shortcut_success_threshold=1,
+            num_rollouts_per_node=100,
+            max_steps_per_rollout=300,
+            shortcut_success_threshold=5,
         )
 
         all_metrics.append(metrics)
@@ -269,7 +272,7 @@ def test_multi_rl_blocks2d_pipeline(system_cls, use_context_wrapper):
 
 
 @pytest.mark.skip("Takes too long to run.")
-def test_multi_rl_blocks2d_pipeline_multi_seed():
+def test_multi_rl_blocks2d_multi_seed():
     """Test the multi-policy RL training and evaluation pipeline with multiple
     seeds."""
     print("\n=== Testing Multi-Policy RL Pipeline with Multiple Seeds ===")
@@ -343,8 +346,11 @@ def test_multi_rl_blocks2d_loaded(system_cls):
 
 
 @pytest.mark.skip("Takes too long to run")
-@pytest.mark.parametrize("use_context_wrapper", [False])
-def test_multi_rl_pybullet_pipeline(use_context_wrapper):
+@pytest.mark.parametrize(
+    "system_cls,use_context_wrapper",
+    [(GraphClearAndPlaceTAMPSystem, False), (ClearAndPlaceTAMPSystem, False)],
+)
+def test_multi_rl_pybullet_pipeline(system_cls, use_context_wrapper):
     """Test the multi-policy RL training and evaluation pipeline."""
     print("\n=== Testing Multi-Policy RL Pipeline ===")
 
@@ -355,14 +361,14 @@ def test_multi_rl_pybullet_pipeline(use_context_wrapper):
         max_steps=300,
         max_training_steps_per_shortcut=100,
         collect_episodes=1,
-        episodes_per_scenario=1500,
+        episodes_per_scenario=3000,
         force_collect=False,
         render=True,
         record_training=False,
         training_record_interval=100,
         training_data_dir="training_data/graph_training_data",
         save_dir=f"trained_policies/multi_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
-        batch_size=32,
+        batch_size=16,
         max_atom_size=14,
         action_scale=0.015,
     )
@@ -370,7 +376,7 @@ def test_multi_rl_pybullet_pipeline(use_context_wrapper):
     # RL configuration
     rl_config = RLConfig(
         learning_rate=3e-4,
-        batch_size=32,
+        batch_size=16,
         n_epochs=10,
         gamma=0.99,
         ent_coef=0.01,
@@ -378,7 +384,7 @@ def test_multi_rl_pybullet_pipeline(use_context_wrapper):
     )
 
     print("\n1. Creating system...")
-    system = ClearAndPlaceTAMPSystem.create_default(
+    system = system_cls.create_default(
         seed=config.seed, render_mode="rgb_array" if config.render else None
     )
 
@@ -411,7 +417,20 @@ def test_multi_rl_pybullet_pipeline(use_context_wrapper):
     return metrics
 
 
-def test_multi_rl_pybullet_loaded(system_cls=ClearAndPlaceTAMPSystem):
+@pytest.mark.skip("Takes too long to run.")
+def test_multi_rl_pybullet_multi_seed():
+    """Test the multi-policy RL training and evaluation pipeline with multiple
+    seeds."""
+    print("\n=== Testing Multi-Policy RL Pipeline with Multiple Seeds ===")
+    results = run_multi_seed_experiment(
+        system_cls=GraphClearAndPlaceTAMPSystem,
+        use_context_wrapper=False,
+        seeds=[44, 45, 46],
+    )
+    return results
+
+
+def test_multi_rl_pybullet_loaded(system_cls=GraphClearAndPlaceTAMPSystem):
     """Test MultiRL on Pybullet ClearAndPlace with loaded policies."""
     policy_dir = Path("trained_policies/multi_rl")
     policy_dir.mkdir(parents=True, exist_ok=True)
@@ -419,7 +438,7 @@ def test_multi_rl_pybullet_loaded(system_cls=ClearAndPlaceTAMPSystem):
     # Configuration
     config = TrainingConfig(
         seed=42,
-        num_episodes=3,
+        num_episodes=1,
         max_steps=300,
         render=True,
         collect_episodes=0,
@@ -433,7 +452,7 @@ def test_multi_rl_pybullet_loaded(system_cls=ClearAndPlaceTAMPSystem):
     # RL configuration
     rl_config = RLConfig(
         learning_rate=3e-4,
-        batch_size=32,
+        batch_size=16,
         n_epochs=10,
         gamma=0.99,
         ent_coef=0.01,
@@ -442,7 +461,9 @@ def test_multi_rl_pybullet_loaded(system_cls=ClearAndPlaceTAMPSystem):
 
     print(f"\n=== Testing MultiRL Loaded Policies on {system_cls.__name__} ===")
     system = system_cls.create_default(
-        seed=42, render_mode="rgb_array" if config.render else None
+        seed=42,
+        render_mode="rgb_array" if config.render else None,
+        num_obstacle_blocks=4,
     )
 
     policy_name = "MultiRL"

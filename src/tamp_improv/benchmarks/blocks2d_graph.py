@@ -339,7 +339,7 @@ class BaseGraphBlocks2DTAMPSystem(BaseTAMPSystem[GraphInstance, NDArray[np.float
 
     def _get_domain_name(self) -> str:
         """Get domain name."""
-        return "graphblocks2d-domain"
+        return "graph-blocks2d-domain"
 
     def get_domain(self) -> PDDLDomain:
         """Get domain."""

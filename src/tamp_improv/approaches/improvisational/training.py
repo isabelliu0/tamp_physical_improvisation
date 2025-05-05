@@ -114,7 +114,6 @@ def get_or_collect_training_data(
                 with open(signatures_path, "rb") as f:
                     approach.trained_signatures = pickle.load(f)
                 print(f"Loaded {len(approach.trained_signatures)} trained signatures")
-
             # Verify config matches
             if (
                 train_data.config.get("seed") == config.seed

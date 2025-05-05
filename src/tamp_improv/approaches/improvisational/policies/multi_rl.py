@@ -59,6 +59,11 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
         """Configure policy with context information."""
         self._current_context = context
 
+        # # DEBUG: Testing generalization on specific shortcuts based on IDs
+        # matching_policy = None
+        # if context.info.get("source_node_id") == 1 and context.info.get("target_node_id") == 331: # pylint:disable=line-too-long
+        #     matching_policy = self._find_matching_policy(context)
+
         matching_policy = self._find_matching_policy(context)
         if matching_policy:
             self._active_policy_key = matching_policy
@@ -70,6 +75,11 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
         """Check if we can handle the current context."""
         if not self._current_context:
             return False
+
+        # # DEBUG: Testing generalization on specific shortcuts based on IDs
+        # if not (self._current_context.info.get("source_node_id") == 1 and self._current_context.info.get("target_node_id") == 331):   # pylint:disable=line-too-long
+        #     return False
+
         return self._find_matching_policy(self._current_context) is not None
 
     def get_action(self, obs: ObsType) -> ActType:
@@ -236,7 +246,7 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
 
             # Find substitution
             match_found, substitution = find_atom_substitution(
-                transformed_train_atoms, transformed_test_atoms
+                transformed_train_atoms, transformed_test_atoms, self.base_env
             )
             if match_found:
                 self._current_substitution = substitution
@@ -389,7 +399,9 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
 
 
 def find_atom_substitution(
-    train_atoms: set[GroundAtom], test_atoms: set[GroundAtom]
+    train_atoms: set[GroundAtom],
+    test_atoms: set[GroundAtom],
+    env: gym.Env | None = None,
 ) -> tuple[bool, dict[Object, Object]]:
     """Find if train_atoms can be mapped to a subset of test_atoms."""
     test_atoms_by_pred = defaultdict(list)
@@ -429,6 +441,7 @@ def find_atom_substitution(
         remaining_train_objs=train_objects,
         test_objs_by_type=test_objs_by_type,
         partial_sub={},
+        env=env,
     )
 
 
@@ -438,13 +451,21 @@ def find_substitution_helper(
     remaining_train_objs: list[Object],
     test_objs_by_type: dict[Any, list[Object]],
     partial_sub: dict[Object, Object],
+    env: gym.Env | None = None,
 ) -> tuple[bool, dict[Object, Object]]:
     """Helper to find_atom_substitution using backtracking search."""
     if not remaining_train_objs:
-        return check_substitution_valid(train_atoms, test_atoms_by_pred, partial_sub)
+        return check_substitution_valid(
+            train_atoms, test_atoms_by_pred, partial_sub, env
+        )
 
     train_obj = remaining_train_objs[0]
     remaining = remaining_train_objs[1:]
+
+    # Sort test objects to prioritize exact name matches
+    candidates = list(test_objs_by_type[train_obj.type])
+    candidates.sort(key=lambda obj: 0 if obj.name == train_obj.name else 1)
+
     for test_obj in test_objs_by_type[train_obj.type]:
         if test_obj in partial_sub.values():
             continue
@@ -456,6 +477,7 @@ def find_substitution_helper(
             remaining_train_objs=remaining,
             test_objs_by_type=test_objs_by_type,
             partial_sub=new_sub,
+            env=env,
         )
         if success:
             return True, final_sub
@@ -467,6 +489,7 @@ def check_substitution_valid(
     train_atoms: set[GroundAtom],
     test_atoms_by_pred: dict[str, list[GroundAtom]],
     substitution: dict[Object, Object],
+    env: gym.Env | None = None,
 ) -> tuple[bool, dict[Object, Object]]:
     """Check if substitution maps all train_atoms to some subset of
     test_atoms."""
@@ -482,4 +505,11 @@ def check_substitution_valid(
                 break
         if not found_match:
             return False, {}
+    if env is not None and hasattr(env, "get_object_category"):
+        for orig, subst in substitution.items():
+            orig_category = env.get_object_category(orig.name)
+            subst_category = env.get_object_category(subst.name)
+            if orig_category and subst_category and orig_category != subst_category:
+                return False, {}
+
     return True, substitution

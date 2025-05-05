@@ -411,7 +411,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         visited_states = {frozenset(init_atoms): initial_node}
         queue = deque([(initial_node, 0)])  # Queue for BFS: [(node, depth)]
         node_count = 0
-        max_nodes = 500
+        max_nodes = 605
         print(f"Building planning graph with max {max_nodes} nodes...")
 
         # Breadth-first search to build the graph
@@ -428,6 +428,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             if self._goal and self._goal.issubset(current_node.atoms):
                 queue.clear()
                 break
+                # continue
 
             # Find applicable ground operators using the domain's operators
             applicable_ops = self._find_applicable_operators(
@@ -561,8 +562,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     if not can_handle:
                         continue
 
-                    print(f"Found similar shortcut with similarity {best_similarity}")
-
                 # Configure context for environment and policy
                 if self.use_context_wrapper and self.context_env is not None:
                     self.context_env.set_context(source_atoms, target_atoms)
@@ -637,6 +636,16 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     continue
                 if edge.target.id <= node.id:
                     continue
+
+                # # DEBUG: Envisioned plan for cluttered drawer env
+                # envisioned_plan = [(0, 1), (1, 8), (8, 28), (28, 79), (79, 147), (147, 237)]  # pylint: disable=line-too-long
+                # if not (node.id, edge.target.id) in envisioned_plan:
+                #     continue
+
+                # # DEBUG: Envisioned plan for clear and place env (4 blocks)
+                # envisioned_plan = [(0, 2), (2, 5), (5, 8), (8, 15), (15, 26), (26, 52), (52, 94), (94, 199), (199, 331), (331, 603), (0, 1), (1, 331)]    # pylint: disable=line-too-long
+                # if not (node.id, edge.target.id) in envisioned_plan:
+                #     continue
 
                 frames: list[Any] = []
                 video_filename = ""
