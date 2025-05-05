@@ -11,6 +11,7 @@ from typing import Any, TypeVar
 
 import gymnasium as gym
 import numpy as np
+import torch
 from gymnasium.spaces import Box
 from relational_structs import GroundAtom, Object, Predicate
 
@@ -24,6 +25,7 @@ from tamp_improv.approaches.improvisational.policies.rl import (
     RLPolicy,
     TrainingProgressCallback,
 )
+from tamp_improv.utils.gpu_parallel import GPUParallelTrainer
 
 ObsType = TypeVar("ObsType")
 ActType = TypeVar("ActType")
@@ -39,11 +41,12 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
         self.env: gym.Env
         self.base_env: gym.Env
         self.config = config or RLConfig()
-        self._policies: dict[str, RLPolicy] = {}
+        self.policies: dict[str, RLPolicy] = {}
         self._active_policy_key: str | None = None
         self._current_context: PolicyContext | None = None
         self._policy_patterns: dict[str, dict[str, set[GroundAtom]]] = {}
         self._current_substitution: dict[Object, Object] | None = None
+        self._saved_models: dict[str, str] = {}
 
     @property
     def requires_training(self) -> bool:
@@ -67,7 +70,7 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
         matching_policy = self._find_matching_policy(context)
         if matching_policy:
             self._active_policy_key = matching_policy
-            self._policies[matching_policy].configure_context(context)
+            self.policies[matching_policy].configure_context(context)
         else:
             self._active_policy_key = None
 
@@ -85,7 +88,7 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
     def get_action(self, obs: ObsType) -> ActType:
         """Get action from the appropriate policy with selective feature
         extraction."""
-        if not self._active_policy_key or self._active_policy_key not in self._policies:
+        if not self._active_policy_key or self._active_policy_key not in self.policies:
             raise ValueError("No active policy for current context")
 
         # For graph observations, extract fixed vector of relevant object features
@@ -109,12 +112,14 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
             feature_vector = self.base_env.extract_relevant_object_features(
                 obs, mapped_objects
             )
-            return self._policies[self._active_policy_key].get_action(feature_vector)
+            return self.policies[self._active_policy_key].get_action(feature_vector)
 
         # For non-graph observations, use the original observation
-        return self._policies[self._active_policy_key].get_action(obs)
+        return self.policies[self._active_policy_key].get_action(obs)
 
-    def train(self, env: gym.Env, train_data: TrainingData | None) -> None:
+    def train(
+        self, env: gym.Env, train_data: TrainingData | None, save_dir: str | None = None
+    ) -> None:
         """Train multiple specialized policies."""
         assert train_data is not None
         print("\n=== Training Multi-Policy RL ===")
@@ -131,12 +136,12 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
             )
 
         # Train a policy for each group
+        policies_to_train = {}
         for policy_key, group_data in grouped_data.items():
-            print(f"\nTraining policy for shortcut type: {policy_key}")
             print(f"Training examples: {len(group_data.states)}")
 
-            if policy_key not in self._policies:
-                self._policies[policy_key] = RLPolicy(self._seed, self.config)
+            if policy_key not in self.policies:
+                self.policies[policy_key] = RLPolicy(self._seed, self.config)
 
             # For graph observations, process the training data to extract fixed vectors
             if is_graph_based:
@@ -170,17 +175,46 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
 
             self._configure_env_recursively(policy_env, group_data)
 
-            # Train the policy with this subset of data with the custom callback
-            callback = TrainingProgressCallback(
-                check_freq=train_data.config.get("training_record_interval", 100),
-                early_stopping=True,
-                early_stopping_patience=1,
-                early_stopping_threshold=0.8,
-                policy_key=policy_key,
+            # Store policy, env, and data for parallel training
+            policies_to_train[policy_key] = (
+                self.policies[policy_key],
+                policy_env,
+                group_data,
             )
-            self._policies[policy_key].train(policy_env, group_data, callback=callback)
 
-        print(f"\nTrained {len(self._policies)} specialized policies")
+        if (
+            len(policies_to_train) > 1
+            and torch.cuda.is_available()
+            and torch.cuda.device_count() > 1
+        ):
+            print(f"\nUsing parallel training with {torch.cuda.device_count()} GPUs")
+            trainer: GPUParallelTrainer = GPUParallelTrainer(use_cuda=True)
+            train_kwargs = {}
+            if save_dir:
+                train_kwargs["save_dir"] = save_dir
+            results = trainer.train_policies(
+                policies_to_train, train_single_policy, **train_kwargs
+            )
+            saved_models = {}
+            for policy_key, result in results.items():
+                if isinstance(result, dict) and result.get("saved_path"):
+                    saved_models[policy_key] = result["saved_path"]
+            trainer.close()
+            self._saved_models = saved_models
+        else:
+            # Train sequentially
+            print("\nTraining policies sequentially")
+            for policy_key, (
+                policy,
+                policy_env,
+                group_data,
+            ) in policies_to_train.items():
+                print(f"\nTraining policy for shortcut type: {policy_key}")
+                train_single_policy(
+                    policy, policy_env, group_data, policy_key=policy_key
+                )
+
+        print(f"\nCompleted training {len(self.policies)} specialized policies")
 
     def _get_policy_key(self, context: PolicyContext) -> str:
         """Create a unique key for a policy based on the context."""
@@ -216,7 +250,7 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
 
         # Try exact key match first
         key = self._get_policy_key(context)
-        if key in self._policies:
+        if key in self.policies:
             relevant_objects = set()
             for atom in (
                 self._policy_patterns[key]
@@ -350,9 +384,13 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
         """Save all policies."""
         path_obj = Path(path)
         path_obj.mkdir(parents=True, exist_ok=True)
+        already_saved = self._saved_models
 
         # Save each policy in its own subdirectory
-        for key, policy in self._policies.items():
+        for key, policy in self.policies.items():
+            if key in already_saved:
+                continue
+
             safe_key = "".join(c if c.isalnum() or c in "-_" else "_" for c in key)
             policy_path = os.path.join(path, f"policy_{safe_key}")
             policy.save(policy_path)
@@ -365,8 +403,8 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
 
         # Save a manifest of all policies
         manifest = {
-            "policies": list(self._policies.keys()),
-            "policy_count": len(self._policies),
+            "policies": list(self.policies.keys()),
+            "policy_count": len(self.policies),
         }
         with open(os.path.join(path, "manifest.json"), "w", encoding="utf-8") as f:
             json.dump(manifest, f)
@@ -385,7 +423,7 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
                     self._policy_patterns[policy_key] = pickle.load(f)
 
         # Load individual policies
-        self._policies = {}
+        self.policies = {}
         for key in manifest["policies"]:
             safe_key = "".join(c if c.isalnum() or c in "-_" else "_" for c in key)
             policy_path = os.path.join(path, f"policy_{safe_key}")
@@ -393,9 +431,27 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
             policy: RLPolicy = RLPolicy(self._seed, self.config)
             policy.load(policy_path)
 
-            self._policies[key] = policy
+            self.policies[key] = policy
 
-        print(f"Loaded {len(self._policies)} specialized policies")
+        print(f"Loaded {len(self.policies)} specialized policies")
+
+
+def train_single_policy(
+    policy: RLPolicy,
+    env: gym.Env,
+    train_data: TrainingData,
+    policy_key: str | None = None,
+):
+    """Train a single policy with a callback."""
+    callback = TrainingProgressCallback(
+        check_freq=train_data.config.get("training_record_interval", 100),
+        early_stopping=True,
+        early_stopping_patience=1,
+        early_stopping_threshold=0.8,
+        policy_key=policy_key,
+    )
+    policy.train(env, train_data, callback=callback)
+    return True
 
 
 def find_atom_substitution(

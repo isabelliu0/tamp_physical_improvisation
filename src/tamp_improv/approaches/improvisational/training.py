@@ -18,11 +18,12 @@ from tamp_improv.approaches.improvisational.graph_training import (
     collect_graph_based_training_data,
 )
 from tamp_improv.approaches.improvisational.policies.base import Policy, TrainingData
+from tamp_improv.approaches.improvisational.policies.multi_rl import MultiRLPolicy
 from tamp_improv.approaches.pure_rl import PureRLApproach
 from tamp_improv.benchmarks.base import ImprovisationalTAMPSystem
 from tamp_improv.benchmarks.goal_wrapper import GoalConditionedWrapper
 from tamp_improv.benchmarks.wrappers import PureRLWrapper
-from tamp_improv.utils.gpu_utils import set_torch_seed
+from tamp_improv.utils.gpu_utils import get_gpu_memory_info, set_torch_seed
 
 ObsType = TypeVar("ObsType")
 ActType = TypeVar("ActType")
@@ -263,9 +264,13 @@ def train_and_evaluate(
         print(f"  CUDA device count: {torch.cuda.device_count()}")
         print(f"  Current CUDA device: {torch.cuda.current_device()}")
         print(f"  Device name: {torch.cuda.get_device_name()}")
-        print(f"  Memory allocated: {torch.cuda.memory_allocated() / 1e9:.2f} GB")
-        print(f"  Memory cached: {torch.cuda.memory_reserved() / 1e9:.2f} GB")
-        print(f"  CUDA initialized and seeded with: {seed}")
+        memory_info = get_gpu_memory_info()
+        assert not isinstance(memory_info, str)
+        for gpu in memory_info:
+            print(f"  Device {gpu['device_index']} ({gpu['name']}):")
+            print(f"    Total memory: {gpu['total_memory']:.2f} GB")
+            print(f"    Allocated memory: {gpu['allocated_memory']:.2f} GB")
+            print(f"    Free memory: {gpu['free_memory']:.2f} GB")
     else:
         print("  CUDA not available, running on CPU")
 
@@ -316,10 +321,13 @@ def train_and_evaluate(
                     episode_trigger=lambda x: x % config.training_record_interval == 0,
                 )
 
-            policy.train(system.wrapped_env, train_data)
+            save_path = Path(config.save_dir) / f"{system.name}_{policy_name}"
+            if isinstance(policy, MultiRLPolicy):
+                policy.train(system.wrapped_env, train_data, save_dir=str(save_path))
+            else:
+                policy.train(system.wrapped_env, train_data)
             training_time = time.time() - start_time
 
-            save_path = Path(config.save_dir) / f"{system.name}_{policy_name}"
             print(f"\nSaving policy to {save_path}")
             policy.save(str(save_path))
 
@@ -329,6 +337,15 @@ def train_and_evaluate(
     elif not policy.requires_training and "_Loaded" not in policy_name:
         # For non-training policies like MPC, just initialize
         policy.initialize(system.wrapped_env)
+
+    # For MultiRLPolicy, ensure models are properly loaded before evaluation
+    if isinstance(policy, MultiRLPolicy) and hasattr(policy, "policies"):
+        if not any(
+            hasattr(p, "model") and p.model is not None
+            for p in policy.policies.values()
+        ):
+            print(f"No loaded models detected, attempting to load from {save_path}")
+            policy.load(str(save_path))
 
     # Run evaluation episodes
     print(f"\nEvaluating policy on {system.name}...")

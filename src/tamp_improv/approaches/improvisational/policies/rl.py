@@ -234,16 +234,6 @@ class RLPolicy(Policy[ObsType, ActType]):
         # Call base class train to initialize and configure env
         super().train(env, train_data)
 
-        print(f"\nStarting RL training on {len(train_data.states)} scenarios")
-        print(f"\nStarting RL training on device: {self.device_ctx.device}")
-        if self.device_ctx.device.type == "cuda":
-            print(
-                f"  CUDA device: {torch.cuda.get_device_name(self.device_ctx.device)}"
-            )
-            print(
-                f"  CUDA memory before training: {torch.cuda.memory_allocated(self.device_ctx.device) / 1e9:.2f} GB"  # pylint: disable=line-too-long
-            )
-
         # Initialize and train PPO
         self.model = PPO(
             "MlpPolicy",
