@@ -411,7 +411,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         visited_states = {frozenset(init_atoms): initial_node}
         queue = deque([(initial_node, 0)])  # Queue for BFS: [(node, depth)]
         node_count = 0
-        max_nodes = 605
+        max_nodes = 3000
         print(f"Building planning graph with max {max_nodes} nodes...")
 
         # Breadth-first search to build the graph
@@ -644,6 +644,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
                 # # DEBUG: Envisioned plan for clear and place env (4 blocks)
                 # envisioned_plan = [(0, 2), (2, 5), (5, 8), (8, 15), (15, 26), (26, 52), (52, 94), (94, 199), (199, 331), (331, 603), (0, 1), (1, 331)]    # pylint: disable=line-too-long
+                # DEBUG: Envisioned plan for clear and place env (5 blocks)
+                # envisioned_plan = [(0, 2), (2, 5), (5, 8), (8, 15), (15, 26), (26, 52), (52, 94), (94, 199), (199, 383), (383, 858), (858, 1523), (1523, 2977), (0, 1), (1, 1523)]    # pylint: disable=line-too-long
                 # if not (node.id, edge.target.id) in envisioned_plan:
                 #     continue
 

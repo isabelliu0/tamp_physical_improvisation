@@ -64,7 +64,7 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
 
         # # DEBUG: Testing generalization on specific shortcuts based on IDs
         # matching_policy = None
-        # if context.info.get("source_node_id") == 1 and context.info.get("target_node_id") == 331: # pylint:disable=line-too-long
+        # if context.info.get("source_node_id") == 1 and context.info.get("target_node_id") == 1523: # pylint:disable=line-too-long
         #     matching_policy = self._find_matching_policy(context)
 
         matching_policy = self._find_matching_policy(context)
@@ -80,7 +80,8 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
             return False
 
         # # DEBUG: Testing generalization on specific shortcuts based on IDs
-        # if not (self._current_context.info.get("source_node_id") == 1 and self._current_context.info.get("target_node_id") == 331):   # pylint:disable=line-too-long
+        # # 4 blocks (331), 5 blocks (1523)
+        # if not (self._current_context.info.get("source_node_id") == 1 and self._current_context.info.get("target_node_id") == 1523):   # pylint:disable=line-too-long
         #     return False
 
         return self._find_matching_policy(self._current_context) is not None
