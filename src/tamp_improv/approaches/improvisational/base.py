@@ -632,6 +632,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
             # Try each outgoing edge from this node
             for edge in self.planning_graph.node_to_outgoing_edges.get(node, []):
+                print("Starting to expand from", edge.source.id, "to", edge.target.id)
                 if (path, node, edge.target) in path_states:
                     continue
                 if edge.target.id <= node.id:
@@ -658,7 +659,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     )
                     video_filename = f"{edge_videos_dir}/edge_{node.id}_to_{edge.target.id}_{edge_type}_via_{path_str}.mp4"  # pylint: disable=line-too-long
 
-                raw_env.reset_from_state(path_state)  # type: ignore
+                raw_env.reset_from_state(path_state, debug=False)  # type: ignore
 
                 if debug and hasattr(raw_env, "render") and not self.training_mode:
                     try:

@@ -162,7 +162,7 @@ class ClutteredDrawerTAMPSystem(
         sim = ClutteredDrawerPyBulletBlocksEnv(
             scene_description=scene_description,
             render_mode=render_mode,
-            use_gui=False,
+            use_gui=True,
         )
         pybullet_skills = {
             s(sim, max_motion_planning_time=0.1)  # type:ignore[abstract]
