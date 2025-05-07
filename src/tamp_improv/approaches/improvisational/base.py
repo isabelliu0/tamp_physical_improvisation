@@ -585,7 +585,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self,
         obs: ObsType,
         info: dict[str, Any],
-        debug: bool = False,
+        debug: bool = True,
     ) -> None:
         """Compute edge costs considering the path taken to reach each node.
 
@@ -638,9 +638,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     continue
 
                 # # DEBUG: Envisioned plan for cluttered drawer env
-                # envisioned_plan = [(0, 1), (1, 8), (8, 28), (28, 79), (79, 147), (147, 237)]  # pylint: disable=line-too-long
-                # if not (node.id, edge.target.id) in envisioned_plan:
-                #     continue
+                envisioned_plan = [(0, 1), (1, 8), (8, 28), (28, 79), (79, 147), (147, 237)]  # pylint: disable=line-too-long
+                if not (node.id, edge.target.id) in envisioned_plan:
+                    continue
 
                 # # DEBUG: Envisioned plan for clear and place env (4 blocks)
                 # envisioned_plan = [(0, 2), (2, 5), (5, 8), (8, 15), (15, 26), (26, 52), (52, 94), (94, 199), (199, 331), (331, 603), (0, 1), (1, 331)]    # pylint: disable=line-too-long
