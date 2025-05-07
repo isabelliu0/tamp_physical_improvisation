@@ -13,9 +13,9 @@ from pybullet_blocks.envs.cluttered_drawer_env import (
     ClutteredDrawerPyBulletBlocksEnv,
     ClutteredDrawerSceneDescription,
 )
-from pybullet_blocks.planning_models.action import OPERATORS, SKILLS
+from pybullet_blocks.planning_models.action import OPERATORS_DRAWER, SKILLS_DRAWER
 from pybullet_blocks.planning_models.perception import (
-    PREDICATES,
+    DRAWER_PREDICATES,
     TYPES,
     ClutteredDrawerBlocksPerceiver,
 )
@@ -36,11 +36,11 @@ class ClutteredDrawerPredicates:
 
     def __getitem__(self, key: str) -> Any:
         """Get predicate by name."""
-        return next(p for p in PREDICATES if p.name == key)
+        return next(p for p in DRAWER_PREDICATES if p.name == key)
 
     def as_set(self) -> set[Predicate]:
         """Convert to set of predicates."""
-        return set(PREDICATES)
+        return set(DRAWER_PREDICATES)
 
 
 class BaseClutteredDrawerTAMPSystem(BaseTAMPSystem[GraphInstance, NDArray[np.float32]]):
@@ -99,7 +99,7 @@ class BaseClutteredDrawerTAMPSystem(BaseTAMPSystem[GraphInstance, NDArray[np.flo
         )
         pybullet_skills = {
             s(sim, max_motion_planning_time=0.1)  # type:ignore[abstract]
-            for s in SKILLS
+            for s in SKILLS_DRAWER
         }
         skills: set[Skill[GraphInstance, NDArray[np.float32]]] = cast(
             set[Skill[GraphInstance, NDArray[np.float32]]], pybullet_skills
@@ -110,7 +110,7 @@ class BaseClutteredDrawerTAMPSystem(BaseTAMPSystem[GraphInstance, NDArray[np.flo
             PlanningComponents(
                 types=set(TYPES),
                 predicate_container=predicates,
-                operators=set(OPERATORS),
+                operators=set(OPERATORS_DRAWER),
                 skills=skills,
                 perceiver=perceiver,
             ),
@@ -166,7 +166,7 @@ class ClutteredDrawerTAMPSystem(
         )
         pybullet_skills = {
             s(sim, max_motion_planning_time=0.1)  # type:ignore[abstract]
-            for s in SKILLS
+            for s in SKILLS_DRAWER
         }
         skills: set[Skill[GraphInstance, NDArray[np.float32]]] = cast(
             set[Skill[GraphInstance, NDArray[np.float32]]], pybullet_skills
@@ -177,7 +177,7 @@ class ClutteredDrawerTAMPSystem(
             PlanningComponents(
                 types=set(TYPES),
                 predicate_container=predicates,
-                operators=set(OPERATORS),
+                operators=set(OPERATORS_DRAWER),
                 skills=skills,
                 perceiver=perceiver,
             ),
