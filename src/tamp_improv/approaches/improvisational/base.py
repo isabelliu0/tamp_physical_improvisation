@@ -452,8 +452,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     # Create new node and edge
                     # DEBUG: To get the desired node id in the graph by looking at op
                     # Instead of Atoms
-                    push_node_id = len(graph.nodes)
-                    current_node_id = current_node.id
+                    # push_node_id = len(graph.nodes)
+                    # current_node_id = current_node.id
                     next_node = graph.add_node(next_atoms)
                     visited_states[next_atoms_frozen] = next_node
                     graph.add_edge(current_node, next_node, op)
@@ -589,7 +589,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self,
         obs: ObsType,
         info: dict[str, Any],
-        debug: bool = True,
+        debug: bool = False,
     ) -> None:
         """Compute edge costs considering the path taken to reach each node.
 
@@ -642,9 +642,12 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     continue
 
                 # # DEBUG: Envisioned plan for cluttered drawer env
-                envisioned_plan = [(0, 3), (3, 7), (7, 14), (14, 22), (22, 28), (28, 31), (31, 34), (34, 35)]  # pylint: disable=line-too-long
-                if not (node.id, edge.target.id) in envisioned_plan:
-                    continue
+                # 1. C->D->B->T
+                # envisioned_plan = [(0, 3), (3, 7), (7, 14), (14, 22), (22, 28), (28, 31), (31, 34), (34, 35)]  # pylint: disable=line-too-long
+                # 2. B->C->T
+                # envisioned_plan = [(0, 1), (1, 5), (5, 10), (10, 19), (19, 24), (24, 30)]
+                # if not (node.id, edge.target.id) in envisioned_plan:
+                #     continue
 
                 # # DEBUG: Envisioned plan for clear and place env (4 blocks)
                 # envisioned_plan = [(0, 2), (2, 5), (5, 8), (8, 15), (15, 26), (26, 52), (52, 94), (94, 199), (199, 331), (331, 603), (0, 1), (1, 331)]    # pylint: disable=line-too-long
@@ -727,10 +730,10 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 curr_raw_obs = path_state
                 curr_aug_obs = aug_obs
                 frame_counter = 0
-                frame = raw_env.render()
-                iio.imwrite(
-                    f"{output_dir}/frame_{frame_counter:06d}.png", frame
-                )
+                # frame = raw_env.render()
+                # iio.imwrite(
+                #     f"{output_dir}/frame_{frame_counter:06d}.png", frame
+                # )
                 is_success = False
                 for _ in range(self._max_skill_steps):
                     act = skill.get_action(curr_aug_obs)
@@ -741,10 +744,10 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     curr_raw_obs = next_raw_obs
                     atoms = self.system.perceiver.step(curr_raw_obs)
                     frame_counter += 1
-                    frame = raw_env.render()
-                    iio.imwrite(
-                        f"{output_dir}/frame_{frame_counter:06d}.png", frame
-                    )
+                    # frame = raw_env.render()
+                    # iio.imwrite(
+                    #     f"{output_dir}/frame_{frame_counter:06d}.png", frame
+                    # )
 
                     if debug and hasattr(raw_env, "render") and not self.training_mode:
                         frames.append(raw_env.render())
