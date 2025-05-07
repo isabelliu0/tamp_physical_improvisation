@@ -411,7 +411,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         visited_states = {frozenset(init_atoms): initial_node}
         queue = deque([(initial_node, 0)])  # Queue for BFS: [(node, depth)]
         node_count = 0
-        max_nodes = 605 #3000
+        max_nodes = 605  # 3000
         print(f"Building planning graph with max {max_nodes} nodes...")
 
         # Breadth-first search to build the graph
