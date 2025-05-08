@@ -366,6 +366,13 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         if not self._current_skill:
             raise TaskThenMotionPlanningFailure("No current skill")
 
+        try:
+            action = self._current_skill.get_action(obs)
+            if action is None:
+                print(f"No action returned by skill {self._current_skill}")
+        except AssertionError as e:
+            print(f"Assertion error in skill {self._current_skill}: {e}")
+            action = None
         return ApproachStepResult(action=self._current_skill.get_action(obs))
 
     def _create_task_plan(
