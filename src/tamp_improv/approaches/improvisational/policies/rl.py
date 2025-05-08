@@ -8,6 +8,7 @@ import numpy as np
 import torch
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
+from torch import Tensor
 
 from tamp_improv.approaches.improvisational.policies.base import (
     ActType,
@@ -280,7 +281,7 @@ class RLPolicy(Policy[ObsType, ActType]):
 
         obs_tensor = self.device_ctx(obs)
         obs_cpu = (
-        obs_tensor.cpu() if torch.is_tensor(obs_tensor) else obs_tensor # type: ignore
+            obs_tensor.cpu() if isinstance(obs_tensor, Tensor) else obs_tensor
         )  # move to CPU for stable_baselines3
         obs_numpy = self.device_ctx.numpy(obs_cpu)
 
