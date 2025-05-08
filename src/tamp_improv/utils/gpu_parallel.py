@@ -76,9 +76,7 @@ class GPUParallelTrainer:
                     policy.config.device = device
 
                 # Train the policy
-                result = train_function(
-                    policy, env, train_data, policy_key=policy_key, **train_kwargs
-                )
+                result = train_function(policy, env, train_data, policy_key=policy_key)
                 results[policy_key] = result
         else:
             # Parallel training
@@ -134,9 +132,7 @@ def _train_policy_process(
 
         # Train the policy
         print(f"Process for {policy_key} starting training on {device}")
-        result = train_function(
-            policy, env, train_data, policy_key=policy_key, **train_kwargs
-        )
+        result = train_function(policy, env, train_data, policy_key=policy_key)
 
         # Save the model directly (don't use the policy.save method)
         save_path = None
