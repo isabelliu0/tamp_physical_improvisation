@@ -18,7 +18,7 @@ def test_pure_rl_blocks2d():
         seed=42,
         num_episodes=1,
         max_steps=100,
-        render=True,
+        render=False,
         record_training=False,
         training_record_interval=100,
         device="cuda" if torch.cuda.is_available() else "cpu",
