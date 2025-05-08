@@ -280,7 +280,7 @@ class RLPolicy(Policy[ObsType, ActType]):
 
         obs_tensor = self.device_ctx(obs)
         obs_cpu = (
-            obs_tensor.cpu() if torch.is_tensor(obs_tensor) else obs_tensor
+            obs_tensor.cpu() if torch.is_tensor(obs_tensor) else obs_tensor  # type: ignore
         )  # move to CPU for stable_baselines3
         obs_numpy = self.device_ctx.numpy(obs_cpu)
 
