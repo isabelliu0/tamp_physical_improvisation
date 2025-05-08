@@ -61,7 +61,7 @@ class BaseClutteredDrawerTAMPSystem(BaseTAMPSystem[GraphInstance, NDArray[np.flo
     def _create_env(self) -> gym.Env:
         """Create base environment."""
         scene_description = ClutteredDrawerSceneDescription(
-            num_drawer_blocks=3,
+            num_drawer_blocks=4,
         )
         return ClutteredDrawerPyBulletBlocksEnv(
             scene_description=scene_description,
@@ -157,7 +157,7 @@ class ClutteredDrawerTAMPSystem(
     ) -> ClutteredDrawerTAMPSystem:
         """Factory method for creating system with default components."""
         scene_description = ClutteredDrawerSceneDescription(
-            num_drawer_blocks=3,
+            num_drawer_blocks=4,
         )
         sim = ClutteredDrawerPyBulletBlocksEnv(
             scene_description=scene_description,
