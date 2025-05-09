@@ -543,7 +543,7 @@ def identify_promising_shortcuts_with_rollouts(
         )
 
         # # DEBUG:
-        # if source_node_id != 0 and source_node_id != 1:
+        # if source_node_id != 0:
         #     continue
 
         # Calculate rollouts per state to maintain roughly the same total
@@ -589,7 +589,7 @@ def identify_promising_shortcuts_with_rollouts(
                             continue
 
                         # # DEBUG:
-                        # if target_node.id != 52 and target_node.id != 79:
+                        # if target_node.id != 3:
                         #     continue
 
                         # Note: no need to stop this rollout when we reach a node

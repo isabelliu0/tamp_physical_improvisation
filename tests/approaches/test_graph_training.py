@@ -30,6 +30,7 @@ from tamp_improv.benchmarks.pybullet_clear_and_place import ClearAndPlaceTAMPSys
 from tamp_improv.benchmarks.pybullet_clear_and_place_graph import (
     GraphClearAndPlaceTAMPSystem,
 )
+from tamp_improv.benchmarks.pybullet_cluttered_drawer import ClutteredDrawerTAMPSystem
 
 
 def run_multi_seed_experiment(system_cls, use_context_wrapper, seeds):
@@ -490,6 +491,78 @@ def test_multi_rl_pybullet_loaded(system_cls=GraphClearAndPlaceTAMPSystem):
     print(f"Success Rate: {metrics.success_rate:.2%}")
     print(f"Average Episode Length: {metrics.avg_episode_length:.2f}")
     print(f"Average Reward: {metrics.avg_reward:.2f}")
+
+
+@pytest.mark.skip("Takes too long to run.")
+@pytest.mark.parametrize(
+    "system_cls,use_context_wrapper",
+    [(ClutteredDrawerTAMPSystem, False)],
+)
+def test_multi_rl_cluttered_drawer_pipeline(system_cls, use_context_wrapper):
+    """Test the multi-policy RL training and evaluation pipeline."""
+    print("\n=== Testing Multi-Policy RL Pipeline ===")
+
+    # Configuration
+    config = TrainingConfig(
+        seed=42,
+        num_episodes=1,
+        max_steps=300,
+        max_training_steps_per_shortcut=100,
+        collect_episodes=1,
+        episodes_per_scenario=3000,
+        force_collect=True,
+        render=True,
+        record_training=False,
+        training_record_interval=100,
+        training_data_dir="training_data/graph_training_data",
+        save_dir=f"trained_policies/multi_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
+        batch_size=16,
+        max_atom_size=14,
+        action_scale=0.015,
+    )
+
+    # RL configuration
+    rl_config = RLConfig(
+        learning_rate=3e-4,
+        batch_size=16,
+        n_epochs=10,
+        gamma=0.99,
+        ent_coef=0.01,
+        device="cuda" if torch.cuda.is_available() else "cpu",
+    )
+
+    print("\n1. Creating system...")
+    system = system_cls.create_default(
+        seed=config.seed, render_mode="rgb_array" if config.render else None
+    )
+
+    print("\n2. Training and evaluating policy...")
+
+    # Define policy factory
+    def policy_factory(seed: int) -> MultiRLPolicy:
+        return MultiRLPolicy(seed=seed, config=rl_config)
+
+    # Train and evaluate with graph-based collection
+    metrics = train_and_evaluate(
+        system,
+        policy_factory,
+        config,
+        policy_name=f"MultiRL{'_Context' if use_context_wrapper else ''}",
+        use_context_wrapper=use_context_wrapper,
+        use_random_rollouts=True,
+        num_rollouts_per_node=1000,
+        max_steps_per_rollout=300,
+        shortcut_success_threshold=1,
+    )
+
+    print("\n=== Results ===")
+    print(f"Success Rate: {metrics.success_rate:.2%}")
+    print(f"Average Episode Length: {metrics.avg_episode_length:.2f}")
+    print(f"Average Reward: {metrics.avg_reward:.2f}")
+    print(f"Training Time: {metrics.training_time:.2f} seconds")
+    print(f"Total Time: {metrics.total_time:.2f} seconds")
+
+    return metrics
 
 
 @pytest.mark.skip()
