@@ -8,6 +8,7 @@ import numpy as np
 import torch
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
+from torch import Tensor
 
 from tamp_improv.approaches.improvisational.policies.base import (
     ActType,
@@ -234,16 +235,6 @@ class RLPolicy(Policy[ObsType, ActType]):
         # Call base class train to initialize and configure env
         super().train(env, train_data)
 
-        print(f"\nStarting RL training on {len(train_data.states)} scenarios")
-        print(f"\nStarting RL training on device: {self.device_ctx.device}")
-        if self.device_ctx.device.type == "cuda":
-            print(
-                f"  CUDA device: {torch.cuda.get_device_name(self.device_ctx.device)}"
-            )
-            print(
-                f"  CUDA memory before training: {torch.cuda.memory_allocated(self.device_ctx.device) / 1e9:.2f} GB"  # pylint: disable=line-too-long
-            )
-
         # Initialize and train PPO
         self.model = PPO(
             "MlpPolicy",
@@ -290,7 +281,7 @@ class RLPolicy(Policy[ObsType, ActType]):
 
         obs_tensor = self.device_ctx(obs)
         obs_cpu = (
-            obs_tensor.cpu() if torch.is_tensor(obs_tensor) else obs_tensor
+            obs_tensor.cpu() if isinstance(obs_tensor, Tensor) else obs_tensor
         )  # move to CPU for stable_baselines3
         obs_numpy = self.device_ctx.numpy(obs_cpu)
 

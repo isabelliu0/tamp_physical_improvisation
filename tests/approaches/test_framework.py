@@ -12,8 +12,10 @@ from tamp_improv.approaches.improvisational.training import (
     TrainingConfig,
     train_and_evaluate,
 )
-from tamp_improv.benchmarks.blocks2d import Blocks2DTAMPSystem
-from tamp_improv.benchmarks.pybullet_clear_and_place import ClearAndPlaceTAMPSystem
+
+# from tamp_improv.benchmarks.blocks2d import Blocks2DTAMPSystem
+# from tamp_improv.benchmarks.pybullet_clear_and_place import ClearAndPlaceTAMPSystem
+from tamp_improv.benchmarks.pybullet_cluttered_drawer import ClutteredDrawerTAMPSystem
 
 
 @pytest.fixture(scope="function", name="training_config")
@@ -27,12 +29,12 @@ def _get_training_config():
     )
 
 
-@pytest.mark.skip("Debugging...")
 @pytest.mark.parametrize(
     "system_cls,policy_cls,env_name",
     [
-        (Blocks2DTAMPSystem, PushingPolicy, "blocks2d"),
-        (ClearAndPlaceTAMPSystem, PybulletPushingPolicy, "pybullet"),
+        # (Blocks2DTAMPSystem, PushingPolicy, "blocks2d"),
+        # (ClearAndPlaceTAMPSystem, PybulletPushingPolicy, "pybullet"),
+        (ClutteredDrawerTAMPSystem, PybulletPushingPolicy, "cluttered_drawer"),
     ],
 )
 def test_framework_with_hardcoded_policy(

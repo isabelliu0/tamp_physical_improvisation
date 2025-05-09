@@ -6,28 +6,23 @@ import numpy as np
 import torch
 
 
-def __init__(self, device_name: str = "cuda"):
-    self.device = get_device(device_name)
-    print(f"DeviceContext initialized with device: {self.device}")
-    if self.device.type == "cuda":
-        print(f"  CUDA device: {torch.cuda.get_device_name(self.device)}")
-        print(
-            f"  CUDA memory allocated: {torch.cuda.memory_allocated(self.device) / 1e9:.2f} GB"  # pylint: disable=line-too-long
-        )
-        print(
-            f"  CUDA memory cached: {torch.cuda.memory_reserved(self.device) / 1e9:.2f} GB"  # pylint: disable=line-too-long
-        )
-
-
 def get_device(device_name: str = "cuda") -> torch.device:
     """Get PyTorch device."""
-    if device_name == "cuda" and torch.cuda.is_available():
-        return torch.device("cuda")
+    if device_name.startswith("cuda"):
+        if torch.cuda.is_available():
+            # Handle specific GPU index if provided (e.g., "cuda:1")
+            if ":" in device_name:
+                index = int(device_name.split(":")[1])
+                if index < torch.cuda.device_count():
+                    return torch.device(device_name)
+                return torch.device("cuda:0")
+            return torch.device("cuda")
     return torch.device("cpu")
 
 
 def set_torch_seed(seed: int) -> None:
     """Set all PyTorch random seeds."""
+    np.random.seed(seed)
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed(seed)
@@ -71,3 +66,31 @@ class DeviceContext:
     def numpy(self, data: Any) -> np.ndarray:
         """Convert data back to numpy."""
         return to_numpy(data)
+
+
+def get_gpu_memory_info() -> Union[str, list[dict[str, Any]]]:
+    """Get memory information for all GPUs."""
+    if not torch.cuda.is_available():
+        return "CUDA not available"
+
+    memory_info = []
+    for i in range(torch.cuda.device_count()):
+        device = torch.device(f"cuda:{i}")
+        allocated = torch.cuda.memory_allocated(device) / 1e9  # GB
+        reserved = torch.cuda.memory_reserved(device) / 1e9  # GB
+        properties = torch.cuda.get_device_properties(i)
+        total = properties.total_memory / 1e9  # GB
+        name = properties.name
+
+        memory_info.append(
+            {
+                "device_index": i,
+                "name": name,
+                "total_memory": total,
+                "allocated_memory": allocated,
+                "reserved_memory": reserved,
+                "free_memory": total - allocated,
+            }
+        )
+
+    return memory_info

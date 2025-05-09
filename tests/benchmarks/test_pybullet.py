@@ -2,13 +2,19 @@
 
 from task_then_motion_planning.planning import TaskThenMotionPlanner
 
-from tamp_improv.benchmarks.pybullet_clear_and_place import ClearAndPlaceTAMPSystem
+from tamp_improv.benchmarks.pybullet_clear_and_place_graph import (
+    GraphClearAndPlaceTAMPSystem,
+)
 
 
 def test_pybullet():
     """Test base TAMP functionality of pybullet environment."""
     # Create system
-    system = ClearAndPlaceTAMPSystem.create_default(seed=124, render_mode=None)
+    system = GraphClearAndPlaceTAMPSystem.create_default(
+        seed=124, render_mode="rgb_array", num_obstacle_blocks=4
+    )
+    # from gymnasium.wrappers import RecordVideo
+    # system.env = RecordVideo(system.env, "videos/clear-and-place-ttmp-test")
 
     # Create planner
     planner = TaskThenMotionPlanner(

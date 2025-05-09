@@ -67,12 +67,12 @@ class PybulletPushingPolicy(Policy[NDArray[np.float32], NDArray[np.float32]]):
     def initialize(self, env: gym.Env) -> None:
         self._wrapped_env = env
         base_env = env
-        while hasattr(base_env, "env") and not isinstance(
-            base_env, ClearAndPlacePyBulletBlocksEnv
-        ):
-            base_env = base_env.env
-        assert isinstance(base_env, ClearAndPlacePyBulletBlocksEnv)
-        self._env = base_env
+        # while hasattr(base_env, "env") and not isinstance(
+        #     base_env, ClearAndPlacePyBulletBlocksEnv
+        # ):
+        #     base_env = base_env.env
+        # assert isinstance(base_env, ClearAndPlacePyBulletBlocksEnv)
+        self._env = base_env  # type: ignore[assignment]
         self._plan = []
         self._current_step = 0
         self._push_stage = 0
