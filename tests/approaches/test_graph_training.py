@@ -493,7 +493,7 @@ def test_multi_rl_pybullet_loaded(system_cls=GraphClearAndPlaceTAMPSystem):
     print(f"Average Reward: {metrics.avg_reward:.2f}")
 
 
-@pytest.mark.skip("Takes too long to run.")
+# @pytest.mark.skip("Takes too long to run.")
 @pytest.mark.parametrize(
     "system_cls,use_context_wrapper",
     [(ClutteredDrawerTAMPSystem, False)],
