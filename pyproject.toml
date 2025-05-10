@@ -23,7 +23,7 @@ dependencies = [
    "pybullet_helpers@git+https://github.com/tomsilver/pybullet-helpers.git",
    "gymnasium>=1.0.0",
    "moviepy",
-   "stable_baselines3>=2.5.0",
+   "stable_baselines3==2.4.0",
    "types-tabulate",
 ]
 
