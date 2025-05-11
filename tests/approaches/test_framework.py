@@ -24,7 +24,7 @@ def _get_training_config():
     return TrainingConfig(
         seed=42,
         num_episodes=1,
-        max_steps=300,
+        max_steps=1000,
         render=True,
     )
 
