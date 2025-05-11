@@ -373,7 +373,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         except AssertionError as e:
             print(f"Assertion error in skill {self._current_skill}: {e}")
             action = None
-        return ApproachStepResult(action=self._current_skill.get_action(obs))
+        return ApproachStepResult(action=action)
 
     def _create_task_plan(
         self,
@@ -459,8 +459,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     # Create new node and edge
                     # DEBUG: To get the desired node id in the graph by looking at op
                     # Instead of Atoms
-                    push_node_id = len(graph.nodes)
-                    current_node_id = current_node.id
+                    # push_node_id = len(graph.nodes)
+                    # current_node_id = current_node.id
                     next_node = graph.add_node(next_atoms)
                     visited_states[next_atoms_frozen] = next_node
                     graph.add_edge(current_node, next_node, op)
@@ -596,7 +596,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self,
         obs: ObsType,
         info: dict[str, Any],
-        debug: bool = True,
+        debug: bool = False,
     ) -> None:
         """Compute edge costs considering the path taken to reach each node.
 
@@ -650,9 +650,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
                 # # DEBUG: Envisioned plan for cluttered drawer env
                 # C->B->T
-                envisioned_plan = [(0, 1), (1, 6), (6, 21), (21, 57), (57, 119), (119, 208), (208, 342), (342, 515), (515, 694), (0, 3), (3, 15)] # pylint: disable=line-too-long
-                if not (node.id, edge.target.id) in envisioned_plan:
-                    continue
+                # envisioned_plan = [(0, 1), (1, 6), (6, 21), (21, 57), (57, 119), (119, 208), (208, 342), (342, 515), (515, 694), (0, 3), (3, 15)] # pylint: disable=line-too-long
+                # if not (node.id, edge.target.id) in envisioned_plan:
+                #     continue
 
                 # # DEBUG: Envisioned plan for clear and place env (4 blocks)
                 # envisioned_plan = [(0, 2), (2, 5), (5, 8), (8, 15), (15, 26), (26, 52), (52, 94), (94, 199), (199, 331), (331, 603), (0, 1), (1, 331)]    # pylint: disable=line-too-long
