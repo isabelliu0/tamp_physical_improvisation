@@ -418,7 +418,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         visited_states = {frozenset(init_atoms): initial_node}
         queue = deque([(initial_node, 0)])  # Queue for BFS: [(node, depth)]
         node_count = 0
-        max_nodes = 1000
+        max_nodes = 2000
         print(f"Building planning graph with max {max_nodes} nodes...")
 
         # Breadth-first search to build the graph
@@ -598,7 +598,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self,
         obs: ObsType,
         info: dict[str, Any],
-        debug: bool = True,
+        debug: bool = False,
     ) -> None:
         """Compute edge costs considering the path taken to reach each node.
 
@@ -655,6 +655,12 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 envisioned_plan = [(0, 1), (1, 10), (10, 33), (33, 61), (61, 119), (119, 210), (210, 310), (310, 474), (474, 632), (1, 33)] # pylint: disable=line-too-long
                 if not (node.id, edge.target.id) in envisioned_plan:
                     continue
+
+                # B->C->D->E->T
+                # Node 1215 is a promising short cut
+                # envisioned_plan = [(0, 1), (1, 10), (10, 33), (33, 61), (61, 119), (119, 210), (210, 332), (332, 500), (500, 665), (665, 849), (849, 1068), (1068, 1215), (1215, 1293), (1293, 474), (474, 632), (1, 1215)] # pylint: disable=line-too-long
+                # if not (node.id, edge.target.id) in envisioned_plan:
+                #     continue
 
                 # # DEBUG: Envisioned plan for clear and place env (4 blocks)
                 # envisioned_plan = [(0, 2), (2, 5), (5, 8), (8, 15), (15, 26), (26, 52), (52, 94), (94, 199), (199, 331), (331, 603), (0, 1), (1, 331)]    # pylint: disable=line-too-long
