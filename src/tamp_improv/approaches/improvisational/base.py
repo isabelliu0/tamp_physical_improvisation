@@ -418,7 +418,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         visited_states = {frozenset(init_atoms): initial_node}
         queue = deque([(initial_node, 0)])  # Queue for BFS: [(node, depth)]
         node_count = 0
-        max_nodes = 605
+        max_nodes = 1000
         print(f"Building planning graph with max {max_nodes} nodes...")
 
         # Breadth-first search to build the graph
@@ -459,12 +459,13 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     # Create new node and edge
                     # DEBUG: To get the desired node id in the graph by looking at op
                     # Instead of Atoms
-                    push_node_id = len(graph.nodes)
-                    current_node_id = current_node.id
                     next_node = graph.add_node(next_atoms)
                     visited_states[next_atoms_frozen] = next_node
                     graph.add_edge(current_node, next_node, op)
                     queue.append((next_node, depth + 1))
+                current_node_id = current_node.id
+                push_node_id = next_node.id
+                print("hello")
 
         print(
             f"Planning graph with {len(graph.nodes)} nodes and {len(graph.edges)} edges"
@@ -597,7 +598,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self,
         obs: ObsType,
         info: dict[str, Any],
-        debug: bool = False,
+        debug: bool = True,
     ) -> None:
         """Compute edge costs considering the path taken to reach each node.
 
@@ -650,8 +651,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     continue
 
                 # # DEBUG: Envisioned plan for cluttered drawer env
-                # C->B->T
-                envisioned_plan = [(0, 1), (1, 10), (10, 33), (33, 57), (57, 119), (119, 208), (208, 342), (342, 515), (515, 694), (0, 3), (3, 15)] # pylint: disable=line-too-long
+                # B->C->T
+                envisioned_plan = [(0, 1), (1, 10), (10, 33), (33, 61), (61, 119), (119, 210), (210, 310), (310, 474), (474, 632), (1, 33)] # pylint: disable=line-too-long
                 if not (node.id, edge.target.id) in envisioned_plan:
                     continue
 
