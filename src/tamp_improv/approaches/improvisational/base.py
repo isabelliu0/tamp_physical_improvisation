@@ -463,9 +463,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     visited_states[next_atoms_frozen] = next_node
                     graph.add_edge(current_node, next_node, op)
                     queue.append((next_node, depth + 1))
-                current_node_id = current_node.id
-                push_node_id = next_node.id
-                print("hello")
+                # current_node_id = current_node.id
+                # push_node_id = next_node.id
+                # print("hello")
 
         print(
             f"Planning graph with {len(graph.nodes)} nodes and {len(graph.edges)} edges"
@@ -490,9 +490,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             # Find valid groundings using parameter types
             valid_groundings = self._find_valid_groundings(lifted_op, objects)
 
-            for i, grounding in enumerate(valid_groundings):
+            for grounding in valid_groundings:
                 ground_op = lifted_op.ground(grounding)
-
 
                 # Check if preconditions are satisfied
                 if ground_op.preconditions.issubset(current_atoms):
@@ -652,8 +651,19 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
                 # # DEBUG: Envisioned plan for cluttered drawer env
                 # B->C->T
-                envisioned_plan = [(0, 1), (1, 10), (10, 33), (33, 61), (61, 119), (119, 210), (210, 310), (310, 474), (474, 632), (1, 33)] # pylint: disable=line-too-long
-                if not (node.id, edge.target.id) in envisioned_plan:
+                envisioned_plan = [
+                    (0, 1),
+                    (1, 10),
+                    (10, 33),
+                    (33, 61),
+                    (61, 119),
+                    (119, 210),
+                    (210, 310),
+                    (310, 474),
+                    (474, 632),
+                    (1, 1215),
+                ]  # pylint: disable=line-too-long
+                if (node.id, edge.target.id) not in envisioned_plan:
                     continue
 
                 # B->C->D->E->T
