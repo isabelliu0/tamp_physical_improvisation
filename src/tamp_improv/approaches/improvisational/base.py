@@ -651,20 +651,20 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
                 # # DEBUG: Envisioned plan for cluttered drawer env
                 # # B->C->T
-                # envisioned_plan = [
-                #     (0, 1),
-                #     (1, 10),
-                #     (10, 33),
-                #     (33, 61),
-                #     (61, 119),
-                #     (119, 210),
-                #     (210, 310),
-                #     (310, 474),
-                #     (474, 632),
-                #     (1, 1215),
-                # ]  # pylint: disable=line-too-long
-                # if (node.id, edge.target.id) not in envisioned_plan:
-                #     continue
+                envisioned_plan = [
+                    (0, 1),
+                    (1, 10),
+                    (10, 33),
+                    (33, 61),
+                    (61, 119),
+                    (119, 210),
+                    (210, 310),
+                    (310, 474),
+                    (474, 632),
+                    (1, 1215),
+                ]  # pylint: disable=line-too-long
+                if (node.id, edge.target.id) not in envisioned_plan:
+                    continue
 
                 # B->C->D->E->T
                 # Node 1215 is a promising short cut
