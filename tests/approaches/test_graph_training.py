@@ -493,7 +493,7 @@ def test_multi_rl_pybullet_loaded(system_cls=GraphClearAndPlaceTAMPSystem):
     print(f"Average Reward: {metrics.avg_reward:.2f}")
 
 
-@pytest.mark.skip("Takes too long to run.")
+# @pytest.mark.skip("Takes too long to run.")
 @pytest.mark.parametrize(
     "system_cls,use_context_wrapper",
     [(ClutteredDrawerTAMPSystem, False)],
@@ -512,7 +512,7 @@ def test_multi_rl_cluttered_drawer_pipeline(system_cls, use_context_wrapper):
         episodes_per_scenario=3000,
         force_collect=True,
         render=True,
-        record_training=False,
+        record_training=True,
         training_record_interval=100,
         training_data_dir="training_data/graph_training_data",
         save_dir=f"trained_policies/multi_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long

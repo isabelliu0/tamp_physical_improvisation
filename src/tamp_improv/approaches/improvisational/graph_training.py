@@ -543,7 +543,9 @@ def identify_promising_shortcuts_with_rollouts(
         )
 
         # # DEBUG:
-        if source_node_id != 1:
+        # 1 2 4 5 are after reaching each blocks with others unmoved
+        # 61, 62, 95, 96 are after reaching each blocks with the opposite block moved
+        if source_node_id not in [1, 2, 4, 5, 61, 62, 95, 96]:
             continue
 
         # Calculate rollouts per state to maintain roughly the same total
@@ -596,8 +598,8 @@ def identify_promising_shortcuts_with_rollouts(
                             continue
 
                         # # DEBUG:
-                        if target_node.id != 33:
-                            continue
+                        # if target_node.id != 33:
+                        #     continue
 
                         # Note: no need to stop this rollout when we reach a node
                         # since we want to explore all reachable nodes
