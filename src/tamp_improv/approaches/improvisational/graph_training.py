@@ -543,7 +543,7 @@ def identify_promising_shortcuts_with_rollouts(
         )
 
         # # DEBUG:
-        if source_node_id != 3:
+        if source_node_id != 1:
             continue
 
         # Calculate rollouts per state to maintain roughly the same total
@@ -561,7 +561,14 @@ def identify_promising_shortcuts_with_rollouts(
         for _, source_state in enumerate(source_states):
             for rollout_idx in range(rollouts_per_state):
                 if rollout_idx > 0 and rollout_idx % 100 == 0:
-                    print(f"  Completed {rollout_idx}/{rollouts_per_state} rollouts")
+                    print(f"Completed {rollout_idx}/{rollouts_per_state} rollouts")
+                    print(f"Current Nodes are reached from node {source_node_id}:")
+                    for target_id, count in sorted(
+                        reached_nodes.items(), key=lambda x: -x[1]
+                    ):
+                        print(
+                            f"→Node {target_id}: {count}/{num_rollouts_per_node} times"
+                        )
 
                 # Reset the environment to source state
                 raw_env.reset_from_state(source_state)
@@ -589,7 +596,7 @@ def identify_promising_shortcuts_with_rollouts(
                             continue
 
                         # # DEBUG:
-                        if target_node.id != 15:
+                        if target_node.id != 33:
                             continue
 
                         # Note: no need to stop this rollout when we reach a node

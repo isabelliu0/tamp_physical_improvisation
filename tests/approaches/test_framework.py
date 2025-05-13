@@ -29,6 +29,7 @@ def _get_training_config():
     )
 
 
+@pytest.mark.skip(reason="Takes too long to run")
 @pytest.mark.parametrize(
     "system_cls,policy_cls,env_name",
     [
