@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, TypeVar
 
 import gymnasium as gym
+from gymnasium.wrappers import RecordVideo
 import numpy as np
 import torch
 from gymnasium.spaces import Box
@@ -153,8 +154,12 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
                 ):
                     for obj in atom.objects:
                         relevant_objects.add(obj.name)
-                if hasattr(env, "set_relevant_objects"):
-                    env.set_relevant_objects(relevant_objects)
+                if isinstance(env, RecordVideo):
+                    if hasattr(env.env, "set_relevant_objects"):
+                        env.env.set_relevant_objects(relevant_objects)
+                else:
+                    if hasattr(env, "set_relevant_objects"):
+                        env.set_relevant_objects(relevant_objects)
                 base_env = self._get_base_env(env)
 
                 # Wrap the environment to use the right observation space
