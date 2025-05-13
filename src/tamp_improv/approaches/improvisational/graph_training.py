@@ -542,9 +542,9 @@ def identify_promising_shortcuts_with_rollouts(
             f"\nPerforming {rollouts_per_state} rollouts for each of {len(source_states)} state(s) from node {source_node_id}"  # pylint: disable=line-too-long
         )
 
-        # # DEBUG:
-        # if source_node_id != 1:
-        #     continue
+        # DEBUG:
+        if source_node_id != 1 and source_node_id != 61:
+            continue
 
         # Calculate rollouts per state to maintain roughly the same total
         rollouts_per_state = max(1, num_rollouts_per_node // len(source_states))
@@ -595,9 +595,9 @@ def identify_promising_shortcuts_with_rollouts(
                         if has_direct_edge:
                             continue
 
-                        # # DEBUG:
-                        # if target_node.id != 1215:
-                        #     continue
+                        # DEBUG:
+                        if target_node.id != 33 and target_node.id != 210:
+                            continue
 
                         # Note: no need to stop this rollout when we reach a node
                         # since we want to explore all reachable nodes

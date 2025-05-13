@@ -262,30 +262,30 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
             self._current_substitution = {obj: obj for obj in relevant_objects}
             return key
 
-        # Try structural matching
-        for policy_key, pattern_info in self._policy_patterns.items():
-            transformed_train_atoms = set()
-            if "transformed_atoms" in pattern_info:
-                transformed_train_atoms = pattern_info["transformed_atoms"]
-            else:
-                for atom in pattern_info["added_atoms"]:
-                    transformed_train_atoms.add(self._transform_atom(atom, "ADD"))
-                for atom in pattern_info["deleted_atoms"]:
-                    transformed_train_atoms.add(self._transform_atom(atom, "DEL"))
+        # # Try structural matching
+        # for policy_key, pattern_info in self._policy_patterns.items():
+        #     transformed_train_atoms = set()
+        #     if "transformed_atoms" in pattern_info:
+        #         transformed_train_atoms = pattern_info["transformed_atoms"]
+        #     else:
+        #         for atom in pattern_info["added_atoms"]:
+        #             transformed_train_atoms.add(self._transform_atom(atom, "ADD"))
+        #         for atom in pattern_info["deleted_atoms"]:
+        #             transformed_train_atoms.add(self._transform_atom(atom, "DEL"))
 
-            # Check predicate subsets with transformed predicates
-            train_predicates = {atom.predicate.name for atom in transformed_train_atoms}
-            test_predicates = {atom.predicate.name for atom in transformed_test_atoms}
-            if not train_predicates.issubset(test_predicates):
-                continue
+        #     # Check predicate subsets with transformed predicates
+        #     train_predicates = {atom.predicate.name for atom in transformed_train_atoms}
+        #     test_predicates = {atom.predicate.name for atom in transformed_test_atoms}
+        #     if not train_predicates.issubset(test_predicates):
+        #         continue
 
-            # Find substitution
-            match_found, substitution = find_atom_substitution(
-                transformed_train_atoms, transformed_test_atoms, self.base_env
-            )
-            if match_found:
-                self._current_substitution = substitution
-                return policy_key
+        #     # Find substitution
+        #     match_found, substitution = find_atom_substitution(
+        #         transformed_train_atoms, transformed_test_atoms, self.base_env
+        #     )
+        #     if match_found:
+        #         self._current_substitution = substitution
+        #         return policy_key
 
         return None
 

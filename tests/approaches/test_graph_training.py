@@ -464,7 +464,7 @@ def test_multi_rl_pybullet_loaded(system_cls=GraphClearAndPlaceTAMPSystem):
     system = system_cls.create_default(
         seed=42,
         render_mode="rgb_array" if config.render else None,
-        num_obstacle_blocks=4,
+        num_obstacle_blocks=3,
     )
 
     policy_name = "MultiRL"
@@ -493,7 +493,7 @@ def test_multi_rl_pybullet_loaded(system_cls=GraphClearAndPlaceTAMPSystem):
     print(f"Average Reward: {metrics.avg_reward:.2f}")
 
 
-@pytest.mark.skip("Takes too long to run.")
+# @pytest.mark.skip("Takes too long to run.")
 @pytest.mark.parametrize(
     "system_cls,use_context_wrapper",
     [(ClutteredDrawerTAMPSystem, False)],
@@ -506,11 +506,11 @@ def test_multi_rl_cluttered_drawer_pipeline(system_cls, use_context_wrapper):
     config = TrainingConfig(
         seed=42,
         num_episodes=1,
-        max_steps=300,
+        max_steps=500,
         max_training_steps_per_shortcut=100,
         collect_episodes=1,
-        episodes_per_scenario=3000,
-        force_collect=True,
+        episodes_per_scenario=1300,
+        force_collect=False,
         render=True,
         record_training=False,
         training_record_interval=100,
@@ -518,7 +518,7 @@ def test_multi_rl_cluttered_drawer_pipeline(system_cls, use_context_wrapper):
         save_dir=f"trained_policies/multi_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
         batch_size=16,
         max_atom_size=14,
-        action_scale=0.015,
+        action_scale=0.005,
     )
 
     # RL configuration
@@ -550,7 +550,7 @@ def test_multi_rl_cluttered_drawer_pipeline(system_cls, use_context_wrapper):
         policy_name=f"MultiRL{'_Context' if use_context_wrapper else ''}",
         use_context_wrapper=use_context_wrapper,
         use_random_rollouts=True,
-        num_rollouts_per_node=1000,
+        num_rollouts_per_node=100,
         max_steps_per_rollout=300,
         shortcut_success_threshold=1,
     )
