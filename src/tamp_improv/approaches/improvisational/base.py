@@ -463,9 +463,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     visited_states[next_atoms_frozen] = next_node
                     graph.add_edge(current_node, next_node, op)
                     queue.append((next_node, depth + 1))
-                # current_node_id = current_node.id
-                # push_node_id = next_node.id
-                # print("hello")
+                current_node_id = current_node.id
+                push_node_id = next_node.id
+                print("hello")
 
         print(
             f"Planning graph with {len(graph.nodes)} nodes and {len(graph.edges)} edges"
@@ -661,7 +661,18 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     (210, 310),
                     (310, 474),
                     (474, 632),
-                    (1, 1215),
+                    (0, 2),
+                    (2, 14),
+                    (14, 42),
+                    (42, 62),
+                    (0, 4),
+                    (4, 18),
+                    (18, 48),
+                    (48, 95),
+                    (0, 5),
+                    (5, 19),
+                    (19, 49),
+                    (49, 96),
                 ]  # pylint: disable=line-too-long
                 if (node.id, edge.target.id) not in envisioned_plan:
                     continue
