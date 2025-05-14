@@ -542,8 +542,8 @@ def identify_promising_shortcuts_with_rollouts(
             f"\nPerforming {rollouts_per_state} rollouts for each of {len(source_states)} state(s) from node {source_node_id}"  # pylint: disable=line-too-long
         )
 
-        # # DEBUG:
-        if source_node_id != 1:
+        # DEBUG:
+        if source_node_id != 1 and source_node_id != 15:
             continue
 
         # Calculate rollouts per state to maintain roughly the same total
@@ -596,7 +596,7 @@ def identify_promising_shortcuts_with_rollouts(
                             continue
 
                         # # DEBUG:
-                        if target_node.id != 10:
+                        if target_node.id != 10 and target_node.id != 50:
                             continue
 
                         # Note: no need to stop this rollout when we reach a node

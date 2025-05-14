@@ -418,7 +418,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         visited_states = {frozenset(init_atoms): initial_node}
         queue = deque([(initial_node, 0)])  # Queue for BFS: [(node, depth)]
         node_count = 0
-        max_nodes = 2000
+        max_nodes = 1300
         print(f"Building planning graph with max {max_nodes} nodes...")
 
         # Breadth-first search to build the graph
@@ -597,7 +597,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self,
         obs: ObsType,
         info: dict[str, Any],
-        debug: bool = False,
+        debug: bool = True,
     ) -> None:
         """Compute edge costs considering the path taken to reach each node.
 
@@ -671,6 +671,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 # if not (node.id, edge.target.id) in envisioned_plan:
                 #     continue
 
+                # # DEBUG: Envisioned plan for clear and place env (3 blocks)
+                # envisioned_plan = [(0, 2), (2, 5), (5, 8), (8, 15), (15, 26), (26, 52), (52, 79), (79, 132), (0, 1), (1, 79)]    # pylint: disable=line-too-long
                 # # DEBUG: Envisioned plan for clear and place env (4 blocks)
                 # envisioned_plan = [(0, 2), (2, 5), (5, 8), (8, 15), (15, 26), (26, 52), (52, 94), (94, 199), (199, 331), (331, 603), (0, 1), (1, 331)]    # pylint: disable=line-too-long
                 # DEBUG: Envisioned plan for clear and place env (5 blocks)
@@ -807,6 +809,11 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                         curr_aug_obs = curr_raw_obs  # type: ignore[assignment]
 
                     num_steps += 1
+
+                    # # DEBUG:
+                    # if (node.id == 1 and edge.target.id == 33) or (node.id == 61 and edge.target.id == 210):
+                    #     print(f"Atoms not satisfied: {goal_atoms - atoms}")
+                    #     print(f"Additional atoms: {atoms - goal_atoms}")
 
                     if goal_atoms == atoms:
                         # Store the observed state for the target node

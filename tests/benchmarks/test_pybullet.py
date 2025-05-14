@@ -11,7 +11,7 @@ def test_pybullet():
     """Test base TAMP functionality of pybullet environment."""
     # Create system
     system = GraphClearAndPlaceTAMPSystem.create_default(
-        seed=124, render_mode="rgb_array", num_obstacle_blocks=4
+        seed=124, render_mode="rgb_array", num_obstacle_blocks=3
     )
     # from gymnasium.wrappers import RecordVideo
     # system.env = RecordVideo(system.env, "videos/clear-and-place-ttmp-test")

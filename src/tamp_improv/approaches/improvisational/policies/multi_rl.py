@@ -13,6 +13,7 @@ import gymnasium as gym
 import numpy as np
 import torch
 from gymnasium.spaces import Box
+from gymnasium.wrappers import RecordVideo
 from relational_structs import GroundAtom, Object, Predicate
 
 from tamp_improv.approaches.improvisational.policies.base import (
@@ -153,8 +154,12 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
                 ):
                     for obj in atom.objects:
                         relevant_objects.add(obj.name)
-                if hasattr(env, "set_relevant_objects"):
-                    env.set_relevant_objects(relevant_objects)
+                if isinstance(env, RecordVideo):
+                    if hasattr(env.env, "set_relevant_objects"):
+                        env.env.set_relevant_objects(relevant_objects)
+                else:
+                    if hasattr(env, "set_relevant_objects"):
+                        env.set_relevant_objects(relevant_objects)
                 base_env = self._get_base_env(env)
 
                 # Wrap the environment to use the right observation space
@@ -262,30 +267,30 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
             self._current_substitution = {obj: obj for obj in relevant_objects}
             return key
 
-        # Try structural matching
-        for policy_key, pattern_info in self._policy_patterns.items():
-            transformed_train_atoms = set()
-            if "transformed_atoms" in pattern_info:
-                transformed_train_atoms = pattern_info["transformed_atoms"]
-            else:
-                for atom in pattern_info["added_atoms"]:
-                    transformed_train_atoms.add(self._transform_atom(atom, "ADD"))
-                for atom in pattern_info["deleted_atoms"]:
-                    transformed_train_atoms.add(self._transform_atom(atom, "DEL"))
+        # # Try structural matching
+        # for policy_key, pattern_info in self._policy_patterns.items():
+        #     transformed_train_atoms = set()
+        #     if "transformed_atoms" in pattern_info:
+        #         transformed_train_atoms = pattern_info["transformed_atoms"]
+        #     else:
+        #         for atom in pattern_info["added_atoms"]:
+        #             transformed_train_atoms.add(self._transform_atom(atom, "ADD"))
+        #         for atom in pattern_info["deleted_atoms"]:
+        #             transformed_train_atoms.add(self._transform_atom(atom, "DEL"))
 
-            # Check predicate subsets with transformed predicates
-            train_predicates = {atom.predicate.name for atom in transformed_train_atoms}
-            test_predicates = {atom.predicate.name for atom in transformed_test_atoms}
-            if not train_predicates.issubset(test_predicates):
-                continue
+        #     # Check predicate subsets with transformed predicates
+        #     train_predicates = {atom.predicate.name for atom in transformed_train_atoms}
+        #     test_predicates = {atom.predicate.name for atom in transformed_test_atoms}
+        #     if not train_predicates.issubset(test_predicates):
+        #         continue
 
-            # Find substitution
-            match_found, substitution = find_atom_substitution(
-                transformed_train_atoms, transformed_test_atoms, self.base_env
-            )
-            if match_found:
-                self._current_substitution = substitution
-                return policy_key
+        #     # Find substitution
+        #     match_found, substitution = find_atom_substitution(
+        #         transformed_train_atoms, transformed_test_atoms, self.base_env
+        #     )
+        #     if match_found:
+        #         self._current_substitution = substitution
+        #         return policy_key
 
         return None
 

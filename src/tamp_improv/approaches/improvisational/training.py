@@ -226,7 +226,6 @@ def run_evaluation_episode(
         obs, reward, terminated, truncated, info = system.env.step(step_result.action)
         total_reward += float(reward)
         step_count += 1
-        print(f"Step {step_count}: Action {step_result.action}, Reward {reward}")
         if step_result.terminate or terminated or truncated:
             success = step_result.terminate or terminated
             break
