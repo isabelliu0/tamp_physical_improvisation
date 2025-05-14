@@ -507,7 +507,7 @@ def test_multi_rl_cluttered_drawer_pipeline(system_cls, use_context_wrapper):
         seed=42,
         num_episodes=3,
         max_steps=500,
-        max_training_steps_per_shortcut=50,
+        max_training_steps_per_shortcut=100,
         collect_episodes=10,
         episodes_per_scenario=200,
         force_collect=False,
