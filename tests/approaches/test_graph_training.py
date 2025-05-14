@@ -518,7 +518,7 @@ def test_multi_rl_cluttered_drawer_pipeline(system_cls, use_context_wrapper):
         save_dir=f"trained_policies/multi_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
         batch_size=16,
         max_atom_size=14,
-        action_scale=0.015,
+        action_scale=0.005,
     )
 
     # RL configuration

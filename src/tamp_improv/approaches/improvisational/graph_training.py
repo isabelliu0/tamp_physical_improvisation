@@ -596,7 +596,7 @@ def identify_promising_shortcuts_with_rollouts(
                             continue
 
                         # # DEBUG:
-                        if target_node.id != 33:
+                        if target_node.id != 10:
                             continue
 
                         # Note: no need to stop this rollout when we reach a node
