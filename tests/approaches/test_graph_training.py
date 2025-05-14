@@ -505,11 +505,11 @@ def test_multi_rl_cluttered_drawer_pipeline(system_cls, use_context_wrapper):
     # Configuration
     config = TrainingConfig(
         seed=42,
-        num_episodes=3,
+        num_episodes=1,
         max_steps=500,
         max_training_steps_per_shortcut=100,
-        collect_episodes=10,
-        episodes_per_scenario=200,
+        collect_episodes=1,
+        episodes_per_scenario=3000,
         force_collect=False,
         render=True,
         record_training=True,
@@ -527,7 +527,7 @@ def test_multi_rl_cluttered_drawer_pipeline(system_cls, use_context_wrapper):
         batch_size=16,
         n_epochs=10,
         gamma=0.99,
-        ent_coef=0.01,
+        ent_coef=0.05,
         device="cuda" if torch.cuda.is_available() else "cpu",
     )
 
@@ -552,7 +552,7 @@ def test_multi_rl_cluttered_drawer_pipeline(system_cls, use_context_wrapper):
         use_random_rollouts=True,
         num_rollouts_per_node=100,
         max_steps_per_rollout=300,
-        shortcut_success_threshold=1,
+        shortcut_success_threshold=5,
     )
 
     print("\n=== Results ===")
@@ -573,7 +573,7 @@ def test_multi_rl_cluttered_drawer_loaded(system_cls=ClutteredDrawerTAMPSystem):
     # Configuration
     config = TrainingConfig(
         seed=42,
-        num_episodes=5,
+        num_episodes=1,
         max_steps=500,
         render=True,
         collect_episodes=0,

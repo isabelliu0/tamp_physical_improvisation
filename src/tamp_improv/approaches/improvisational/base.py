@@ -433,9 +433,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             # NOTE: we use the same assumption as PDDL to find the goal nodes of the
             # shortest sequences of symbolic actions
             if self._goal and self._goal.issubset(current_node.atoms):
-                # queue.clear()
-                # break
-                continue
+                queue.clear()
+                break
+                # continue
 
             # Find applicable ground operators using the domain's operators
             applicable_ops = self._find_applicable_operators(
@@ -463,9 +463,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     visited_states[next_atoms_frozen] = next_node
                     graph.add_edge(current_node, next_node, op)
                     queue.append((next_node, depth + 1))
-                current_node_id = current_node.id
-                push_node_id = next_node.id
-                print("hello")
 
         print(
             f"Planning graph with {len(graph.nodes)} nodes and {len(graph.edges)} edges"
@@ -649,8 +646,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 if edge.target.id <= node.id:
                     continue
 
-                # # DEBUG: Envisioned plan for cluttered drawer env
-                # # B->C->T
+                # DEBUG: Envisioned plan for cluttered drawer env
+                # B->C->T
                 envisioned_plan = [
                     (0, 1),
                     (1, 6),
@@ -661,6 +658,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     (50, 58),
                     (58, 88),
                     (88, 111),
+                    (1, 10),
+                    (15, 50)
                 ]  # pylint: disable=line-too-long
                 if (node.id, edge.target.id) not in envisioned_plan:
                     continue
