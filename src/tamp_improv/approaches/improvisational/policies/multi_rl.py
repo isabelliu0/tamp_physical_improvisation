@@ -10,10 +10,10 @@ from pathlib import Path
 from typing import Any, TypeVar
 
 import gymnasium as gym
-from gymnasium.wrappers import RecordVideo
 import numpy as np
 import torch
 from gymnasium.spaces import Box
+from gymnasium.wrappers import RecordVideo
 from relational_structs import GroundAtom, Object, Predicate
 
 from tamp_improv.approaches.improvisational.policies.base import (

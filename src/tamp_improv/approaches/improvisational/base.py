@@ -658,18 +658,20 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     (210, 310),
                     (310, 474),
                     (474, 632),
-                    (0, 2),
-                    (2, 14),
-                    (14, 42),
-                    (42, 62),
-                    (0, 4),
-                    (4, 18),
-                    (18, 48),
-                    (48, 95),
-                    (0, 5),
-                    (5, 19),
-                    (19, 49),
-                    (49, 96),
+                    (1, 33),
+                    (61, 210),
+                    # (0, 2),
+                    # (2, 14),
+                    # (14, 42),
+                    # (42, 62),
+                    # (0, 4),
+                    # (4, 18),
+                    # (18, 48),
+                    # (48, 95),
+                    # (0, 5),
+                    # (5, 19),
+                    # (19, 49),
+                    # (49, 96),
                 ]  # pylint: disable=line-too-long
                 if (node.id, edge.target.id) not in envisioned_plan:
                     continue
@@ -818,6 +820,11 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                         curr_aug_obs = curr_raw_obs  # type: ignore[assignment]
 
                     num_steps += 1
+
+                    # # DEBUG:
+                    # if (node.id == 1 and edge.target.id == 33) or (node.id == 61 and edge.target.id == 210):
+                    #     print(f"Atoms not satisfied: {goal_atoms - atoms}")
+                    #     print(f"Additional atoms: {atoms - goal_atoms}")
 
                     if goal_atoms == atoms:
                         # Store the observed state for the target node

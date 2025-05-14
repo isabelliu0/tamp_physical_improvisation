@@ -286,7 +286,7 @@ class RLPolicy(Policy[ObsType, ActType]):
         obs_numpy = self.device_ctx.numpy(obs_cpu)
 
         with torch.no_grad():
-            action, _ = self.model.predict(obs_numpy, deterministic=True)
+            action, _ = self.model.predict(obs_numpy, deterministic=False)
 
         # Convert back to original type
         if isinstance(obs, (int, float)):
