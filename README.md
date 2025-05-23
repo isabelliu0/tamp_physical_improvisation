@@ -32,7 +32,7 @@ A shortcut learning framework for improving Task and Motion Planning (TAMP) thro
 
 2. **Reproduce Paper Results**:
    ```python
-   python -u -m src.tamp_improv.run_experiments --system=<env> --episodes=<episodes_per_scenario>
+   python -m src.tamp_improv.run_experiments --system=<env> --episodes=<episodes_per_scenario>
    ```
 
 ## Clarification
