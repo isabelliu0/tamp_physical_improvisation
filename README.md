@@ -1,12 +1,11 @@
 # Shortcut Learning for Abstract Planning
 
-A shortcut learning framework for improving Task and Motion Planning (TAMP) through learned dynamic shortcuts using model-free Reinforcement Learning (RL). This version is for anonymous code supplement for NeurIPS 2025 submission.
+A shortcut learning framework for improving Task and Motion Planning (TAMP) through learned dynamic shortcuts using model-free Reinforcement Learning (RL). This version is for the anonymous code supplement for the NeurIPS 2025 submission.
 
 ## Requirements
 
 - Python 3.11+
-- PyBullet
-- Tested on MacOS
+- Tested on MacOS and Ubuntu 22.04
 
 ## Installation
 
@@ -14,6 +13,9 @@ A shortcut learning framework for improving Task and Motion Planning (TAMP) thro
 
 2. **Install the package**:
    ```bash
+   cd pybullet-blocks
+   pip install -e ."[develop]"
+   cd ../
    pip install -e ".[develop]"
    ```
 
@@ -34,7 +36,3 @@ A shortcut learning framework for improving Task and Motion Planning (TAMP) thro
    ```python
    python -m src.tamp_improv.run_experiments --system=<env> --episodes=<episodes_per_scenario>
    ```
-
-## Clarification
-
-This repository contains the majority of code used for the paper's experiments. However, the two PyBullet environments are maintained in a separate repository (pybullet-blocks) and imported as dependencies for better modularity. For submission purposes and to ensure anonymity, we have included a copy of the relevant PyBullet environment implementations in the pybullet-blocks/ directory alongside this README. Note that when running the code, the system will still import from the external dependency specified in pyproject.toml, not from the local copy.
