@@ -50,7 +50,7 @@ def run_obstacle2d_multi_seed_experiment(
             num_episodes=5,
             max_steps=50,
             max_training_steps_per_shortcut=50,
-            collect_episodes=5,
+            collect_episodes=10,
             episodes_per_scenario=episodes_per_scenario,
             force_collect=False,
             render=False,
@@ -181,10 +181,10 @@ def run_obstacle_tower_multi_seed_experiment(
         # Configuration with current seed and specified episodes_per_scenario
         config = TrainingConfig(
             seed=seed,
-            num_episodes=1,
+            num_episodes=5,
             max_steps=300,
             max_training_steps_per_shortcut=100,
-            collect_episodes=1,
+            collect_episodes=10,
             episodes_per_scenario=episodes_per_scenario,  # Use the passed parameter
             force_collect=False,
             render=False,
@@ -316,7 +316,7 @@ def run_cluttered_drawer_multi_seed_experiment(
         # Configuration with current seed and specified episodes_per_scenario
         config = TrainingConfig(
             seed=seed,
-            num_episodes=3,
+            num_episodes=5,
             max_steps=500,
             max_training_steps_per_shortcut=50,
             collect_episodes=10,
