@@ -180,7 +180,6 @@ def test_goal_conditioned_rl(algorithm):
     return policy
 
 
-@pytest.mark.skip("TODO: Enable using different graphs and node-states for HER")
 @pytest.mark.parametrize("algorithm", ["SAC"])
 def test_goal_conditioned_training_pipeline(algorithm):
     """Test the full goal-conditioned training and evaluation pipeline."""
@@ -191,7 +190,7 @@ def test_goal_conditioned_training_pipeline(algorithm):
         max_steps=50,
         collect_episodes=1,
         episodes_per_scenario=250,
-        force_collect=True,
+        force_collect=False,
         render=True,
         record_training=False,
         training_record_interval=100,
@@ -233,7 +232,6 @@ def test_goal_conditioned_training_pipeline(algorithm):
     return metrics
 
 
-@pytest.mark.skip("TODO: Enable using different graphs and node-states for HER")
 @pytest.mark.parametrize("algorithm", ["SAC"])
 def test_goal_conditioned_rl_rollouts(
     algorithm,
@@ -253,7 +251,7 @@ def test_goal_conditioned_rl_rollouts(
         episodes_per_scenario=200,
         force_collect=False,
         render=True,
-        record_training=True,
+        record_training=False,
         training_record_interval=100,
         training_data_dir="training_data/test_goal_rollouts",
         save_dir="trained_policies/test_goal_rollouts",

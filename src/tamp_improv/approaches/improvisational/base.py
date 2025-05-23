@@ -646,39 +646,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 if edge.target.id <= node.id:
                     continue
 
-                # DEBUG: Envisioned plan for cluttered drawer env
-                # B->C->T
-                envisioned_plan = [
-                    (0, 1),
-                    (1, 6),
-                    (6, 10),
-                    (10, 15),
-                    (15, 35),
-                    (35, 50),
-                    (50, 58),
-                    (58, 88),
-                    (88, 111),
-                    (1, 10),
-                    (15, 50)
-                ]  # pylint: disable=line-too-long
-                if (node.id, edge.target.id) not in envisioned_plan:
-                    continue
-
-                # B->C->D->E->T
-                # Node 1215 is a promising short cut
-                # envisioned_plan = [(0, 1), (1, 10), (10, 33), (33, 61), (61, 119), (119, 210), (210, 332), (332, 500), (500, 665), (665, 849), (849, 1068), (1068, 1215), (1215, 1293), (1293, 474), (474, 632), (1, 1215)] # pylint: disable=line-too-long
-                # if not (node.id, edge.target.id) in envisioned_plan:
-                #     continue
-
-                # # DEBUG: Envisioned plan for clear and place env (3 blocks)
-                # envisioned_plan = [(0, 2), (2, 5), (5, 8), (8, 15), (15, 26), (26, 52), (52, 79), (79, 132), (0, 1), (1, 79)]    # pylint: disable=line-too-long
-                # # DEBUG: Envisioned plan for clear and place env (4 blocks)
-                # envisioned_plan = [(0, 2), (2, 5), (5, 8), (8, 15), (15, 26), (26, 52), (52, 94), (94, 199), (199, 331), (331, 603), (0, 1), (1, 331)]    # pylint: disable=line-too-long
-                # DEBUG: Envisioned plan for clear and place env (5 blocks)
-                # envisioned_plan = [(0, 2), (2, 5), (5, 8), (8, 15), (15, 26), (26, 52), (52, 94), (94, 199), (199, 383), (383, 858), (858, 1523), (1523, 2977), (0, 1), (1, 1523)]    # pylint: disable=line-too-long
-                # if not (node.id, edge.target.id) in envisioned_plan:
-                #     continue
-
                 frames: list[Any] = []
                 video_filename = ""
                 if debug:
@@ -808,11 +775,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                         curr_aug_obs = curr_raw_obs  # type: ignore[assignment]
 
                     num_steps += 1
-
-                    # # DEBUG:
-                    # if (node.id == 1 and edge.target.id == 33) or (node.id == 61 and edge.target.id == 210):
-                    #     print(f"Atoms not satisfied: {goal_atoms - atoms}")
-                    #     print(f"Additional atoms: {atoms - goal_atoms}")
 
                     if goal_atoms == atoms:
                         # Store the observed state for the target node
