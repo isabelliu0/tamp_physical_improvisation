@@ -1,4 +1,4 @@
-"""Core blocks2d environment."""
+"""Core obstacle2d environment."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ from tomsgeoms2d.structs import Rectangle
 from tomsutils.utils import fig2data
 
 
-class Blocks2DState(NamedTuple):
-    """State of the blocks2d environment."""
+class Obstacle2DState(NamedTuple):
+    """State of the obstacle2d environment."""
 
     robot_position: NDArray[np.float32]
     block_1_position: NDArray[np.float32]
@@ -89,7 +89,7 @@ def is_block_in_target_area(
     )
 
 
-class GraphBlocks2DEnv(gym.Env):
+class GraphObstacle2DEnv(gym.Env):
     """A block environment in 2D with graph observation support and variable
     number of blocks."""
 
@@ -142,7 +142,7 @@ class GraphBlocks2DEnv(gym.Env):
         """Get gripper status."""
         return self.state.gripper_status
 
-    def _get_default_state(self) -> Blocks2DState:
+    def _get_default_state(self) -> Obstacle2DState:
         """Get default initial state with randomized blocks' positions."""
         target_x = self._target_area["x"]
         target_width = self._target_area["width"]
@@ -152,7 +152,7 @@ class GraphBlocks2DEnv(gym.Env):
         # Position block 1 and 2 randomly but in the hardest positions for the task
         block_2_x = self.np_random.choice([target_left, target_x, target_right])
         block_1_x = self.np_random.choice([0.0, 1.0])
-        state = Blocks2DState(
+        state = Obstacle2DState(
             robot_position=np.array([0.5, 1.0], dtype=np.float32),
             block_1_position=np.array([block_1_x, 0.0], dtype=np.float32),
             block_2_position=np.array([block_2_x, 0.0], dtype=np.float32),
@@ -164,7 +164,7 @@ class GraphBlocks2DEnv(gym.Env):
                 if block_1_x == 0.0
                 else np.random.uniform(0.0, 0.2)
             )
-            state = Blocks2DState(
+            state = Obstacle2DState(
                 robot_position=state.robot_position,
                 block_1_position=state.block_1_position,
                 block_2_position=state.block_2_position,
@@ -180,7 +180,7 @@ class GraphBlocks2DEnv(gym.Env):
 
     def reset_from_state(
         self,
-        state: Blocks2DState | GraphInstance,
+        state: Obstacle2DState | GraphInstance,
         *,
         seed: int | None = None,
     ) -> tuple[GraphInstance, dict[str, Any]]:
@@ -209,7 +209,7 @@ class GraphBlocks2DEnv(gym.Env):
 
             # Build new state
             if 3 in block_positions and self.n_blocks > 2:
-                self.state = Blocks2DState(
+                self.state = Obstacle2DState(
                     robot_position=robot_pos,
                     block_1_position=block_positions[1],
                     block_2_position=block_positions[2],
@@ -222,7 +222,7 @@ class GraphBlocks2DEnv(gym.Env):
                     block_positions[3],
                 ]
             else:
-                self.state = Blocks2DState(
+                self.state = Obstacle2DState(
                     robot_position=robot_pos,
                     block_1_position=block_positions[1],
                     block_2_position=block_positions[2],
@@ -268,7 +268,7 @@ class GraphBlocks2DEnv(gym.Env):
             if self.n_blocks > 2 and block_3_pos is not None:
                 self.block_positions.append(block_3_pos)
 
-            self.state = Blocks2DState(
+            self.state = Obstacle2DState(
                 robot_position=robot_pos,
                 block_1_position=block_1_pos,
                 block_2_position=block_2_pos,
@@ -367,7 +367,7 @@ class GraphBlocks2DEnv(gym.Env):
 
         # Update state
         if self.n_blocks > 2:
-            new_state = Blocks2DState(
+            new_state = Obstacle2DState(
                 robot_position=new_robot_position,
                 block_1_position=new_block_positions[0],
                 block_2_position=new_block_positions[1],
@@ -375,7 +375,7 @@ class GraphBlocks2DEnv(gym.Env):
                 gripper_status=new_gripper_status,
             )
         else:
-            new_state = Blocks2DState(
+            new_state = Obstacle2DState(
                 robot_position=new_robot_position,
                 block_1_position=new_block_positions[0],
                 block_2_position=new_block_positions[1],
@@ -564,16 +564,16 @@ class GraphBlocks2DEnv(gym.Env):
         plt.close(fig)
         return img
 
-    def clone(self) -> GraphBlocks2DEnv:
+    def clone(self) -> GraphObstacle2DEnv:
         """Clone the environment."""
-        clone_env = GraphBlocks2DEnv(
+        clone_env = GraphObstacle2DEnv(
             n_blocks=self.n_blocks, render_mode=self.render_mode
         )
         clone_env.reset_from_state(self.state)
         return clone_env
 
 
-class Blocks2DEnv(gym.Env):
+class Obstacle2DEnv(gym.Env):
     """A block environment in 2D.
 
     Observations are 15D:
@@ -636,7 +636,7 @@ class Blocks2DEnv(gym.Env):
         """Get gripper status."""
         return self.state.gripper_status
 
-    def _get_default_state(self) -> Blocks2DState:
+    def _get_default_state(self) -> Obstacle2DState:
         """Get default initial state with randomized blocks' positions."""
         target_x = self._target_area["x"]
         target_width = self._target_area["width"]
@@ -647,7 +647,7 @@ class Blocks2DEnv(gym.Env):
         block_2_x = self.np_random.choice([target_left, target_x, target_right])
         block_1_x = self.np_random.choice([0.0, 1.0])
 
-        return Blocks2DState(
+        return Obstacle2DState(
             robot_position=np.array([0.5, 1.0], dtype=np.float32),
             block_1_position=np.array([block_1_x, 0.0], dtype=np.float32),
             block_2_position=np.array([block_2_x, 0.0], dtype=np.float32),
@@ -656,7 +656,7 @@ class Blocks2DEnv(gym.Env):
 
     def reset_from_state(
         self,
-        state: Blocks2DState | NDArray[np.float32],
+        state: Obstacle2DState | NDArray[np.float32],
         *,
         seed: int | None = None,
     ) -> tuple[NDArray[np.float32], dict[str, Any]]:
@@ -665,7 +665,7 @@ class Blocks2DEnv(gym.Env):
 
         if isinstance(state, np.ndarray):
             # Convert array to state
-            self.state = Blocks2DState(
+            self.state = Obstacle2DState(
                 robot_position=state[0:2].copy(),
                 block_1_position=state[4:6].copy(),
                 block_2_position=state[6:8].copy(),
@@ -688,7 +688,7 @@ class Blocks2DEnv(gym.Env):
         if options is None:
             self.state = self._get_default_state()
         else:
-            self.state = Blocks2DState(
+            self.state = Obstacle2DState(
                 robot_position=options.get(
                     "robot_pos", np.array([0.5, 1.0], dtype=np.float32)
                 ).copy(),
@@ -806,7 +806,7 @@ class Blocks2DEnv(gym.Env):
                 picking_up_block2 = True
 
         # Update state
-        self.state = Blocks2DState(
+        self.state = Obstacle2DState(
             robot_position=new_robot_position,
             block_1_position=new_block_1_position,
             block_2_position=new_block_2_position,
@@ -967,8 +967,8 @@ class Blocks2DEnv(gym.Env):
         plt.close(fig)
         return img
 
-    def clone(self) -> Blocks2DEnv:
+    def clone(self) -> Obstacle2DEnv:
         """Clone the environment."""
-        clone_env = Blocks2DEnv(self.render_mode)
+        clone_env = Obstacle2DEnv(self.render_mode)
         clone_env.reset_from_state(self.state)
         return clone_env

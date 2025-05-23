@@ -12,20 +12,22 @@ from tamp_improv.approaches.improvisational.training import (
     TrainingConfig,
     train_and_evaluate,
 )
-from tamp_improv.benchmarks.blocks2d_graph import GraphBlocks2DTAMPSystem
-from tamp_improv.benchmarks.pybullet_clear_and_place_graph import (
-    GraphClearAndPlaceTAMPSystem,
+from tamp_improv.benchmarks.obstacle2d_graph import (
+    GraphObstacle2DTAMPSystem,
 )
 from tamp_improv.benchmarks.pybullet_cluttered_drawer import ClutteredDrawerTAMPSystem
+from tamp_improv.benchmarks.pybullet_obstacle_tower_graph import (
+    GraphObstacleTowerTAMPSystem,
+)
 
 
-def run_blocks2d_multi_seed_experiment(
+def run_obstacle2d_multi_seed_experiment(
     system_cls: type,
     use_context_wrapper: bool,
     seeds: list[int],
     episodes_per_scenario: int,
 ) -> dict:
-    """Run the Blocks2D experiment with multiple seeds and return aggregated
+    """Run the Obstacle2D experiment with multiple seeds and return aggregated
     results."""
     all_metrics = []
 
@@ -40,7 +42,7 @@ def run_blocks2d_multi_seed_experiment(
     )
 
     for seed in seeds:
-        print(f"\n\n=== Running Blocks2D experiment with seed {seed} ===")
+        print(f"\n\n=== Running Obstacle2D experiment with seed {seed} ===")
 
         # Configuration with current seed and specified episodes_per_scenario
         config = TrainingConfig(
@@ -55,7 +57,7 @@ def run_blocks2d_multi_seed_experiment(
             record_training=False,
             training_record_interval=125,
             training_data_dir="training_data/graph_training_data",
-            save_dir=f"trained_policies/blocks2d_multi_rl_eps_{episodes_per_scenario}/seed_{seed}",  # pylint: disable=line-too-long
+            save_dir=f"trained_policies/obstacle2d_multi_rl_eps_{episodes_per_scenario}/seed_{seed}",  # pylint: disable=line-too-long
             batch_size=32,
             max_atom_size=14,
         )
@@ -76,7 +78,7 @@ def run_blocks2d_multi_seed_experiment(
             system,
             policy_factory,
             config,
-            policy_name=f"Blocks2D_MultiRL_EPS{episodes_per_scenario}_Seed{seed}",
+            policy_name=f"Obstacle2D_MultiRL_EPS{episodes_per_scenario}_Seed{seed}",
             use_context_wrapper=use_context_wrapper,
             use_random_rollouts=True,
             num_rollouts_per_node=1000,
@@ -114,7 +116,7 @@ def run_blocks2d_multi_seed_experiment(
         print(f"  Training Time: {metrics.training_time:.2f} seconds")
 
     # Save results summary to a file
-    results_dir = Path(f"results/blocks2d_multi_rl_eps_{episodes_per_scenario}")
+    results_dir = Path(f"results/obstacle2d_multi_rl_eps_{episodes_per_scenario}")
     results_dir.mkdir(parents=True, exist_ok=True)
 
     with open(results_dir / "summary.txt", "w", encoding="utf-8") as f:
@@ -153,14 +155,14 @@ def run_blocks2d_multi_seed_experiment(
     }
 
 
-def run_blocks_multi_seed_experiment(
+def run_obstacle_tower_multi_seed_experiment(
     system_cls: type,
     use_context_wrapper: bool,
     seeds: list[int],
     episodes_per_scenario: int,
 ):
-    """Run the blocks experiment with multiple seeds and return aggregated
-    results."""
+    """Run the obstacle tower experiment with multiple seeds and return
+    aggregated results."""
     all_metrics = []
 
     # RL configuration
@@ -174,7 +176,7 @@ def run_blocks_multi_seed_experiment(
     )
 
     for seed in seeds:
-        print(f"\n\n=== Running Blocks experiment with seed {seed} ===")
+        print(f"\n\n=== Running Obstacle experiment with seed {seed} ===")
 
         # Configuration with current seed and specified episodes_per_scenario
         config = TrainingConfig(
@@ -423,12 +425,12 @@ def run_cluttered_drawer_multi_seed_experiment(
     }
 
 
-def run_blocks2d_experiment(episodes_per_scenario: int):
-    """Run the Blocks2D experiment with multiple seeds."""
-    print("\n=== Running Blocks2D Multi-Policy RL Experiment ===")
+def run_obstacle2d_experiment(episodes_per_scenario: int):
+    """Run the Obstacle2D experiment with multiple seeds."""
+    print("\n=== Running Obstacle2D Multi-Policy RL Experiment ===")
     print(f"Episodes per scenario: {episodes_per_scenario}")
-    results = run_blocks2d_multi_seed_experiment(
-        system_cls=GraphBlocks2DTAMPSystem,
+    results = run_obstacle2d_multi_seed_experiment(
+        system_cls=GraphObstacle2DTAMPSystem,
         use_context_wrapper=False,
         seeds=[42, 43, 44, 45, 46],
         episodes_per_scenario=episodes_per_scenario,
@@ -436,13 +438,13 @@ def run_blocks2d_experiment(episodes_per_scenario: int):
     return results
 
 
-def run_blocks_experiment(episodes_per_scenario: int):
+def run_obstacle_tower_experiment(episodes_per_scenario: int):
     """Run the PyBullet experiment with multiple seeds."""
     print("\n=== Running PyBullet Multi-Policy RL Experiment ===")
     print(f"Episodes per scenario: {episodes_per_scenario}")
 
-    results = run_blocks_multi_seed_experiment(
-        system_cls=GraphClearAndPlaceTAMPSystem,
+    results = run_obstacle_tower_multi_seed_experiment(
+        system_cls=GraphObstacleTowerTAMPSystem,
         use_context_wrapper=False,
         seeds=[42, 43, 44, 45, 46],
         episodes_per_scenario=episodes_per_scenario,
@@ -472,16 +474,16 @@ if __name__ == "__main__":
         "--system",
         type=str,
         required=True,
-        choices=["blocks2d", "blocks", "drawer"],
+        choices=["obstacle2d", "obstacletower", "drawer"],
         help="System to use for experiments",
     )
     parser.add_argument(
         "--episodes", type=int, required=True, help="Number of episodes per scenario"
     )
     args = parser.parse_args()
-    if args.system == "blocks2d":
-        run_blocks2d_experiment(episodes_per_scenario=args.episodes)
-    elif args.system == "blocks":
-        run_blocks_experiment(episodes_per_scenario=args.episodes)
+    if args.system == "obstacle2d":
+        run_obstacle2d_experiment(episodes_per_scenario=args.episodes)
+    elif args.system == "obstacletower":
+        run_obstacle_tower_experiment(episodes_per_scenario=args.episodes)
     else:  # "drawer"
         run_cluttered_drawer_experiment(episodes_per_scenario=args.episodes)

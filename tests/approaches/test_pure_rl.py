@@ -7,13 +7,13 @@ from tamp_improv.approaches.improvisational.training import (
     TrainingConfig,
     train_and_evaluate_pure_rl,
 )
-from tamp_improv.benchmarks.blocks2d import Blocks2DTAMPSystem
-from tamp_improv.benchmarks.pybullet_clear_and_place import ClearAndPlaceTAMPSystem
+from tamp_improv.benchmarks.obstacle2d import Obstacle2DTAMPSystem
+from tamp_improv.benchmarks.pybullet_obstacle_tower import ObstacleTowerTAMPSystem
 
 
-def test_pure_rl_blocks2d():
-    """Test pure RL approach on Blocks2D TAMP system."""
-    print("\n=== Testing Pure RL on Blocks2D ===")
+def test_pure_rl_obstacle2d():
+    """Test pure RL approach on Obstacle2D TAMP system."""
+    print("\n=== Testing Pure RL on Obstacle2D ===")
     config = TrainingConfig(
         seed=42,
         num_episodes=1,
@@ -36,7 +36,7 @@ def test_pure_rl_blocks2d():
         device=config.device,
     )
 
-    system = Blocks2DTAMPSystem.create_default(
+    system = Obstacle2DTAMPSystem.create_default(
         seed=config.seed,
         render_mode="rgb_array" if config.render else None,
     )
@@ -61,8 +61,8 @@ def test_pure_rl_blocks2d():
 
 
 def test_pure_rl_pybullet():
-    """Test pure RL approach on PyBullet ClearAndPlace TAMP system."""
-    print("\n=== Testing Pure RL on PyBullet ClearAndPLace ===")
+    """Test pure RL approach on PyBullet ObstacleTower TAMP system."""
+    print("\n=== Testing Pure RL on PyBullet ObstacleTower ===")
     config = TrainingConfig(
         seed=42,
         num_episodes=1,
@@ -85,7 +85,7 @@ def test_pure_rl_pybullet():
         device=config.device,
     )
 
-    system = ClearAndPlaceTAMPSystem.create_default(
+    system = ObstacleTowerTAMPSystem.create_default(
         seed=config.seed,
         render_mode="rgb_array" if config.render else None,
     )

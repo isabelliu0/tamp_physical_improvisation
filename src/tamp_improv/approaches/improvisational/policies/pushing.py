@@ -10,7 +10,10 @@ from tamp_improv.approaches.improvisational.policies.base import (
     PolicyContext,
     TrainingData,
 )
-from tamp_improv.benchmarks.blocks2d import Blocks2DPredicates, Blocks2DTypes
+from tamp_improv.benchmarks.obstacle2d import (
+    Obstacle2DPredicates,
+    Obstacle2DTypes,
+)
 
 
 class PushingPolicy(Policy[NDArray[np.float32], NDArray[np.float32]]):
@@ -30,8 +33,8 @@ class PushingPolicy(Policy[NDArray[np.float32], NDArray[np.float32]]):
         self._env = env
 
     def can_initiate(self) -> bool:
-        types = Blocks2DTypes()
-        predicates = Blocks2DPredicates(types)
+        types = Obstacle2DTypes()
+        predicates = Obstacle2DPredicates(types)
         On = predicates["On"]
         Clear = predicates["Clear"]
         block2 = Object("block2", types.block)

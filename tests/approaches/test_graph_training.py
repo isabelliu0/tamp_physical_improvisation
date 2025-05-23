@@ -18,13 +18,13 @@ from tamp_improv.approaches.improvisational.training import (
     TrainingConfig,
     train_and_evaluate,
 )
-from tamp_improv.benchmarks.blocks2d import Blocks2DTAMPSystem
-from tamp_improv.benchmarks.blocks2d_graph import GraphBlocks2DTAMPSystem
-from tamp_improv.benchmarks.pybullet_clear_and_place import ClearAndPlaceTAMPSystem
-from tamp_improv.benchmarks.pybullet_clear_and_place_graph import (
-    GraphClearAndPlaceTAMPSystem,
-)
+from tamp_improv.benchmarks.obstacle2d import Obstacle2DTAMPSystem
+from tamp_improv.benchmarks.obstacle2d_graph import GraphObstacle2DTAMPSystem
 from tamp_improv.benchmarks.pybullet_cluttered_drawer import ClutteredDrawerTAMPSystem
+from tamp_improv.benchmarks.pybullet_obstacle_tower import ObstacleTowerTAMPSystem
+from tamp_improv.benchmarks.pybullet_obstacle_tower_graph import (
+    GraphObstacleTowerTAMPSystem,
+)
 
 
 @pytest.mark.skip("Takes too long to run.")
@@ -44,7 +44,7 @@ def test_pybullet_graph_training_collection():
     }
 
     print("\n1. Creating system...")
-    system = ClearAndPlaceTAMPSystem.create_default(
+    system = ObstacleTowerTAMPSystem.create_default(
         seed=config["seed"], render_mode="rgb_array" if config["render"] else None
     )
 
@@ -90,9 +90,9 @@ def test_pybullet_graph_training_collection():
 @pytest.mark.skip("Takes too long to run.")
 @pytest.mark.parametrize(
     "system_cls,use_context_wrapper",
-    [(GraphBlocks2DTAMPSystem, False), (Blocks2DTAMPSystem, False)],
+    [(GraphObstacle2DTAMPSystem, False), (Obstacle2DTAMPSystem, False)],
 )
-def test_multi_rl_blocks2d_pipeline(system_cls, use_context_wrapper):
+def test_multi_rl_obstacle2d_pipeline(system_cls, use_context_wrapper):
     """Test the multi-policy RL training and evaluation pipeline."""
     print("\n=== Testing Multi-Policy RL Pipeline ===")
 
@@ -158,9 +158,11 @@ def test_multi_rl_blocks2d_pipeline(system_cls, use_context_wrapper):
     return metrics
 
 
-@pytest.mark.parametrize("system_cls", [GraphBlocks2DTAMPSystem, Blocks2DTAMPSystem])
-def test_multi_rl_blocks2d_loaded(system_cls):
-    """Test MultiRL on Blocks2D with loaded policies."""
+@pytest.mark.parametrize(
+    "system_cls", [GraphObstacle2DTAMPSystem, Obstacle2DTAMPSystem]
+)
+def test_multi_rl_obstacle2d_loaded(system_cls):
+    """Test MultiRL on Obstacle2D with loaded policies."""
     policy_dir = Path("trained_policies/multi_rl")
     policy_dir.mkdir(parents=True, exist_ok=True)
 
@@ -222,7 +224,7 @@ def test_multi_rl_blocks2d_loaded(system_cls):
 @pytest.mark.skip("Takes too long to run")
 @pytest.mark.parametrize(
     "system_cls,use_context_wrapper",
-    [(GraphClearAndPlaceTAMPSystem, False)],
+    [(GraphObstacleTowerTAMPSystem, False)],
 )
 def test_multi_rl_pybullet_pipeline(system_cls, use_context_wrapper):
     """Test the multi-policy RL training and evaluation pipeline."""
@@ -291,8 +293,8 @@ def test_multi_rl_pybullet_pipeline(system_cls, use_context_wrapper):
     return metrics
 
 
-def test_multi_rl_pybullet_loaded(system_cls=GraphClearAndPlaceTAMPSystem):
-    """Test MultiRL on Pybullet ClearAndPlace with loaded policies."""
+def test_multi_rl_pybullet_loaded(system_cls=GraphObstacleTowerTAMPSystem):
+    """Test MultiRL on Pybullet ObstacleTower with loaded policies."""
     policy_dir = Path("trained_policies/multi_rl")
     policy_dir.mkdir(parents=True, exist_ok=True)
 

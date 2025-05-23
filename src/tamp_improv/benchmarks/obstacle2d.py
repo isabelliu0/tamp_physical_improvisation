@@ -1,4 +1,4 @@
-"""Blocks2D environment implementation."""
+"""Obstacle2D environment implementation."""
 
 from __future__ import annotations
 
@@ -25,16 +25,16 @@ from tamp_improv.benchmarks.base import (
     ImprovisationalTAMPSystem,
     PlanningComponents,
 )
-from tamp_improv.benchmarks.blocks2d_env import (
-    Blocks2DEnv,
+from tamp_improv.benchmarks.obstacle2d_env import (
+    Obstacle2DEnv,
     is_block_in_target_area,
 )
 from tamp_improv.benchmarks.wrappers import ImprovWrapper
 
 
 @dataclass
-class Blocks2DTypes:
-    """Container for blocks2d types."""
+class Obstacle2DTypes:
+    """Container for obstacle2d types."""
 
     def __init__(self) -> None:
         """Initialize types."""
@@ -48,10 +48,10 @@ class Blocks2DTypes:
 
 
 @dataclass
-class Blocks2DPredicates:
-    """Container for blocks2d predicates."""
+class Obstacle2DPredicates:
+    """Container for obstacle2d predicates."""
 
-    def __init__(self, types: Blocks2DTypes) -> None:
+    def __init__(self, types: Obstacle2DTypes) -> None:
         """Initialize predicates."""
         self.on = Predicate("On", [types.block, types.surface])
         self.overlap = Predicate("Overlap", [types.block, types.surface])
@@ -78,10 +78,10 @@ class Blocks2DPredicates:
         }
 
 
-class BaseBlocks2DSkill(
+class BaseObstacle2DSkill(
     LiftedOperatorSkill[NDArray[np.float32] | GraphInstance, NDArray[np.float32]]
 ):
-    """Base class for blocks2d environment skills."""
+    """Base class for obstacle2d environment skills."""
 
     def __init__(
         self, components: PlanningComponents[NDArray[np.float32] | GraphInstance]
@@ -122,7 +122,7 @@ class BaseBlocks2DSkill(
         return robot_pos, block_positions, gripper_status
 
 
-class PickUpSkill(BaseBlocks2DSkill):
+class PickUpSkill(BaseObstacle2DSkill):
     """Skill for picking up blocks from non-target surfaces."""
 
     def _get_operator_name(self) -> str:
@@ -179,7 +179,7 @@ class PickUpFromTargetSkill(PickUpSkill):
         return "PickUpFromTarget"
 
 
-class PutDownSkill(BaseBlocks2DSkill):
+class PutDownSkill(BaseObstacle2DSkill):
     """Skill for putting down blocks on non-target surfaces."""
 
     def _get_operator_name(self) -> str:
@@ -239,25 +239,25 @@ class PutDownOnTargetSkill(PutDownSkill):
         return "PutDownOnTarget"
 
 
-class Blocks2DPerceiver(Perceiver[NDArray[np.float32]]):
+class Obstacle2DPerceiver(Perceiver[NDArray[np.float32]]):
     """Perceiver for blocks2d environment."""
 
-    def __init__(self, types: Blocks2DTypes) -> None:
+    def __init__(self, types: Obstacle2DTypes) -> None:
         """Initialize with required types."""
         self._robot = Object("robot", types.robot)
         self._block_1 = Object("block1", types.block)
         self._block_2 = Object("block2", types.block)
         self._table = Object("table", types.surface)
         self._target_area = Object("target_area", types.surface)
-        self._predicates: Blocks2DPredicates | None = None
+        self._predicates: Obstacle2DPredicates | None = None
         self._types = types
 
-    def initialize(self, predicates: Blocks2DPredicates) -> None:
+    def initialize(self, predicates: Obstacle2DPredicates) -> None:
         """Initialize predicates after environment creation."""
         self._predicates = predicates
 
     @property
-    def predicates(self) -> Blocks2DPredicates:
+    def predicates(self) -> Obstacle2DPredicates:
         """Get predicates, ensuring they're initialized."""
         if self._predicates is None:
             raise RuntimeError("Predicates not initialized. Call initialize() first.")
@@ -417,8 +417,10 @@ class Blocks2DPerceiver(Perceiver[NDArray[np.float32]]):
         return free_width < block_width
 
 
-class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.float32]]):
-    """Base TAMP system for 2D blocks environment."""
+class BaseObstacle2DTAMPSystem(
+    BaseTAMPSystem[NDArray[np.float32], NDArray[np.float32]]
+):
+    """Base TAMP system for 2D obstacle environment."""
 
     def __init__(
         self,
@@ -426,17 +428,17 @@ class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.floa
         seed: int | None = None,
         render_mode: str | None = None,
     ) -> None:
-        """Initialize Blocks2D TAMP system."""
+        """Initialize Obstacle2D TAMP system."""
         self._render_mode = render_mode
-        super().__init__(planning_components, name="Blocks2DTAMPSystem", seed=seed)
+        super().__init__(planning_components, name="Obstacle2DTAMPSystem", seed=seed)
 
     def _create_env(self) -> gym.Env:
         """Create base environment."""
-        return Blocks2DEnv(render_mode=self._render_mode)
+        return Obstacle2DEnv(render_mode=self._render_mode)
 
     def _get_domain_name(self) -> str:
         """Get domain name."""
-        return "blocks2d-domain"
+        return "obstacle2d-domain"
 
     def get_domain(self) -> PDDLDomain:
         """Get domain."""
@@ -449,11 +451,11 @@ class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.floa
 
     @classmethod
     def _create_planning_components(cls) -> PlanningComponents[NDArray[np.float32]]:
-        """Create planning components for Blocks2D system."""
-        types_container = Blocks2DTypes()
+        """Create planning components for Obstacle2D system."""
+        types_container = Obstacle2DTypes()
         types_set = types_container.as_set()
-        predicates = Blocks2DPredicates(types_container)
-        perceiver = Blocks2DPerceiver(types_container)
+        predicates = Obstacle2DPredicates(types_container)
+        perceiver = Obstacle2DPerceiver(types_container)
         perceiver.initialize(predicates)
 
         robot = Variable("?robot", types_container.robot)
@@ -544,7 +546,7 @@ class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.floa
         n_blocks: int = 2,  # pylint:disable=unused-argument
         seed: int | None = None,
         render_mode: str | None = None,
-    ) -> BaseBlocks2DTAMPSystem:
+    ) -> BaseObstacle2DTAMPSystem:
         """Factory method for creating system with default components."""
         planning_components = cls._create_planning_components()
         system = cls(
@@ -562,11 +564,11 @@ class BaseBlocks2DTAMPSystem(BaseTAMPSystem[NDArray[np.float32], NDArray[np.floa
         return system
 
 
-class Blocks2DTAMPSystem(
+class Obstacle2DTAMPSystem(
     ImprovisationalTAMPSystem[NDArray[np.float32], NDArray[np.float32]],
-    BaseBlocks2DTAMPSystem,
+    BaseObstacle2DTAMPSystem,
 ):
-    """TAMP system for 2D blocks environment with improvisational policy
+    """TAMP system for 2D obstacle environment with improvisational policy
     learning enabled."""
 
     def __init__(
@@ -576,7 +578,7 @@ class Blocks2DTAMPSystem(
         seed: int | None = None,
         render_mode: str | None = None,
     ) -> None:
-        """Initialize Blocks2D TAMP system."""
+        """Initialize Obstacle2D TAMP system."""
         self.n_blocks = n_blocks
         self._render_mode = render_mode
         super().__init__(planning_components, seed=seed, render_mode=render_mode)
@@ -598,7 +600,7 @@ class Blocks2DTAMPSystem(
         n_blocks: int = 2,
         seed: int | None = None,
         render_mode: str | None = None,
-    ) -> Blocks2DTAMPSystem:
+    ) -> Obstacle2DTAMPSystem:
         """Factory method for creating improvisational system with default
         components."""
         planning_components = cls._create_planning_components()
