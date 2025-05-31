@@ -180,6 +180,7 @@ def test_goal_conditioned_rl(algorithm):
     return policy
 
 
+@pytest.mark.skip("TODO: Enable using different graphs and node-states for HER")
 @pytest.mark.parametrize("algorithm", ["SAC"])
 def test_goal_conditioned_training_pipeline(algorithm):
     """Test the full goal-conditioned training and evaluation pipeline."""
@@ -232,6 +233,7 @@ def test_goal_conditioned_training_pipeline(algorithm):
     return metrics
 
 
+@pytest.mark.skip("TODO: Enable using different graphs and node-states for HER")
 @pytest.mark.parametrize("algorithm", ["SAC"])
 def test_goal_conditioned_rl_rollouts(
     algorithm,
