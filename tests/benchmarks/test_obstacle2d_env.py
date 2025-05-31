@@ -1,20 +1,20 @@
-"""Tests for core blocks2d environment."""
+"""Tests for core obstacle2d environment."""
 
 import numpy as np
 from gymnasium.wrappers import TimeLimit
 
-from tamp_improv.benchmarks.blocks2d_env import Blocks2DEnv, GraphBlocks2DEnv
+from tamp_improv.benchmarks.obstacle2d_env import GraphObstacle2DEnv, Obstacle2DEnv
 
 
-def test_graph_blocks2d_env():
-    """Test basic functionality of Blocks2D environment."""
-    env = GraphBlocks2DEnv(n_blocks=3, render_mode="rgb_array")
+def test_graph_obstacle2d_env():
+    """Test basic functionality of Obstacle2D environment."""
+    env = GraphObstacle2DEnv(n_blocks=3, render_mode="rgb_array")
     env = TimeLimit(env, max_episode_steps=100)
 
     # # Uncomment to generate videos.
     # from gymnasium.wrappers import RecordVideo
 
-    # env = RecordVideo(env, "videos/graph-blocks2d-test")
+    # env = RecordVideo(env, "videos/graph-obstacle2d-test")
 
     obs, info = env.reset()
 
@@ -56,15 +56,15 @@ def test_graph_blocks2d_env():
     env.close()
 
 
-def test_blocks2d_env():
-    """Test basic functionality of Blocks2D environment."""
-    env = Blocks2DEnv(render_mode="rgb_array")
+def test_obstacle2d_env():
+    """Test basic functionality of Obstacle2D environment."""
+    env = Obstacle2DEnv(render_mode="rgb_array")
     env = TimeLimit(env, max_episode_steps=100)
 
     # # Uncomment to generate videos.
     # from gymnasium.wrappers import RecordVideo
 
-    # env = RecordVideo(env, "videos/blocks2d-test")
+    # env = RecordVideo(env, "videos/obstacle2d-test")
 
     obs, info = env.reset()
 

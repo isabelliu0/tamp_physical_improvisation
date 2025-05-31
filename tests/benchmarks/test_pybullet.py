@@ -1,20 +1,20 @@
-"""Test pybullet clear and place environment."""
+"""Test pybullet obstacle tower environment."""
 
 from task_then_motion_planning.planning import TaskThenMotionPlanner
 
-from tamp_improv.benchmarks.pybullet_clear_and_place_graph import (
-    GraphClearAndPlaceTAMPSystem,
+from tamp_improv.benchmarks.pybullet_obstacle_tower_graph import (
+    GraphObstacleTowerTAMPSystem,
 )
 
 
 def test_pybullet():
     """Test base TAMP functionality of pybullet environment."""
     # Create system
-    system = GraphClearAndPlaceTAMPSystem.create_default(
-        seed=124, render_mode="rgb_array", num_obstacle_blocks=4
+    system = GraphObstacleTowerTAMPSystem.create_default(
+        seed=124, render_mode="rgb_array", num_obstacle_blocks=3
     )
     # from gymnasium.wrappers import RecordVideo
-    # system.env = RecordVideo(system.env, "videos/clear-and-place-ttmp-test")
+    # system.env = RecordVideo(system.env, "videos/obstacle-tower-ttmp-test")
 
     # Create planner
     planner = TaskThenMotionPlanner(

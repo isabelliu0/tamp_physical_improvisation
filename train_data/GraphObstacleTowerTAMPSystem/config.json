@@ -1,0 +1,696 @@
+{
+  "seed": 43,
+  "num_episodes": 1,
+  "max_steps": 300,
+  "max_training_steps_per_shortcut": 100,
+  "collect_episodes": 1,
+  "episodes_per_scenario": 3000,
+  "force_collect": false,
+  "save_dir": "trained_policies/multi_rl_eps_3000/seed_43",
+  "training_data_dir": "training_data/graph_training_data",
+  "render": false,
+  "record_training": false,
+  "training_record_interval": 100,
+  "device": "cuda",
+  "batch_size": 16,
+  "policy_config": null,
+  "shortcut_info": [
+    {
+      "source_node_id": 13,
+      "target_node_id": 15,
+      "source_atoms_count": 27,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 4,
+      "target_node_id": 5,
+      "source_atoms_count": 26,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 45,
+      "target_node_id": 52,
+      "source_atoms_count": 27,
+      "target_atoms_count": 29
+    },
+    {
+      "source_node_id": 49,
+      "target_node_id": 52,
+      "source_atoms_count": 28,
+      "target_atoms_count": 29
+    },
+    {
+      "source_node_id": 14,
+      "target_node_id": 15,
+      "source_atoms_count": 27,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 44,
+      "target_node_id": 46,
+      "source_atoms_count": 27,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 51,
+      "target_node_id": 52,
+      "source_atoms_count": 28,
+      "target_atoms_count": 29
+    },
+    {
+      "source_node_id": 41,
+      "target_node_id": 52,
+      "source_atoms_count": 28,
+      "target_atoms_count": 29
+    },
+    {
+      "source_node_id": 40,
+      "target_node_id": 41,
+      "source_atoms_count": 27,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 30,
+      "target_node_id": 52,
+      "source_atoms_count": 27,
+      "target_atoms_count": 29
+    },
+    {
+      "source_node_id": 27,
+      "target_node_id": 52,
+      "source_atoms_count": 26,
+      "target_atoms_count": 29
+    },
+    {
+      "source_node_id": 29,
+      "target_node_id": 31,
+      "source_atoms_count": 27,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 99,
+      "target_node_id": 100,
+      "source_atoms_count": 27,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 99,
+      "target_node_id": 100,
+      "source_atoms_count": 27,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 99,
+      "target_node_id": 100,
+      "source_atoms_count": 27,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 9,
+      "target_node_id": 15,
+      "source_atoms_count": 26,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 22,
+      "target_node_id": 26,
+      "source_atoms_count": 26,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 39,
+      "target_node_id": 52,
+      "source_atoms_count": 27,
+      "target_atoms_count": 29
+    },
+    {
+      "source_node_id": 50,
+      "target_node_id": 52,
+      "source_atoms_count": 28,
+      "target_atoms_count": 29
+    },
+    {
+      "source_node_id": 24,
+      "target_node_id": 26,
+      "source_atoms_count": 26,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 17,
+      "target_node_id": 26,
+      "source_atoms_count": 26,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 2,
+      "target_node_id": 18,
+      "source_atoms_count": 25,
+      "target_atoms_count": 26
+    },
+    {
+      "source_node_id": 45,
+      "target_node_id": 46,
+      "source_atoms_count": 27,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 35,
+      "target_node_id": 36,
+      "source_atoms_count": 26,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 96,
+      "target_node_id": 97,
+      "source_atoms_count": 26,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 39,
+      "target_node_id": 41,
+      "source_atoms_count": 27,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 98,
+      "target_node_id": 100,
+      "source_atoms_count": 27,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 98,
+      "target_node_id": 100,
+      "source_atoms_count": 27,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 106,
+      "target_node_id": 110,
+      "source_atoms_count": 27,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 106,
+      "target_node_id": 110,
+      "source_atoms_count": 27,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 123,
+      "target_node_id": 124,
+      "source_atoms_count": 27,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 123,
+      "target_node_id": 124,
+      "source_atoms_count": 27,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 6,
+      "target_node_id": 8,
+      "source_atoms_count": 25,
+      "target_atoms_count": 26
+    },
+    {
+      "source_node_id": 9,
+      "target_node_id": 10,
+      "source_atoms_count": 26,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 97,
+      "target_node_id": 100,
+      "source_atoms_count": 27,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 30,
+      "target_node_id": 31,
+      "source_atoms_count": 27,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 42,
+      "target_node_id": 118,
+      "source_atoms_count": 26,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 1,
+      "target_node_id": 7,
+      "source_atoms_count": 24,
+      "target_atoms_count": 25
+    },
+    {
+      "source_node_id": 7,
+      "target_node_id": 25,
+      "source_atoms_count": 25,
+      "target_atoms_count": 26
+    },
+    {
+      "source_node_id": 27,
+      "target_node_id": 28,
+      "source_atoms_count": 26,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 11,
+      "target_node_id": 15,
+      "source_atoms_count": 26,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 42,
+      "target_node_id": 46,
+      "source_atoms_count": 26,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 61,
+      "target_node_id": 62,
+      "source_atoms_count": 25,
+      "target_atoms_count": 26
+    },
+    {
+      "source_node_id": 101,
+      "target_node_id": 102,
+      "source_atoms_count": 26,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 1,
+      "target_node_id": 25,
+      "source_atoms_count": 24,
+      "target_atoms_count": 26
+    },
+    {
+      "source_node_id": 1,
+      "target_node_id": 79,
+      "source_atoms_count": 24,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 5,
+      "target_node_id": 15,
+      "source_atoms_count": 27,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 6,
+      "target_node_id": 53,
+      "source_atoms_count": 25,
+      "target_atoms_count": 26
+    },
+    {
+      "source_node_id": 32,
+      "target_node_id": 52,
+      "source_atoms_count": 27,
+      "target_atoms_count": 29
+    },
+    {
+      "source_node_id": 32,
+      "target_node_id": 52,
+      "source_atoms_count": 27,
+      "target_atoms_count": 29
+    },
+    {
+      "source_node_id": 16,
+      "target_node_id": 26,
+      "source_atoms_count": 25,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 37,
+      "target_node_id": 41,
+      "source_atoms_count": 26,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 71,
+      "target_node_id": 79,
+      "source_atoms_count": 25,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 3,
+      "target_node_id": 52,
+      "source_atoms_count": 25,
+      "target_atoms_count": 29
+    },
+    {
+      "source_node_id": 16,
+      "target_node_id": 17,
+      "source_atoms_count": 25,
+      "target_atoms_count": 26
+    },
+    {
+      "source_node_id": 37,
+      "target_node_id": 107,
+      "source_atoms_count": 26,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 53,
+      "target_node_id": 67,
+      "source_atoms_count": 26,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 53,
+      "target_node_id": 67,
+      "source_atoms_count": 26,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 122,
+      "target_node_id": 124,
+      "source_atoms_count": 27,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 2,
+      "target_node_id": 56,
+      "source_atoms_count": 25,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 19,
+      "target_node_id": 56,
+      "source_atoms_count": 24,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 83,
+      "target_node_id": 88,
+      "source_atoms_count": 27,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 83,
+      "target_node_id": 88,
+      "source_atoms_count": 27,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 11,
+      "target_node_id": 52,
+      "source_atoms_count": 26,
+      "target_atoms_count": 29
+    },
+    {
+      "source_node_id": 112,
+      "target_node_id": 113,
+      "source_atoms_count": 26,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 8,
+      "target_node_id": 67,
+      "source_atoms_count": 26,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 32,
+      "target_node_id": 86,
+      "source_atoms_count": 27,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 32,
+      "target_node_id": 86,
+      "source_atoms_count": 27,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 47,
+      "target_node_id": 131,
+      "source_atoms_count": 27,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 47,
+      "target_node_id": 52,
+      "source_atoms_count": 27,
+      "target_atoms_count": 29
+    },
+    {
+      "source_node_id": 54,
+      "target_node_id": 56,
+      "source_atoms_count": 26,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 54,
+      "target_node_id": 56,
+      "source_atoms_count": 26,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 65,
+      "target_node_id": 67,
+      "source_atoms_count": 26,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 65,
+      "target_node_id": 67,
+      "source_atoms_count": 26,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 20,
+      "target_node_id": 148,
+      "source_atoms_count": 25,
+      "target_atoms_count": 26
+    },
+    {
+      "source_node_id": 81,
+      "target_node_id": 110,
+      "source_atoms_count": 27,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 81,
+      "target_node_id": 110,
+      "source_atoms_count": 27,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 85,
+      "target_node_id": 110,
+      "source_atoms_count": 26,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 55,
+      "target_node_id": 67,
+      "source_atoms_count": 25,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 104,
+      "target_node_id": 108,
+      "source_atoms_count": 26,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 3,
+      "target_node_id": 15,
+      "source_atoms_count": 25,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 5,
+      "target_node_id": 52,
+      "source_atoms_count": 27,
+      "target_atoms_count": 29
+    },
+    {
+      "source_node_id": 7,
+      "target_node_id": 79,
+      "source_atoms_count": 25,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 34,
+      "target_node_id": 52,
+      "source_atoms_count": 25,
+      "target_atoms_count": 29
+    },
+    {
+      "source_node_id": 40,
+      "target_node_id": 52,
+      "source_atoms_count": 27,
+      "target_atoms_count": 29
+    },
+    {
+      "source_node_id": 96,
+      "target_node_id": 100,
+      "source_atoms_count": 26,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 2,
+      "target_node_id": 133,
+      "source_atoms_count": 25,
+      "target_atoms_count": 26
+    },
+    {
+      "source_node_id": 23,
+      "target_node_id": 25,
+      "source_atoms_count": 25,
+      "target_atoms_count": 26
+    },
+    {
+      "source_node_id": 23,
+      "target_node_id": 72,
+      "source_atoms_count": 25,
+      "target_atoms_count": 26
+    },
+    {
+      "source_node_id": 71,
+      "target_node_id": 72,
+      "source_atoms_count": 25,
+      "target_atoms_count": 26
+    },
+    {
+      "source_node_id": 77,
+      "target_node_id": 79,
+      "source_atoms_count": 26,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 12,
+      "target_node_id": 15,
+      "source_atoms_count": 26,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 21,
+      "target_node_id": 66,
+      "source_atoms_count": 25,
+      "target_atoms_count": 26
+    },
+    {
+      "source_node_id": 57,
+      "target_node_id": 79,
+      "source_atoms_count": 25,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 57,
+      "target_node_id": 79,
+      "source_atoms_count": 25,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 59,
+      "target_node_id": 141,
+      "source_atoms_count": 25,
+      "target_atoms_count": 26
+    },
+    {
+      "source_node_id": 59,
+      "target_node_id": 141,
+      "source_atoms_count": 25,
+      "target_atoms_count": 26
+    },
+    {
+      "source_node_id": 134,
+      "target_node_id": 153,
+      "source_atoms_count": 25,
+      "target_atoms_count": 26
+    },
+    {
+      "source_node_id": 134,
+      "target_node_id": 153,
+      "source_atoms_count": 25,
+      "target_atoms_count": 26
+    },
+    {
+      "source_node_id": 134,
+      "target_node_id": 153,
+      "source_atoms_count": 25,
+      "target_atoms_count": 26
+    },
+    {
+      "source_node_id": 5,
+      "target_node_id": 109,
+      "source_atoms_count": 27,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 0,
+      "target_node_id": 52,
+      "source_atoms_count": 26,
+      "target_atoms_count": 29
+    },
+    {
+      "source_node_id": 0,
+      "target_node_id": 5,
+      "source_atoms_count": 26,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 6,
+      "target_node_id": 67,
+      "source_atoms_count": 25,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 10,
+      "target_node_id": 15,
+      "source_atoms_count": 27,
+      "target_atoms_count": 28
+    },
+    {
+      "source_node_id": 12,
+      "target_node_id": 52,
+      "source_atoms_count": 26,
+      "target_atoms_count": 29
+    },
+    {
+      "source_node_id": 12,
+      "target_node_id": 36,
+      "source_atoms_count": 26,
+      "target_atoms_count": 27
+    },
+    {
+      "source_node_id": 15,
+      "target_node_id": 52,
+      "source_atoms_count": 28,
+      "target_atoms_count": 29
+    },
+    {
+      "source_node_id": 57,
+      "target_node_id": 139,
+      "source_atoms_count": 25,
+      "target_atoms_count": 26
+    },
+    {
+      "source_node_id": 57,
+      "target_node_id": 139,
+      "source_atoms_count": 25,
+      "target_atoms_count": 26
+    },
+    {
+      "source_node_id": 64,
+      "target_node_id": 66,
+      "source_atoms_count": 25,
+      "target_atoms_count": 26
+    }
+  ],
+  "max_atom_size": 14,
+  "success_threshold": 0.01,
+  "success_reward": 10.0,
+  "step_penalty": -0.5,
+  "action_scale": 0.015,
+  "atom_to_index": {},
+  "using_context_wrapper": false,
+  "use_random_rollouts": true,
+  "num_rollouts_per_node": 100,
+  "max_steps_per_rollout": 300,
+  "shortcut_success_threshold": 5
+}

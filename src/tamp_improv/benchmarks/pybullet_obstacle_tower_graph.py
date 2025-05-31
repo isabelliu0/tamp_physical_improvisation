@@ -1,4 +1,4 @@
-"""Graph-based ClearAndPlace environment implementation."""
+"""Graph-based ObstacleTower environment implementation."""
 
 from __future__ import annotations
 
@@ -9,15 +9,15 @@ import gymnasium as gym
 import numpy as np
 from gymnasium.spaces import GraphInstance
 from numpy.typing import NDArray
-from pybullet_blocks.envs.clear_and_place_env import (
-    ClearAndPlaceSceneDescription,
-    GraphClearAndPlacePyBulletBlocksEnv,
+from pybullet_blocks.envs.obstacle_tower_env import (
+    GraphObstacleTowerPyBulletBlocksEnv,
+    ObstacleTowerSceneDescription,
 )
 from pybullet_blocks.planning_models.action import OPERATORS, SKILLS
 from pybullet_blocks.planning_models.perception import (
     PREDICATES,
     TYPES,
-    GraphClearAndPlacePyBulletBlocksPerceiver,
+    GraphObstacleTowerPyBulletBlocksPerceiver,
 )
 from relational_structs import PDDLDomain, Predicate
 from task_then_motion_planning.structs import Skill
@@ -31,8 +31,8 @@ from tamp_improv.benchmarks.wrappers import ImprovWrapper
 
 
 @dataclass(frozen=True)
-class GraphClearAndPlacePredicates:
-    """Container for GraphClearAndPlace predicates."""
+class GraphObstacleTowerPredicates:
+    """Container for GraphObstacleTower predicates."""
 
     def __getitem__(self, key: str) -> Any:
         """Get predicate by name."""
@@ -43,10 +43,10 @@ class GraphClearAndPlacePredicates:
         return set(PREDICATES)
 
 
-class BaseGraphClearAndPlaceTAMPSystem(
+class BaseGraphObstacleTowerTAMPSystem(
     BaseTAMPSystem[GraphInstance, NDArray[np.float32]]
 ):
-    """Base TAMP system for graph-based ClearAndPlace environment."""
+    """Base TAMP system for graph-based ObstacleTower environment."""
 
     def __init__(
         self,
@@ -55,20 +55,20 @@ class BaseGraphClearAndPlaceTAMPSystem(
         render_mode: str | None = None,
         num_obstacle_blocks: int = 3,
     ) -> None:
-        """Initialize graph-based ClearAndPlace TAMP system."""
+        """Initialize graph-based ObstacleTower TAMP system."""
         self._render_mode = render_mode
         self._num_obstacle_blocks = num_obstacle_blocks
         super().__init__(
-            planning_components, name="GraphClearAndPlaceTAMPSystem", seed=seed
+            planning_components, name="GraphObstacleTowerTAMPSystem", seed=seed
         )
 
     def _create_env(self) -> gym.Env:
         """Create base environment."""
-        scene_description = ClearAndPlaceSceneDescription(
+        scene_description = ObstacleTowerSceneDescription(
             num_obstacle_blocks=self._num_obstacle_blocks,
             stack_blocks=True,
         )
-        return GraphClearAndPlacePyBulletBlocksEnv(
+        return GraphObstacleTowerPyBulletBlocksEnv(
             scene_description=scene_description,
             render_mode=self._render_mode,
             use_gui=False,
@@ -76,7 +76,7 @@ class BaseGraphClearAndPlaceTAMPSystem(
 
     def _get_domain_name(self) -> str:
         """Get domain name."""
-        return "graph-clear-and-place-domain"
+        return "graph-obstacle-tower-domain"
 
     def get_domain(self) -> PDDLDomain:
         """Get PDDL domain."""
@@ -93,13 +93,13 @@ class BaseGraphClearAndPlaceTAMPSystem(
         seed: int | None = None,
         render_mode: str | None = None,
         num_obstacle_blocks: int = 3,
-    ) -> BaseGraphClearAndPlaceTAMPSystem:
+    ) -> BaseGraphObstacleTowerTAMPSystem:
         """Factory method for creating system with default components."""
-        scene_description = ClearAndPlaceSceneDescription(
+        scene_description = ObstacleTowerSceneDescription(
             num_obstacle_blocks=num_obstacle_blocks,
             stack_blocks=True,
         )
-        sim = GraphClearAndPlacePyBulletBlocksEnv(
+        sim = GraphObstacleTowerPyBulletBlocksEnv(
             scene_description=scene_description,
             render_mode=render_mode,
             use_gui=False,
@@ -111,8 +111,8 @@ class BaseGraphClearAndPlaceTAMPSystem(
         skills: set[Skill[GraphInstance, NDArray[np.float32]]] = cast(
             set[Skill[GraphInstance, NDArray[np.float32]]], pybullet_skills
         )
-        perceiver = GraphClearAndPlacePyBulletBlocksPerceiver(sim)
-        predicates = GraphClearAndPlacePredicates()
+        perceiver = GraphObstacleTowerPyBulletBlocksPerceiver(sim)
+        predicates = GraphObstacleTowerPredicates()
         system = cls(
             PlanningComponents(
                 types=set(TYPES),
@@ -128,11 +128,11 @@ class BaseGraphClearAndPlaceTAMPSystem(
         return system
 
 
-class GraphClearAndPlaceTAMPSystem(
+class GraphObstacleTowerTAMPSystem(
     ImprovisationalTAMPSystem[GraphInstance, NDArray[np.float32]],
-    BaseGraphClearAndPlaceTAMPSystem,
+    BaseGraphObstacleTowerTAMPSystem,
 ):
-    """TAMP system for graph-based ClearAndPlace environment with
+    """TAMP system for graph-based ObstacleTower environment with
     improvisational policy learning enabled."""
 
     def __init__(
@@ -142,7 +142,7 @@ class GraphClearAndPlaceTAMPSystem(
         render_mode: str | None = None,
         num_obstacle_blocks: int = 3,
     ) -> None:
-        """Initialize graph-based ClearAndPlace TAMP system."""
+        """Initialize graph-based ObstacleTower TAMP system."""
         self._render_mode = render_mode
         self._num_obstacle_blocks = num_obstacle_blocks
         ImprovisationalTAMPSystem.__init__(
@@ -151,7 +151,7 @@ class GraphClearAndPlaceTAMPSystem(
             seed=seed,
             render_mode=render_mode,
         )
-        BaseGraphClearAndPlaceTAMPSystem.__init__(
+        BaseGraphObstacleTowerTAMPSystem.__init__(
             self,
             planning_components,
             seed=seed,
@@ -177,13 +177,13 @@ class GraphClearAndPlaceTAMPSystem(
         seed: int | None = None,
         render_mode: str | None = None,
         num_obstacle_blocks: int = 3,
-    ) -> GraphClearAndPlaceTAMPSystem:
+    ) -> GraphObstacleTowerTAMPSystem:
         """Factory method for creating system with default components."""
-        scene_description = ClearAndPlaceSceneDescription(
+        scene_description = ObstacleTowerSceneDescription(
             num_obstacle_blocks=num_obstacle_blocks,
             stack_blocks=True,
         )
-        sim = GraphClearAndPlacePyBulletBlocksEnv(
+        sim = GraphObstacleTowerPyBulletBlocksEnv(
             scene_description=scene_description,
             render_mode=render_mode,
             use_gui=False,
@@ -195,8 +195,8 @@ class GraphClearAndPlaceTAMPSystem(
         skills: set[Skill[GraphInstance, NDArray[np.float32]]] = cast(
             set[Skill[GraphInstance, NDArray[np.float32]]], pybullet_skills
         )
-        perceiver = GraphClearAndPlacePyBulletBlocksPerceiver(sim)
-        predicates = GraphClearAndPlacePredicates()
+        perceiver = GraphObstacleTowerPyBulletBlocksPerceiver(sim)
+        predicates = GraphObstacleTowerPredicates()
         system = cls(
             PlanningComponents(
                 types=set(TYPES),

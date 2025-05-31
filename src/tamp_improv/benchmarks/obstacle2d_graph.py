@@ -1,4 +1,4 @@
-"""Blocks2D environment graph-based implementation."""
+"""Obstacle2D environment graph-based implementation."""
 
 from __future__ import annotations
 
@@ -22,19 +22,19 @@ from tamp_improv.benchmarks.base import (
     ImprovisationalTAMPSystem,
     PlanningComponents,
 )
-from tamp_improv.benchmarks.blocks2d import (
-    BaseBlocks2DSkill,
-    Blocks2DPredicates,
-    Blocks2DTypes,
+from tamp_improv.benchmarks.obstacle2d import (
+    BaseObstacle2DSkill,
+    Obstacle2DPredicates,
+    Obstacle2DTypes,
 )
-from tamp_improv.benchmarks.blocks2d_env import (
-    GraphBlocks2DEnv,
+from tamp_improv.benchmarks.obstacle2d_env import (
+    GraphObstacle2DEnv,
     is_block_in_target_area,
 )
 from tamp_improv.benchmarks.wrappers import ImprovWrapper
 
 
-class GraphPickUpSkill(BaseBlocks2DSkill):
+class GraphPickUpSkill(BaseObstacle2DSkill):
     """Skill for picking up blocks from non-target surfaces."""
 
     def _get_operator_name(self) -> str:
@@ -96,7 +96,7 @@ class GraphPickUpFromTargetSkill(GraphPickUpSkill):
         return "PickUpFromTarget"
 
 
-class GraphPutDownSkill(BaseBlocks2DSkill):
+class GraphPutDownSkill(BaseObstacle2DSkill):
     """Skill for putting down blocks on non-target surfaces."""
 
     def _get_operator_name(self) -> str:
@@ -154,25 +154,25 @@ class GraphPutDownOnTargetSkill(GraphPutDownSkill):
         return "PutDownOnTarget"
 
 
-class GraphBlocks2DPerceiver(Perceiver[GraphInstance]):
+class GraphObstacle2DPerceiver(Perceiver[GraphInstance]):
     """Perceiver for blocks2d environment."""
 
-    def __init__(self, types: Blocks2DTypes, n_blocks: int = 2) -> None:
+    def __init__(self, types: Obstacle2DTypes, n_blocks: int = 2) -> None:
         """Initialize with required types."""
         self._robot = Object("robot", types.robot)
         self._blocks = [Object(f"block{i+1}", types.block) for i in range(n_blocks)]
         self._table = Object("table", types.surface)
         self._target_area = Object("target_area", types.surface)
-        self._predicates: Blocks2DPredicates | None = None
+        self._predicates: Obstacle2DPredicates | None = None
         self._types = types
         self.n_blocks = n_blocks
 
-    def initialize(self, predicates: Blocks2DPredicates) -> None:
+    def initialize(self, predicates: Obstacle2DPredicates) -> None:
         """Initialize predicates after environment creation."""
         self._predicates = predicates
 
     @property
-    def predicates(self) -> Blocks2DPredicates:
+    def predicates(self) -> Obstacle2DPredicates:
         """Get predicates, ensuring they're initialized."""
         if self._predicates is None:
             raise RuntimeError("Predicates not initialized. Call initialize() first.")
@@ -318,8 +318,8 @@ class GraphBlocks2DPerceiver(Perceiver[GraphInstance]):
         return free_width < block_width
 
 
-class BaseGraphBlocks2DTAMPSystem(BaseTAMPSystem[GraphInstance, NDArray[np.float32]]):
-    """Base TAMP system for 2D blocks graph-based environment."""
+class BaseGraphObstacle2DTAMPSystem(BaseTAMPSystem[GraphInstance, NDArray[np.float32]]):
+    """Base TAMP system for 2D obstacle graph-based environment."""
 
     def __init__(
         self,
@@ -328,18 +328,20 @@ class BaseGraphBlocks2DTAMPSystem(BaseTAMPSystem[GraphInstance, NDArray[np.float
         seed: int | None = None,
         render_mode: str | None = None,
     ) -> None:
-        """Initialize graph-based Blocks2D TAMP system."""
+        """Initialize graph-based Obstacle2D TAMP system."""
         self._render_mode = render_mode
         self.n_blocks = n_blocks
-        super().__init__(planning_components, name="GraphBlocks2DTAMPSystem", seed=seed)
+        super().__init__(
+            planning_components, name="GraphObstacle2DTAMPSystem", seed=seed
+        )
 
     def _create_env(self) -> gym.Env:
         """Create base environment."""
-        return GraphBlocks2DEnv(n_blocks=self.n_blocks, render_mode=self._render_mode)
+        return GraphObstacle2DEnv(n_blocks=self.n_blocks, render_mode=self._render_mode)
 
     def _get_domain_name(self) -> str:
         """Get domain name."""
-        return "graph-blocks2d-domain"
+        return "graph-obstacle2d-domain"
 
     def get_domain(self) -> PDDLDomain:
         """Get domain."""
@@ -354,13 +356,13 @@ class BaseGraphBlocks2DTAMPSystem(BaseTAMPSystem[GraphInstance, NDArray[np.float
     def _create_planning_components(
         cls, n_blocks: int = 2
     ) -> PlanningComponents[GraphInstance]:
-        """Create planning components for graph-based Blocks2D system."""
-        types_container = Blocks2DTypes()
+        """Create planning components for graph-based Obstacle2D system."""
+        types_container = Obstacle2DTypes()
         types_set = types_container.as_set()
 
-        predicates = Blocks2DPredicates(types_container)
+        predicates = Obstacle2DPredicates(types_container)
 
-        perceiver = GraphBlocks2DPerceiver(types_container, n_blocks)
+        perceiver = GraphObstacle2DPerceiver(types_container, n_blocks)
         perceiver.initialize(predicates)
 
         robot = Variable("?robot", types_container.robot)
@@ -451,7 +453,7 @@ class BaseGraphBlocks2DTAMPSystem(BaseTAMPSystem[GraphInstance, NDArray[np.float
         n_blocks: int = 2,
         seed: int | None = None,
         render_mode: str | None = None,
-    ) -> BaseGraphBlocks2DTAMPSystem:
+    ) -> BaseGraphObstacle2DTAMPSystem:
         """Factory method for creating system with default components."""
         planning_components = cls._create_planning_components(n_blocks=n_blocks)
         system = cls(
@@ -470,11 +472,11 @@ class BaseGraphBlocks2DTAMPSystem(BaseTAMPSystem[GraphInstance, NDArray[np.float
         return system
 
 
-class GraphBlocks2DTAMPSystem(
+class GraphObstacle2DTAMPSystem(
     ImprovisationalTAMPSystem[GraphInstance, NDArray[np.float32]],
-    BaseGraphBlocks2DTAMPSystem,
+    BaseGraphObstacle2DTAMPSystem,
 ):
-    """TAMP system for 2D blocks graph-based environment with improvisational
+    """TAMP system for 2D obstacle graph-based environment with improvisational
     policy learning enabled."""
 
     def __init__(
@@ -484,7 +486,7 @@ class GraphBlocks2DTAMPSystem(
         seed: int | None = None,
         render_mode: str | None = None,
     ) -> None:
-        """Initialize graph-based Blocks2D TAMP system."""
+        """Initialize graph-based Obstacle2D TAMP system."""
         self.n_blocks = n_blocks
         self._render_mode = render_mode
         ImprovisationalTAMPSystem.__init__(
@@ -493,7 +495,7 @@ class GraphBlocks2DTAMPSystem(
             seed=seed,
             render_mode=render_mode,
         )
-        BaseGraphBlocks2DTAMPSystem.__init__(
+        BaseGraphObstacle2DTAMPSystem.__init__(
             self,
             planning_components,
             n_blocks=n_blocks,
@@ -518,11 +520,11 @@ class GraphBlocks2DTAMPSystem(
         n_blocks: int = 2,
         seed: int | None = None,
         render_mode: str | None = None,
-    ) -> GraphBlocks2DTAMPSystem:
+    ) -> GraphObstacle2DTAMPSystem:
         """Factory method for creating improvisational system with default
         components."""
         planning_components = cls._create_planning_components(n_blocks=n_blocks)
-        system = GraphBlocks2DTAMPSystem(
+        system = GraphObstacle2DTAMPSystem(
             planning_components,
             n_blocks=n_blocks,
             seed=seed,

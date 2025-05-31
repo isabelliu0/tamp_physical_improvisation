@@ -21,8 +21,8 @@ from tamp_improv.approaches.improvisational.training import (
     TrainingConfig,
     train_and_evaluate_goal_conditioned,
 )
-from tamp_improv.benchmarks.blocks2d import Blocks2DTAMPSystem
 from tamp_improv.benchmarks.goal_wrapper import GoalConditionedWrapper
+from tamp_improv.benchmarks.obstacle2d import Obstacle2DTAMPSystem
 
 
 def test_goal_conditioned_data_collection():
@@ -36,7 +36,7 @@ def test_goal_conditioned_data_collection():
         "force_collect": True,
         "training_data_dir": "training_data/test_goal",
     }
-    system = Blocks2DTAMPSystem.create_default(
+    system = Obstacle2DTAMPSystem.create_default(
         seed=config["seed"], render_mode="rgb_array" if config["render"] else None
     )
     policy = PushingPolicy(seed=config["seed"])
@@ -77,7 +77,7 @@ def test_goal_wrapper():
     """Test the goal-conditioned wrapper."""
     print("\n=== Testing Goal-Conditioned Wrapper ===")
     train_data = test_goal_conditioned_data_collection()
-    system = Blocks2DTAMPSystem.create_default(seed=42, render_mode=None)
+    system = Obstacle2DTAMPSystem.create_default(seed=42, render_mode=None)
     goal_env = GoalConditionedWrapper(
         env=system.env,
         node_states=train_data.node_states,
@@ -113,7 +113,7 @@ def test_goal_conditioned_rl(algorithm):
     """Test goal-conditioned RL policy training."""
     print(f"\n=== Testing Goal-Conditioned RL Policy ({algorithm}) ===")
     train_data = test_goal_conditioned_data_collection()
-    system = Blocks2DTAMPSystem.create_default(seed=42, render_mode=None)
+    system = Obstacle2DTAMPSystem.create_default(seed=42, render_mode=None)
     goal_env = GoalConditionedWrapper(
         env=system.env,
         node_states=train_data.node_states,
@@ -204,7 +204,7 @@ def test_goal_conditioned_training_pipeline(algorithm):
     )
 
     # Create system
-    system = Blocks2DTAMPSystem.create_default(
+    system = Obstacle2DTAMPSystem.create_default(
         seed=config.seed, render_mode="rgb_array" if config.render else None
     )
 
@@ -251,9 +251,9 @@ def test_goal_conditioned_rl_rollouts(
         max_steps=50,
         collect_episodes=1,
         episodes_per_scenario=200,
-        force_collect=False,
+        force_collect=True,
         render=True,
-        record_training=True,
+        record_training=False,
         training_record_interval=100,
         training_data_dir="training_data/test_goal_rollouts",
         save_dir="trained_policies/test_goal_rollouts",
@@ -264,7 +264,7 @@ def test_goal_conditioned_rl_rollouts(
     )
 
     # Create system
-    system = Blocks2DTAMPSystem.create_default(
+    system = Obstacle2DTAMPSystem.create_default(
         seed=config.seed, render_mode="rgb_array" if config.render else None
     )
 

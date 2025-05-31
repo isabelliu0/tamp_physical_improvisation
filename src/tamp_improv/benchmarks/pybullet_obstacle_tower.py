@@ -1,4 +1,4 @@
-"""ClearAndPlace environment implementation."""
+"""ObstacleTower environment implementation."""
 
 from __future__ import annotations
 
@@ -8,15 +8,15 @@ from typing import Any, cast
 import gymnasium as gym
 import numpy as np
 from numpy.typing import NDArray
-from pybullet_blocks.envs.clear_and_place_env import (
-    ClearAndPlacePyBulletBlocksEnv,
-    ClearAndPlaceSceneDescription,
+from pybullet_blocks.envs.obstacle_tower_env import (
+    ObstacleTowerPyBulletBlocksEnv,
+    ObstacleTowerSceneDescription,
 )
 from pybullet_blocks.planning_models.action import OPERATORS, SKILLS
 from pybullet_blocks.planning_models.perception import (
     PREDICATES,
     TYPES,
-    ClearAndPlacePyBulletBlocksPerceiver,
+    ObstacleTowerPyBulletBlocksPerceiver,
 )
 from relational_structs import PDDLDomain
 from task_then_motion_planning.structs import Skill
@@ -30,8 +30,8 @@ from tamp_improv.benchmarks.wrappers import ImprovWrapper
 
 
 @dataclass(frozen=True)
-class ClearAndPlacePredicates:
-    """Container for ClearAndPlace predicates."""
+class ObstacleTowerPredicates:
+    """Container for ObstacleTower predicates."""
 
     def __getitem__(self, key: str) -> Any:
         """Get predicate by name."""
@@ -42,10 +42,10 @@ class ClearAndPlacePredicates:
         return set(PREDICATES)
 
 
-class BaseClearAndPlaceTAMPSystem(
+class BaseObstacleTowerTAMPSystem(
     BaseTAMPSystem[NDArray[np.float32], NDArray[np.float32]]
 ):
-    """Base TAMP system for ClearAndPlace environment."""
+    """Base TAMP system for ObstacleTower environment."""
 
     def __init__(
         self,
@@ -53,17 +53,17 @@ class BaseClearAndPlaceTAMPSystem(
         seed: int | None = None,
         render_mode: str | None = None,
     ) -> None:
-        """Initialize ClearAndPlace TAMP system."""
+        """Initialize ObstacleTower TAMP system."""
         self._render_mode = render_mode
-        super().__init__(planning_components, name="ClearAndPlaceTAMPSystem", seed=seed)
+        super().__init__(planning_components, name="ObstacleTowerTAMPSystem", seed=seed)
 
     def _create_env(self) -> gym.Env:
         """Create base environment."""
-        scene_description = ClearAndPlaceSceneDescription(
+        scene_description = ObstacleTowerSceneDescription(
             num_obstacle_blocks=3,
             stack_blocks=True,
         )
-        return ClearAndPlacePyBulletBlocksEnv(
+        return ObstacleTowerPyBulletBlocksEnv(
             scene_description=scene_description,
             render_mode=self._render_mode,
             use_gui=False,
@@ -71,7 +71,7 @@ class BaseClearAndPlaceTAMPSystem(
 
     def _get_domain_name(self) -> str:
         """Get domain name."""
-        return "clear-and-place-domain"
+        return "obstacle-tower-domain"
 
     def get_domain(self) -> PDDLDomain:
         """Get PDDL domain."""
@@ -87,13 +87,13 @@ class BaseClearAndPlaceTAMPSystem(
         cls,
         seed: int | None = None,
         render_mode: str | None = None,
-    ) -> BaseClearAndPlaceTAMPSystem:
+    ) -> BaseObstacleTowerTAMPSystem:
         """Factory method for creating system with default components."""
-        scene_description = ClearAndPlaceSceneDescription(
+        scene_description = ObstacleTowerSceneDescription(
             num_obstacle_blocks=3,
             stack_blocks=True,
         )
-        sim = ClearAndPlacePyBulletBlocksEnv(
+        sim = ObstacleTowerPyBulletBlocksEnv(
             scene_description=scene_description,
             render_mode=render_mode,
             use_gui=False,
@@ -105,8 +105,8 @@ class BaseClearAndPlaceTAMPSystem(
         skills: set[Skill[NDArray[np.float32], NDArray[np.float32]]] = cast(
             set[Skill[NDArray[np.float32], NDArray[np.float32]]], pybullet_skills
         )
-        perceiver = ClearAndPlacePyBulletBlocksPerceiver(sim)
-        predicates = ClearAndPlacePredicates()
+        perceiver = ObstacleTowerPyBulletBlocksPerceiver(sim)
+        predicates = ObstacleTowerPredicates()
         system = cls(
             PlanningComponents(
                 types=set(TYPES),
@@ -121,11 +121,11 @@ class BaseClearAndPlaceTAMPSystem(
         return system
 
 
-class ClearAndPlaceTAMPSystem(
+class ObstacleTowerTAMPSystem(
     ImprovisationalTAMPSystem[NDArray[np.float32], NDArray[np.float32]],
-    BaseClearAndPlaceTAMPSystem,
+    BaseObstacleTowerTAMPSystem,
 ):
-    """TAMP system for ClearAndPlace environment with improvisational policy
+    """TAMP system for ObstacleTower environment with improvisational policy
     learning enabled."""
 
     def __init__(
@@ -134,7 +134,7 @@ class ClearAndPlaceTAMPSystem(
         seed: int | None = None,
         render_mode: str | None = None,
     ) -> None:
-        """Initialize ClearAndPlace TAMP system."""
+        """Initialize ObstacleTower TAMP system."""
         self._render_mode = render_mode
         super().__init__(planning_components, seed=seed, render_mode=render_mode)
 
@@ -155,14 +155,14 @@ class ClearAndPlaceTAMPSystem(
         cls,
         seed: int | None = None,
         render_mode: str | None = None,
-    ) -> ClearAndPlaceTAMPSystem:
+    ) -> ObstacleTowerTAMPSystem:
         """Factory method for creating improvisational system with default
         components."""
-        scene_description = ClearAndPlaceSceneDescription(
+        scene_description = ObstacleTowerSceneDescription(
             num_obstacle_blocks=3,
             stack_blocks=True,
         )
-        sim = ClearAndPlacePyBulletBlocksEnv(
+        sim = ObstacleTowerPyBulletBlocksEnv(
             scene_description=scene_description,
             render_mode=render_mode,
             use_gui=False,
@@ -174,8 +174,8 @@ class ClearAndPlaceTAMPSystem(
         skills: set[Skill[NDArray[np.float32], NDArray[np.float32]]] = cast(
             set[Skill[NDArray[np.float32], NDArray[np.float32]]], pybullet_skills
         )
-        perceiver = ClearAndPlacePyBulletBlocksPerceiver(sim)
-        predicates = ClearAndPlacePredicates()
+        perceiver = ObstacleTowerPyBulletBlocksPerceiver(sim)
+        predicates = ObstacleTowerPredicates()
         system = cls(
             PlanningComponents(
                 types=set(TYPES),

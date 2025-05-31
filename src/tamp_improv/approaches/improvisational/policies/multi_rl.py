@@ -13,6 +13,7 @@ import gymnasium as gym
 import numpy as np
 import torch
 from gymnasium.spaces import Box
+from gymnasium.wrappers import RecordVideo
 from relational_structs import GroundAtom, Object, Predicate
 
 from tamp_improv.approaches.improvisational.policies.base import (
@@ -61,12 +62,6 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
     def configure_context(self, context: PolicyContext) -> None:
         """Configure policy with context information."""
         self._current_context = context
-
-        # # DEBUG: Testing generalization on specific shortcuts based on IDs
-        # matching_policy = None
-        # if context.info.get("source_node_id") == 1 and context.info.get("target_node_id") == 1523: # pylint:disable=line-too-long
-        #     matching_policy = self._find_matching_policy(context)
-
         matching_policy = self._find_matching_policy(context)
         if matching_policy:
             self._active_policy_key = matching_policy
@@ -78,12 +73,6 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
         """Check if we can handle the current context."""
         if not self._current_context:
             return False
-
-        # # DEBUG: Testing generalization on specific shortcuts based on IDs
-        # # 4 blocks (331), 5 blocks (1523)
-        # if not (self._current_context.info.get("source_node_id") == 1 and self._current_context.info.get("target_node_id") == 1523):   # pylint:disable=line-too-long
-        #     return False
-
         return self._find_matching_policy(self._current_context) is not None
 
     def get_action(self, obs: ObsType) -> ActType:
@@ -153,8 +142,12 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
                 ):
                     for obj in atom.objects:
                         relevant_objects.add(obj.name)
-                if hasattr(env, "set_relevant_objects"):
-                    env.set_relevant_objects(relevant_objects)
+                if isinstance(env, RecordVideo):
+                    if hasattr(env.env, "set_relevant_objects"):
+                        env.env.set_relevant_objects(relevant_objects)
+                else:
+                    if hasattr(env, "set_relevant_objects"):
+                        env.set_relevant_objects(relevant_objects)
                 base_env = self._get_base_env(env)
 
                 # Wrap the environment to use the right observation space

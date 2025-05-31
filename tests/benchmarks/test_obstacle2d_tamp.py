@@ -1,18 +1,18 @@
-"""Tests for Blocks2D environment with TAMP."""
+"""Tests for Obstacle2D environment with TAMP."""
 
 import pytest
 from gymnasium.wrappers import TimeLimit
 from task_then_motion_planning.planning import TaskThenMotionPlanner
 
-from tamp_improv.benchmarks.blocks2d import BaseBlocks2DTAMPSystem
-from tamp_improv.benchmarks.blocks2d_graph import BaseGraphBlocks2DTAMPSystem
+from tamp_improv.benchmarks.obstacle2d import BaseObstacle2DTAMPSystem
+from tamp_improv.benchmarks.obstacle2d_graph import BaseGraphObstacle2DTAMPSystem
 
 
 @pytest.mark.parametrize(
-    "system_cls", [BaseBlocks2DTAMPSystem, BaseGraphBlocks2DTAMPSystem]
+    "system_cls", [BaseObstacle2DTAMPSystem, BaseGraphObstacle2DTAMPSystem]
 )
-def test_blocks2d_tamp_system(system_cls):
-    """Test Blocks2D environment with TAMP planner."""
+def test_obstacle2d_tamp_system(system_cls):
+    """Test Obstacle2D environment with TAMP planner."""
     # Create TAMP system
     tamp_system = system_cls.create_default(render_mode="rgb_array", seed=42)
 
@@ -21,7 +21,7 @@ def test_blocks2d_tamp_system(system_cls):
 
     # # Uncomment to generate videos.
     # from gymnasium.wrappers import RecordVideo
-    # env = RecordVideo(env, "videos/blocks2d-planning-test")
+    # env = RecordVideo(env, "videos/obstacle2d-planning-test")
 
     # Create planner using environment's components
     planner = TaskThenMotionPlanner(

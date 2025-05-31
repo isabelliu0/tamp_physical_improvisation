@@ -11,8 +11,9 @@ from tamp_improv.approaches.improvisational.policies.pushing import PushingPolic
 from tamp_improv.approaches.improvisational.policies.pushing_pybullet import (
     PybulletPushingPolicy,
 )
-from tamp_improv.benchmarks.blocks2d import Blocks2DTAMPSystem
-from tamp_improv.benchmarks.pybullet_clear_and_place import ClearAndPlaceTAMPSystem
+from tamp_improv.benchmarks.obstacle2d import Obstacle2DTAMPSystem
+from tamp_improv.benchmarks.pybullet_cluttered_drawer import ClutteredDrawerTAMPSystem
+from tamp_improv.benchmarks.pybullet_obstacle_tower import ObstacleTowerTAMPSystem
 
 
 def visualize_graph(graph, output_path=None):
@@ -86,8 +87,9 @@ def visualize_graph(graph, output_path=None):
 @pytest.mark.parametrize(
     "system_cls,policy_cls,env_name",
     [
-        (Blocks2DTAMPSystem, PushingPolicy, "blocks2d"),
-        (ClearAndPlaceTAMPSystem, PybulletPushingPolicy, "pybullet"),
+        (Obstacle2DTAMPSystem, PushingPolicy, "obstacle2d"),
+        (ObstacleTowerTAMPSystem, PybulletPushingPolicy, "pybullet"),
+        (ClutteredDrawerTAMPSystem, PybulletPushingPolicy, "cluttered_drawer"),
     ],
 )
 def test_planning_graph_visualization(system_cls, policy_cls, env_name):
