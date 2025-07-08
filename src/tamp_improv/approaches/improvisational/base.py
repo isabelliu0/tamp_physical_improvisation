@@ -594,7 +594,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self,
         obs: ObsType,
         info: dict[str, Any],
-        debug: bool = True,
+        debug: bool = False,
     ) -> None:
         """Compute edge costs considering the path taken to reach each node.
 
@@ -645,6 +645,22 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     continue
                 if edge.target.id <= node.id:
                     continue
+
+                # # DEBUG: Envisioned plan for cluttered drawer env
+                # # B->C->T
+                # envisioned_plan = [
+                #     (0, 1),
+                #     (1, 6),
+                #     (6, 10),
+                #     (10, 15),
+                #     (15, 35),
+                #     (35, 50),
+                #     (50, 58),
+                #     (58, 88),
+                #     (88, 111),
+                # ]  # pylint: disable=line-too-long
+                # if (node.id, edge.target.id) not in envisioned_plan:
+                #     continue
 
                 frames: list[Any] = []
                 video_filename = ""

@@ -6,6 +6,7 @@ from typing import cast
 import gymnasium as gym
 import numpy as np
 import torch
+from numpy.typing import NDArray
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
 from torch import Tensor
@@ -213,9 +214,10 @@ class RLPolicy(Policy[ObsType, ActType]):
                 raise ValueError(
                     "Environment does not have max_episode_steps attribute"
                 )
+            wrapped_env = FlattenGraphObsWrapper(env)
             self.model = PPO(
                 "MlpPolicy",
-                env,
+                wrapped_env,
                 learning_rate=self.config.learning_rate,
                 n_steps=max_steps,
                 batch_size=self.config.batch_size,
@@ -279,11 +281,24 @@ class RLPolicy(Policy[ObsType, ActType]):
         if self.model is None:
             raise ValueError("Policy not trained or loaded")
 
-        obs_tensor = self.device_ctx(obs)
-        obs_cpu = (
-            obs_tensor.cpu() if isinstance(obs_tensor, Tensor) else obs_tensor
-        )  # move to CPU for stable_baselines3
-        obs_numpy = self.device_ctx.numpy(obs_cpu)
+        if hasattr(obs, "nodes"):
+            obs_flat = obs.nodes.flatten()
+            # Pad to match training observation space if needed
+            assert self.model.observation_space.shape is not None
+            expected_size = self.model.observation_space.shape[0]
+            if len(obs_flat) < expected_size:
+                padded = np.zeros(expected_size, dtype=np.float32)
+                padded[: len(obs_flat)] = obs_flat
+                obs_flat = padded
+            elif len(obs_flat) > expected_size:
+                obs_flat = obs_flat[:expected_size]
+            obs_numpy = obs_flat
+        else:
+            obs_tensor = self.device_ctx(obs)
+            obs_cpu = (
+                obs_tensor.cpu() if isinstance(obs_tensor, Tensor) else obs_tensor
+            )  # move to CPU for stable_baselines3
+            obs_numpy = self.device_ctx.numpy(obs_cpu)
 
         with torch.no_grad():
             action, _ = self.model.predict(obs_numpy, deterministic=False)
@@ -302,3 +317,35 @@ class RLPolicy(Policy[ObsType, ActType]):
     def load(self, path: str) -> None:
         """Load policy."""
         self.model = PPO.load(path)
+
+
+class FlattenGraphObsWrapper(gym.ObservationWrapper):
+    """Simple wrapper to flatten graph observations for stable-baselines3."""
+
+    def __init__(self, env: gym.Env) -> None:
+        super().__init__(env)
+        if hasattr(env.observation_space, "node_space"):
+            # Graph space - determine max possible size
+            # Sample a few observations to get the maximum size
+            max_size = 0
+            for _ in range(10):
+                sample_obs = env.observation_space.sample()
+                flattened_size = sample_obs.nodes.flatten().shape[0]
+                max_size = max(max_size, flattened_size)
+
+            self.max_size: int | None = max_size
+            self.observation_space = gym.spaces.Box(
+                low=-np.inf, high=np.inf, shape=(max_size,), dtype=np.float32
+            )
+        else:
+            self.max_size = None
+
+    def observation(self, observation: ObsType) -> ObsType | NDArray[np.float32]:
+        if hasattr(observation, "nodes"):
+            flattened = observation.nodes.flatten()
+            if self.max_size and len(flattened) < self.max_size:
+                padded = np.zeros(self.max_size, dtype=np.float32)
+                padded[: len(flattened)] = flattened
+                return padded
+            return flattened
+        return observation

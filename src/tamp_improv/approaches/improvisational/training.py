@@ -540,9 +540,6 @@ def train_and_evaluate_pure_rl(
             name_prefix="training",
         )
 
-    # Initialize policy
-    policy.initialize(pure_rl_env)
-
     # Train policy if needed
     start_time = time.time()
     if policy.requires_training:

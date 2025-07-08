@@ -7,8 +7,8 @@ import gymnasium as gym
 import numpy as np
 from numpy.typing import NDArray
 from pybullet_blocks.envs.obstacle_tower_env import (
-    ObstacleTowerPyBulletBlocksEnv,
-    ObstacleTowerPyBulletBlocksState,
+    ObstacleTowerPyBulletObjectsEnv,
+    ObstacleTowerPyBulletObjectsState,
 )
 from pybullet_blocks.planning_models.perception import (
     GripperEmpty,
@@ -39,15 +39,15 @@ class PybulletPushingPolicy(Policy[NDArray[np.float32], NDArray[np.float32]]):
 
     def __init__(self, seed: int) -> None:
         super().__init__(seed)
-        self._env: ObstacleTowerPyBulletBlocksEnv | None = None
+        self._env: ObstacleTowerPyBulletObjectsEnv | None = None
         self._wrapped_env: gym.Env | None = None
-        self._planning_env: ObstacleTowerPyBulletBlocksEnv | None = None
+        self._planning_env: ObstacleTowerPyBulletObjectsEnv | None = None
         self._current_atoms: set[GroundAtom] | None = None
         self._goal_atoms: set[GroundAtom] | None = None
         self._context: PolicyContext | None = None
 
         # Push state tracking
-        self._state: ObstacleTowerPyBulletBlocksState | None = None
+        self._state: ObstacleTowerPyBulletObjectsState | None = None
         self._joint_distance_fn: Callable[[list[float], list[float]], float] | None = (
             None
         )
@@ -68,10 +68,10 @@ class PybulletPushingPolicy(Policy[NDArray[np.float32], NDArray[np.float32]]):
         self._wrapped_env = env
         base_env = env
         # while hasattr(base_env, "env") and not isinstance(
-        #     base_env, ObstacleTowerPyBulletBlocksEnv
+        #     base_env, ObstacleTowerPyBulletObjectsEnv
         # ):
         #     base_env = base_env.env
-        # assert isinstance(base_env, ObstacleTowerPyBulletBlocksEnv)
+        # assert isinstance(base_env, ObstacleTowerPyBulletObjectsEnv)
         self._env = base_env  # type: ignore[assignment]
         self._plan = []
         self._current_step = 0
@@ -79,7 +79,7 @@ class PybulletPushingPolicy(Policy[NDArray[np.float32], NDArray[np.float32]]):
         self._init_ee_orn = None
         self._push_ee_orn = None
 
-    def _create_planning_env(self, state: ObstacleTowerPyBulletBlocksState) -> None:
+    def _create_planning_env(self, state: ObstacleTowerPyBulletObjectsState) -> None:
         """Create a separate environment instance for motion planning."""
         assert self._env is not None
         if hasattr(self._env, "clone"):
@@ -139,7 +139,7 @@ class PybulletPushingPolicy(Policy[NDArray[np.float32], NDArray[np.float32]]):
 
     def get_action(self, obs: NDArray[np.float32]) -> NDArray[np.float32]:
         """Get action for pushing obstacle blocks out of the target area."""
-        self._state = ObstacleTowerPyBulletBlocksState.from_observation(obs)
+        self._state = ObstacleTowerPyBulletObjectsState.from_observation(obs)
 
         # If we're done with the current plan, generate the next one based on push stage
         if not self._plan:
@@ -250,7 +250,7 @@ class PybulletPushingPolicy(Policy[NDArray[np.float32], NDArray[np.float32]]):
             self._push_stage = 0
 
     def _convert_plan_to_actions(
-        self, plan: list[NDArray[np.float32]], state: ObstacleTowerPyBulletBlocksState
+        self, plan: list[NDArray[np.float32]], state: ObstacleTowerPyBulletObjectsState
     ) -> list[NDArray[np.float32]]:
         """Convert a joint position plan to a sequence of actions."""
         assert plan is not None and self._planning_env is not None

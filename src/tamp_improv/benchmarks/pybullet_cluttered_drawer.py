@@ -10,14 +10,14 @@ import numpy as np
 from gymnasium.spaces import GraphInstance
 from numpy.typing import NDArray
 from pybullet_blocks.envs.cluttered_drawer_env import (
-    ClutteredDrawerPyBulletBlocksEnv,
+    ClutteredDrawerPyBulletObjectsEnv,
     ClutteredDrawerSceneDescription,
 )
 from pybullet_blocks.planning_models.action import OPERATORS_DRAWER, SKILLS_DRAWER
 from pybullet_blocks.planning_models.perception import (
     DRAWER_PREDICATES,
     TYPES,
-    ClutteredDrawerBlocksPerceiver,
+    ClutteredDrawerObjectsPerceiver,
 )
 from relational_structs import PDDLDomain, Predicate
 from task_then_motion_planning.structs import Skill
@@ -61,9 +61,9 @@ class BaseClutteredDrawerTAMPSystem(BaseTAMPSystem[GraphInstance, NDArray[np.flo
     def _create_env(self) -> gym.Env:
         """Create base environment."""
         scene_description = ClutteredDrawerSceneDescription(
-            num_drawer_blocks=4,
+            num_drawer_objects=4,
         )
-        return ClutteredDrawerPyBulletBlocksEnv(
+        return ClutteredDrawerPyBulletObjectsEnv(
             scene_description=scene_description,
             render_mode=self._render_mode,
             use_gui=False,
@@ -90,9 +90,9 @@ class BaseClutteredDrawerTAMPSystem(BaseTAMPSystem[GraphInstance, NDArray[np.flo
     ) -> BaseClutteredDrawerTAMPSystem:
         """Factory method for creating system with default components."""
         scene_description = ClutteredDrawerSceneDescription(
-            num_drawer_blocks=3,
+            num_drawer_objects=3,
         )
-        sim = ClutteredDrawerPyBulletBlocksEnv(
+        sim = ClutteredDrawerPyBulletObjectsEnv(
             scene_description=scene_description,
             render_mode=render_mode,
             use_gui=False,
@@ -104,7 +104,7 @@ class BaseClutteredDrawerTAMPSystem(BaseTAMPSystem[GraphInstance, NDArray[np.flo
         skills: set[Skill[GraphInstance, NDArray[np.float32]]] = cast(
             set[Skill[GraphInstance, NDArray[np.float32]]], pybullet_skills
         )
-        perceiver = ClutteredDrawerBlocksPerceiver(sim)
+        perceiver = ClutteredDrawerObjectsPerceiver(sim)
         predicates = ClutteredDrawerPredicates()
         system = cls(
             PlanningComponents(
@@ -157,9 +157,9 @@ class ClutteredDrawerTAMPSystem(
     ) -> ClutteredDrawerTAMPSystem:
         """Factory method for creating system with default components."""
         scene_description = ClutteredDrawerSceneDescription(
-            num_drawer_blocks=4,
+            num_drawer_objects=4,
         )
-        sim = ClutteredDrawerPyBulletBlocksEnv(
+        sim = ClutteredDrawerPyBulletObjectsEnv(
             scene_description=scene_description,
             render_mode=render_mode,
             use_gui=False,
@@ -171,7 +171,7 @@ class ClutteredDrawerTAMPSystem(
         skills: set[Skill[GraphInstance, NDArray[np.float32]]] = cast(
             set[Skill[GraphInstance, NDArray[np.float32]]], pybullet_skills
         )
-        perceiver = ClutteredDrawerBlocksPerceiver(sim)
+        perceiver = ClutteredDrawerObjectsPerceiver(sim)
         predicates = ClutteredDrawerPredicates()
         system = cls(
             PlanningComponents(
