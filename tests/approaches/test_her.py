@@ -23,6 +23,10 @@ from tamp_improv.approaches.improvisational.training import (
 )
 from tamp_improv.benchmarks.goal_wrapper import GoalConditionedWrapper
 from tamp_improv.benchmarks.obstacle2d import Obstacle2DTAMPSystem
+from tamp_improv.benchmarks.pybullet_cluttered_drawer import ClutteredDrawerTAMPSystem
+from tamp_improv.benchmarks.pybullet_obstacle_tower_graph import (
+    GraphObstacleTowerTAMPSystem,
+)
 
 
 def test_goal_conditioned_data_collection():
@@ -180,7 +184,6 @@ def test_goal_conditioned_rl(algorithm):
     return policy
 
 
-@pytest.mark.skip("TODO: Enable using different graphs and node-states for HER")
 @pytest.mark.parametrize("algorithm", ["SAC"])
 def test_goal_conditioned_training_pipeline(algorithm):
     """Test the full goal-conditioned training and evaluation pipeline."""
@@ -189,7 +192,7 @@ def test_goal_conditioned_training_pipeline(algorithm):
         seed=42,
         num_episodes=1,
         max_steps=50,
-        collect_episodes=1,
+        collect_episodes=5,
         episodes_per_scenario=250,
         force_collect=True,
         render=True,
@@ -225,7 +228,11 @@ def test_goal_conditioned_training_pipeline(algorithm):
         policy_factory,
         config,
         policy_name=f"Test_Goal_{algorithm}",
-        use_atom_as_obs=True,
+        use_atom_as_obs=False,
+        use_random_rollouts=True,
+        num_rollouts_per_node=1000,
+        max_steps_per_rollout=100,
+        shortcut_success_threshold=1,
     )
     print(f"Success rate: {metrics.success_rate:.2%}")
     print(f"Average episode length: {metrics.avg_episode_length:.2f}")
@@ -233,38 +240,38 @@ def test_goal_conditioned_training_pipeline(algorithm):
     return metrics
 
 
-@pytest.mark.skip("TODO: Enable using different graphs and node-states for HER")
-@pytest.mark.parametrize("algorithm", ["SAC"])
-def test_goal_conditioned_rl_rollouts(
-    algorithm,
-    use_random_rollouts=True,
-    num_rollouts_per_node=1000,
-    max_steps_per_rollout=100,
-    shortcut_success_threshold=1,
-):
-    """Test the full goal-conditioned RL with random rollout shortcut
-    selection."""
-    print("\n=== Testing Goal-Conditioned RL with Random Rollout Selection ===")
+@pytest.mark.skip(reason="Taking too long as unit tests")
+@pytest.mark.parametrize(
+    "system_cls,max_atom_size",
+    [
+        (GraphObstacleTowerTAMPSystem, 42),
+        (ClutteredDrawerTAMPSystem, 72),
+    ],
+)
+def test_goal_conditioned_pybullet(system_cls, max_atom_size):
+    """Test the goal-conditioned training and evaluation on pybullet
+    environments."""
+    print(f"\n=== Testing Goal-Conditioned Training on {system_cls.__name__} ===")
     config = TrainingConfig(
         seed=42,
         num_episodes=1,
         max_steps=50,
         collect_episodes=1,
-        episodes_per_scenario=200,
+        episodes_per_scenario=50,
         force_collect=True,
         render=True,
         record_training=False,
         training_record_interval=100,
-        training_data_dir="training_data/test_goal_rollouts",
-        save_dir="trained_policies/test_goal_rollouts",
-        max_atom_size=14,
+        training_data_dir="training_data/test_goal_pipeline",
+        save_dir="trained_policies/test_goal_pipeline",
+        max_atom_size=max_atom_size,
         success_threshold=0.01,
         success_reward=10.0,
         step_penalty=-0.5,
     )
 
     # Create system
-    system = Obstacle2DTAMPSystem.create_default(
+    system = system_cls.create_default(
         seed=config.seed, render_mode="rgb_array" if config.render else None
     )
 
@@ -273,7 +280,7 @@ def test_goal_conditioned_rl_rollouts(
         return GoalConditionedRLPolicy(
             seed=seed,
             config=GoalConditionedRLConfig(
-                algorithm=algorithm,
+                algorithm="SAC",
                 batch_size=64,
                 buffer_size=1000,
                 n_sampled_goal=4,
@@ -284,12 +291,12 @@ def test_goal_conditioned_rl_rollouts(
         system,
         policy_factory,
         config,
-        policy_name=f"Goal_{algorithm}_rollouts",
-        use_atom_as_obs=True,
-        use_random_rollouts=use_random_rollouts,
-        num_rollouts_per_node=num_rollouts_per_node,
-        max_steps_per_rollout=max_steps_per_rollout,
-        shortcut_success_threshold=shortcut_success_threshold,
+        policy_name="Test_Goal",
+        use_atom_as_obs=False,
+        use_random_rollouts=True,
+        num_rollouts_per_node=100,
+        max_steps_per_rollout=300,
+        shortcut_success_threshold=5,
     )
     print(f"Success rate: {metrics.success_rate:.2%}")
     print(f"Average episode length: {metrics.avg_episode_length:.2f}")

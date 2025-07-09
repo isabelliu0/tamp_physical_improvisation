@@ -246,8 +246,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         """Step approach with new observation."""
         atoms = self.system.perceiver.step(obs)
         using_goal_env, goal_env = self._using_goal_env(self.system.wrapped_env)
-        target_atom_vector = None
-        current_atom_vector = None
+        target_vec = None
+        current_vec = None
 
         # Check if the custom goal (if any) has been achieved
         if self._custom_goal and self._custom_goal.issubset(atoms):
@@ -274,20 +274,18 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     target_node_id = self._current_edge.target.id
                     target_atoms = set(self._current_edge.target.atoms)
                     if goal_env.use_atom_as_obs is True:
-                        target_atom_vector = goal_env.create_atom_vector(target_atoms)
-                        current_atom_vector = goal_env.create_atom_vector(atoms)
+                        target_vec = goal_env.create_atom_vector(target_atoms)
+                        current_vec = goal_env.create_atom_vector(atoms)
+                    else:
+                        target_state = self.policy.node_states[target_node_id]
+                        if isinstance(target_state, list):
+                            target_state = target_state[0]  # Use first state
+                        target_vec = goal_env.flatten_obs(target_state)
+                        current_vec = goal_env.flatten_obs(obs)
                     dict_obs = {
-                        "observation": obs,
-                        "achieved_goal": (
-                            obs
-                            if goal_env.use_atom_as_obs is False
-                            else current_atom_vector
-                        ),
-                        "desired_goal": (
-                            self.policy.node_states[target_node_id]
-                            if goal_env.use_atom_as_obs is False
-                            else target_atom_vector
-                        ),
+                        "observation": goal_env.flatten_obs(obs),
+                        "achieved_goal": current_vec,
+                        "desired_goal": target_vec,
                     }
                     return ApproachStepResult(action=self.policy.get_action(dict_obs))  # type: ignore[arg-type] # pylint: disable=line-too-long
             elif self.use_context_wrapper and self.context_env is not None:
@@ -322,22 +320,19 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 )
                 if using_goal_env and goal_env is not None:
                     target_state = self.policy.node_states[target_node.id]
+                    if isinstance(target_state, list):
+                        target_state = target_state[0]
                     target_atoms = set(self._current_edge.target.atoms)
                     if goal_env.use_atom_as_obs is True:
-                        target_atom_vector = goal_env.create_atom_vector(target_atoms)
-                        current_atom_vector = goal_env.create_atom_vector(atoms)
+                        target_vec = goal_env.create_atom_vector(target_atoms)
+                        current_vec = goal_env.create_atom_vector(atoms)
+                    else:
+                        target_vec = goal_env.flatten_obs(target_state)
+                        current_vec = goal_env.flatten_obs(obs)
                     dict_obs = {
-                        "observation": obs,
-                        "achieved_goal": (
-                            obs
-                            if goal_env.use_atom_as_obs is False
-                            else current_atom_vector
-                        ),
-                        "desired_goal": (
-                            target_state
-                            if goal_env.use_atom_as_obs is False
-                            else target_atom_vector
-                        ),
+                        "observation": goal_env.flatten_obs(obs),
+                        "achieved_goal": current_vec,
+                        "desired_goal": target_vec,
                     }
                     return ApproachStepResult(action=self.policy.get_action(dict_obs))  # type: ignore[arg-type] # pylint: disable=line-too-long
                 if self.use_context_wrapper and self.context_env is not None:
@@ -658,6 +653,24 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 #     (50, 58),
                 #     (58, 88),
                 #     (88, 111),
+                #     (1, 10),
+                #     (15, 50),
+                # ]  # pylint: disable=line-too-long
+                # if (node.id, edge.target.id) not in envisioned_plan:
+                #     continue
+
+                # # DEBUG: Envisioned plan for clear and place env (3 blocks)
+                # envisioned_plan = [
+                #     (0, 2),
+                #     (2, 5),
+                #     (5, 8),
+                #     (8, 15),
+                #     (15, 26),
+                #     (26, 52),
+                #     (52, 79),
+                #     (79, 132),
+                #     (0, 1),
+                #     (1, 79),
                 # ]  # pylint: disable=line-too-long
                 # if (node.id, edge.target.id) not in envisioned_plan:
                 #     continue
@@ -698,26 +711,19 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                             self.policy, "node_states"
                         ), "Policy must have node_states"
                         target_state = self.policy.node_states[edge.target.id]
+                        if isinstance(target_state, list):
+                            target_state = target_state[0]
                         target_atoms = set(edge.target.atoms)
                         if goal_env.use_atom_as_obs is True:
-                            target_atom_vector = goal_env.create_atom_vector(
-                                target_atoms
-                            )
-                            current_atom_vector = goal_env.create_atom_vector(
-                                init_atoms
-                            )
+                            target_vec = goal_env.create_atom_vector(target_atoms)
+                            current_vec = goal_env.create_atom_vector(init_atoms)
+                        else:
+                            target_vec = goal_env.flatten_obs(target_state)
+                            current_vec = goal_env.flatten_obs(path_state)
                         aug_obs = {
-                            "observation": path_state,
-                            "achieved_goal": (
-                                path_state
-                                if goal_env.use_atom_as_obs is False
-                                else current_atom_vector
-                            ),
-                            "desired_goal": (
-                                target_state
-                                if goal_env.use_atom_as_obs is False
-                                else target_atom_vector
-                            ),
+                            "observation": goal_env.flatten_obs(path_state),
+                            "achieved_goal": current_vec,
+                            "desired_goal": target_vec,
                         }
                     elif self.use_context_wrapper and self.context_env is not None:
                         self.context_env.set_context(init_atoms, goal_atoms)
@@ -761,24 +767,19 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     if edge.is_shortcut:
                         if using_goal_env and goal_env is not None:
                             target_state = self.policy.node_states[edge.target.id]
+                            if isinstance(target_state, list):
+                                target_state = target_state[0]
                             target_atoms = set(edge.target.atoms)
                             if goal_env.use_atom_as_obs is True:
-                                target_atom_vector = goal_env.create_atom_vector(
-                                    target_atoms
-                                )
-                                current_atom_vector = goal_env.create_atom_vector(atoms)
+                                target_vec = goal_env.create_atom_vector(target_atoms)
+                                current_vec = goal_env.create_atom_vector(atoms)
+                            else:
+                                target_vec = goal_env.flatten_obs(target_state)
+                                current_vec = goal_env.flatten_obs(curr_raw_obs)
                             curr_aug_obs = {
-                                "observation": curr_raw_obs,
-                                "achieved_goal": (
-                                    curr_raw_obs
-                                    if goal_env.use_atom_as_obs is False
-                                    else current_atom_vector
-                                ),
-                                "desired_goal": (
-                                    target_state
-                                    if goal_env.use_atom_as_obs is False
-                                    else target_atom_vector
-                                ),
+                                "observation": goal_env.flatten_obs(curr_raw_obs),
+                                "achieved_goal": current_vec,
+                                "desired_goal": target_vec,
                             }
                         elif self.use_context_wrapper and self.context_env is not None:
                             self.context_env.set_context(atoms, goal_atoms)

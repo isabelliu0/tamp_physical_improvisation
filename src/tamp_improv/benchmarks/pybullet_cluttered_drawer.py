@@ -17,7 +17,7 @@ from pybullet_blocks.planning_models.action import OPERATORS_DRAWER, SKILLS_DRAW
 from pybullet_blocks.planning_models.perception import (
     DRAWER_PREDICATES,
     TYPES,
-    ClutteredDrawerObjectsPerceiver,
+    ClutteredDrawerPyBulletObjectsPerceiver,
 )
 from relational_structs import PDDLDomain, Predicate
 from task_then_motion_planning.structs import Skill
@@ -104,7 +104,7 @@ class BaseClutteredDrawerTAMPSystem(BaseTAMPSystem[GraphInstance, NDArray[np.flo
         skills: set[Skill[GraphInstance, NDArray[np.float32]]] = cast(
             set[Skill[GraphInstance, NDArray[np.float32]]], pybullet_skills
         )
-        perceiver = ClutteredDrawerObjectsPerceiver(sim)
+        perceiver = ClutteredDrawerPyBulletObjectsPerceiver(sim)
         predicates = ClutteredDrawerPredicates()
         system = cls(
             PlanningComponents(
@@ -171,7 +171,7 @@ class ClutteredDrawerTAMPSystem(
         skills: set[Skill[GraphInstance, NDArray[np.float32]]] = cast(
             set[Skill[GraphInstance, NDArray[np.float32]]], pybullet_skills
         )
-        perceiver = ClutteredDrawerObjectsPerceiver(sim)
+        perceiver = ClutteredDrawerPyBulletObjectsPerceiver(sim)
         predicates = ClutteredDrawerPredicates()
         system = cls(
             PlanningComponents(

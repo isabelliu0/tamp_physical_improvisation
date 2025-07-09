@@ -4,6 +4,7 @@ from typing import Any, TypeVar
 
 import gymnasium as gym
 import numpy as np
+from gymnasium import spaces
 from relational_structs import GroundAtom
 from task_then_motion_planning.structs import Perceiver
 
@@ -65,9 +66,16 @@ class GoalConditionedWrapper(gym.Wrapper):
                 self.atom_vectors[node_id] = self.create_atom_vector(atoms)
 
             # Observation space with atom vectors
+            base_obs_space = env.observation_space
+            if hasattr(base_obs_space, "node_space"):
+                sample_obs = base_obs_space.sample()
+                flattened_size = sample_obs.nodes.flatten().shape[0]
+                base_obs_space = gym.spaces.Box(
+                    low=-np.inf, high=np.inf, shape=(flattened_size,), dtype=np.float32
+                )
             self.observation_space = gym.spaces.Dict(
                 {
-                    "observation": env.observation_space,
+                    "observation": base_obs_space,
                     "achieved_goal": gym.spaces.Box(
                         0, 1, shape=(max_atom_size,), dtype=np.float32
                     ),
@@ -76,13 +84,31 @@ class GoalConditionedWrapper(gym.Wrapper):
                     ),
                 }
             )
+
         else:
             # Original observation space with raw state goals
+            base_obs_space = env.observation_space
+            if hasattr(env.observation_space, "node_space"):
+                # Use the first available state to determine size
+                assert len(node_states) > 0, "Node states must not be empty"
+                first_node_id = next(iter(node_states.keys()))
+                first_state = (
+                    node_states[first_node_id][0]
+                    if isinstance(node_states[first_node_id], list)
+                    else node_states[first_node_id]
+                )
+                if hasattr(first_state, "nodes"):
+                    flattened_size = first_state.nodes.flatten().shape[0]
+                else:
+                    flattened_size = len(np.array(first_state).flatten())
+                base_obs_space = gym.spaces.Box(
+                    low=-np.inf, high=np.inf, shape=(flattened_size,), dtype=np.float32
+                )
             self.observation_space = gym.spaces.Dict(
                 {
-                    "observation": env.observation_space,
-                    "achieved_goal": env.observation_space,
-                    "desired_goal": env.observation_space,
+                    "observation": base_obs_space,
+                    "achieved_goal": base_obs_space,
+                    "desired_goal": base_obs_space,
                 }
             )
 
@@ -110,9 +136,26 @@ class GoalConditionedWrapper(gym.Wrapper):
             "max_steps", self.max_episode_steps
         )
 
+    def flatten_obs(self, obs: ObsType) -> np.ndarray:
+        """Flatten graph observation for stable-baselines3."""
+        if hasattr(obs, "nodes"):
+            flattened = obs.nodes.flatten()
+            # Get expected size from observation space
+            assert isinstance(self.observation_space, spaces.Dict)
+            assert self.observation_space["observation"].shape is not None
+            expected_size = self.observation_space["observation"].shape[0]
+            if len(flattened) < expected_size:
+                padded = np.zeros(expected_size, dtype=np.float32)
+                padded[: len(flattened)] = flattened
+                return padded
+            if len(flattened) > expected_size:
+                return flattened[:expected_size]
+            return flattened
+        return np.array(obs, dtype=np.float32)
+
     def reset(
         self, *, seed: int | None = None, options: dict[str, Any] | None = None
-    ) -> tuple[dict[str, ObsType], dict[str, Any]]:
+    ) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
         """Reset environment and sample a goal."""
         self.steps = 0
         options = options or {}
@@ -127,7 +170,7 @@ class GoalConditionedWrapper(gym.Wrapper):
 
         # Reset with current state
         if hasattr(self.env, "reset_from_state"):
-            obs, info = self.env.reset_from_state(current_state, seed=seed)
+            original_obs, info = self.env.reset_from_state(current_state, seed=seed)
         else:
             raise AttributeError(
                 "The environment does not have a 'reset_from_state' method."
@@ -144,30 +187,31 @@ class GoalConditionedWrapper(gym.Wrapper):
 
         if self.use_atom_as_obs:
             self.goal_atom_vector = self.atom_vectors[self.goal_node_id]
-            current_atom_vector = self._get_current_atom_vector(obs)
+            current_atom_vector = self._get_current_atom_vector(original_obs)
             dict_obs = {
-                "observation": obs,
+                "observation": self.flatten_obs(original_obs),
                 "achieved_goal": current_atom_vector,
                 "desired_goal": self.goal_atom_vector,
             }
         else:
+            flattened_goal = self.flatten_obs(self.goal_state)
             dict_obs = {
-                "observation": obs,
-                "achieved_goal": obs,
-                "desired_goal": self.goal_state,
+                "observation": self.flatten_obs(original_obs),
+                "achieved_goal": self.flatten_obs(original_obs),
+                "desired_goal": flattened_goal,
             }
 
         return dict_obs, info
 
     def step(
         self, action: ActType
-    ) -> tuple[dict[str, ObsType], float, bool, bool, dict[str, Any]]:
+    ) -> tuple[dict[str, np.ndarray], float, bool, bool, dict[str, Any]]:
         """Step environment and compute goal-conditioned rewards."""
-        next_obs, _, terminated, truncated, info = self.env.step(action)
+        original_next_obs, _, terminated, truncated, info = self.env.step(action)
         self.steps += 1
 
         if self.use_atom_as_obs and self.goal_atom_vector is not None:
-            current_atom_vector = self._get_current_atom_vector(next_obs)
+            current_atom_vector = self._get_current_atom_vector(original_next_obs)
             goal_indices = np.where(self.goal_atom_vector > 0.5)[0]
             goal_achieved = np.all(current_atom_vector[goal_indices] > 0.5)
             atoms_distance = np.sum(current_atom_vector[goal_indices] < 0.5)
@@ -180,12 +224,14 @@ class GoalConditionedWrapper(gym.Wrapper):
                 }
             )
             dict_obs = {
-                "observation": next_obs,
+                "observation": self.flatten_obs(original_next_obs),
                 "achieved_goal": current_atom_vector,
                 "desired_goal": self.goal_atom_vector,
             }
         else:
-            goal_distance = np.linalg.norm(next_obs - self.goal_state)
+            goal_distance = np.linalg.norm(
+                self.flatten_obs(original_next_obs) - self.flatten_obs(self.goal_state)
+            )
             goal_achieved = goal_distance < self.success_threshold
             info.update(
                 {
@@ -196,9 +242,9 @@ class GoalConditionedWrapper(gym.Wrapper):
                 }
             )
             dict_obs = {
-                "observation": next_obs,
-                "achieved_goal": next_obs,
-                "desired_goal": self.goal_state,
+                "observation": self.flatten_obs(original_next_obs),
+                "achieved_goal": self.flatten_obs(original_next_obs),
+                "desired_goal": self.flatten_obs(self.goal_state),
             }
 
         goal_reward = self.success_reward if goal_achieved else self.step_penalty
@@ -285,7 +331,7 @@ class GoalConditionedWrapper(gym.Wrapper):
             return self.atom_to_index[atom_str]
         assert (
             self._next_index < self.max_atom_size
-        ), "No more space for new atoms. Increase max_atom_size."
+        ), f"No more space for new atom at index {self._next_index}. Increase max_atom_size (currently {self.max_atom_size})."  # pylint: disable=line-too-long
         idx = self._next_index
         self.atom_to_index[atom_str] = idx
         self._next_index += 1

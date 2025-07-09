@@ -340,7 +340,23 @@ class FlattenGraphObsWrapper(gym.ObservationWrapper):
         else:
             self.max_size = None
 
-    def observation(self, observation: ObsType) -> ObsType | NDArray[np.float32]:
+    def observation(
+        self, observation: ObsType
+    ) -> ObsType | NDArray[np.float32] | dict[str, np.ndarray]:
+        if isinstance(observation, dict):
+            result: dict[str, np.ndarray] = {}
+            for key, value in observation.items():
+                if hasattr(value, "nodes"):
+                    flattened = value.nodes.flatten()
+                    if self.max_size and len(flattened) < self.max_size:
+                        padded = np.zeros(self.max_size, dtype=np.float32)
+                        padded[: len(flattened)] = flattened
+                        result[key] = padded
+                    else:
+                        result[key] = flattened
+                else:
+                    result[key] = value
+            return result
         if hasattr(observation, "nodes"):
             flattened = observation.nodes.flatten()
             if self.max_size and len(flattened) < self.max_size:

@@ -542,6 +542,10 @@ def identify_promising_shortcuts_with_rollouts(
             f"\nPerforming {rollouts_per_state} rollouts for each of {len(source_states)} state(s) from node {source_node_id}"  # pylint: disable=line-too-long
         )
 
+        # # DEBUG:
+        # if source_node_id != 1:
+        #     continue
+
         # Calculate rollouts per state to maintain roughly the same total
         rollouts_per_state = max(1, num_rollouts_per_node // len(source_states))
         print(
@@ -558,13 +562,6 @@ def identify_promising_shortcuts_with_rollouts(
             for rollout_idx in range(rollouts_per_state):
                 if rollout_idx > 0 and rollout_idx % 100 == 0:
                     print(f"Completed {rollout_idx}/{rollouts_per_state} rollouts")
-                    print(f"Current Nodes are reached from node {source_node_id}:")
-                    for target_id, count in sorted(
-                        reached_nodes.items(), key=lambda x: -x[1]
-                    ):
-                        print(
-                            f"→Node {target_id}: {count}/{num_rollouts_per_node} times"
-                        )
 
                 # Reset the environment to source state
                 raw_env.reset_from_state(source_state)
@@ -581,6 +578,11 @@ def identify_promising_shortcuts_with_rollouts(
                     for target_node in planning_graph.nodes:
                         if target_node.id <= source_node_id:
                             continue
+
+                        # # DEBUG:
+                        # if target_node.id != 79:
+                        #     continue
+
                         has_direct_edge = False
                         for edge in planning_graph.node_to_outgoing_edges.get(
                             source_node, []

@@ -4,7 +4,7 @@ import os
 import pickle
 import time
 from dataclasses import dataclass
-from typing import Any
+from typing import cast
 
 import gymnasium as gym
 import numpy as np
@@ -206,14 +206,14 @@ class GoalConditionedRLPolicy(Policy[ObsType, ActType]):
     def configure_context(self, context: PolicyContext) -> None:
         """Configure policy with context information."""
 
-    def get_action(self, obs: dict[str, np.ndarray[Any, Any]]) -> np.ndarray[Any, Any]:  # type: ignore[override] # pylint: disable=line-too-long
+    def get_action(self, obs: ObsType) -> ActType:
         """Get action from policy."""
         assert self.model is not None
         assert isinstance(
             obs, dict
         ), "Observation must be a dictionary, consistent with HER"
         action, _ = self.model.predict(obs, deterministic=True)
-        return action
+        return cast(ActType, action)
 
     def train(
         self,
@@ -297,16 +297,13 @@ class GoalConditionedRLPolicy(Policy[ObsType, ActType]):
         assert self.model is not None
         os.makedirs(path, exist_ok=True)
 
-        # Save the model
         self.model.save(f"{path}/model")
 
-        # Save observation space and action space for loading
         with open(f"{path}/model_observation_space.pkl", "wb") as f:
             pickle.dump(self.model.observation_space, f)
         with open(f"{path}/model_action_space.pkl", "wb") as f:
             pickle.dump(self.model.action_space, f)
 
-        # Save node states and shortcuts
         with open(f"{path}/node_states.pkl", "wb") as f:
             pickle.dump(self.node_states, f)
         with open(f"{path}/valid_shortcuts.pkl", "wb") as f:

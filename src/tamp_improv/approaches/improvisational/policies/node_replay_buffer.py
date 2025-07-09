@@ -15,7 +15,7 @@ class NodeBasedHerBuffer(HerReplayBuffer):
 
     This buffer ensures that:
     1. Goals come from the collection of node states (G)
-    2. The node ID of the goal state is larger than the INITIAL source node ID (s_0)
+    2. The node ID of the goal state is larger than the initial source node ID (s_0)
     3. There's no direct non-shortcut edge between source and goal nodes
     """
 
@@ -125,9 +125,19 @@ class NodeBasedHerBuffer(HerReplayBuffer):
         ), "Invalid source node ID"
         if source_node_id in self.valid_targets and self.valid_targets[source_node_id]:
             goal_id = np.random.choice(self.valid_targets[source_node_id])
-            return (
-                np.array(self.atom_vectors[goal_id])
-                if self.using_atom_as_obs
-                else np.array(self.node_states[goal_id])
-            )
+            if self.using_atom_as_obs:
+                return np.array(self.atom_vectors[goal_id])
+            # node_states[goal_id] is a list of states, pick one randomly
+            goal_states = self.node_states[goal_id]
+            if isinstance(goal_states, list) and len(goal_states) > 0:
+                random_state = np.random.choice(len(goal_states))
+                selected_state = goal_states[random_state]
+                # Ensure it's a numpy array and flatten if needed
+                if hasattr(selected_state, "nodes"):
+                    return selected_state.nodes.flatten().astype(np.float32)
+                return np.array(selected_state, dtype=np.float32)
+            # Single state, not a list
+            if hasattr(goal_states, "nodes"):
+                return goal_states.nodes.flatten().astype(np.float32)
+            return np.array(goal_states, dtype=np.float32)
         raise ValueError(f"No valid targets for source node {source_node_id}!")
