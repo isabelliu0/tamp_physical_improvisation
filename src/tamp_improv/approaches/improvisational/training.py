@@ -19,9 +19,10 @@ from tamp_improv.approaches.improvisational.graph_training import (
 )
 from tamp_improv.approaches.improvisational.policies.base import Policy, TrainingData
 from tamp_improv.approaches.improvisational.policies.multi_rl import MultiRLPolicy
-from tamp_improv.approaches.pure_rl import PureRLApproach
+from tamp_improv.approaches.pure_rl import PureRLApproach, SACHERApproach
 from tamp_improv.benchmarks.base import ImprovisationalTAMPSystem
 from tamp_improv.benchmarks.goal_wrapper import GoalConditionedWrapper
+from tamp_improv.benchmarks.sac_her_wrapper import SACHERWrapper
 from tamp_improv.benchmarks.wrappers import PureRLWrapper
 from tamp_improv.utils.gpu_utils import get_gpu_memory_info, set_torch_seed
 
@@ -171,7 +172,9 @@ def get_or_collect_training_data(
 def run_evaluation_episode(
     system: ImprovisationalTAMPSystem[ObsType, ActType],
     approach: (
-        ImprovisationalTAMPApproach[ObsType, ActType] | PureRLApproach[ObsType, ActType]
+        ImprovisationalTAMPApproach[ObsType, ActType]
+        | PureRLApproach[ObsType, ActType]
+        | SACHERApproach[ObsType, ActType]
     ),
     policy_name: str,
     config: TrainingConfig,
@@ -555,6 +558,79 @@ def train_and_evaluate_pure_rl(
 
     # Run evaluation
     print(f"\nEvaluating pure RL policy on {system.name}...")
+    rewards = []
+    lengths = []
+    successes = []
+
+    for episode in range(config.num_episodes):
+        print(f"\nEvaluation Episode {episode + 1}/{config.num_episodes}")
+        reward, length, success = run_evaluation_episode(
+            system,
+            approach,
+            policy_name,
+            config,
+            episode_num=episode,
+        )
+        rewards.append(reward)
+        lengths.append(length)
+        successes.append(success)
+
+        print(f"Current Success Rate: {sum(successes)/(episode+1):.2%}")
+        print(f"Current Avg Episode Length: {np.mean(lengths):.2f}")
+        print(f"Current Avg Reward: {np.mean(rewards):.2f}")
+
+    total_time = time.time() - start_time
+    return Metrics(
+        success_rate=float(sum(successes) / len(successes)),
+        avg_episode_length=float(np.mean(lengths)),
+        avg_reward=float(np.mean(rewards)),
+        training_time=training_time,
+        total_time=total_time,
+    )
+
+
+def train_and_evaluate_sac_her(
+    system: ImprovisationalTAMPSystem[ObsType, ActType],
+    policy_factory: Callable[[int], Policy[ObsType, ActType]],
+    config: TrainingConfig,
+    policy_name: str,
+    max_atom_size: int = 14,
+) -> Metrics:
+    """Train and evaluate SAC+HER baseline."""
+    print(f"\nInitializing SAC+HER baseline training for {system.name}...")
+
+    seed = config.seed
+    set_torch_seed(seed)
+
+    policy = policy_factory(seed)
+
+    obs, info = system.reset()
+    _, _, goal_atoms = system.perceiver.reset(obs, info)
+
+    sac_her_env = SACHERWrapper(
+        env=system.env,
+        perceiver=system.perceiver,
+        goal_atoms=goal_atoms,
+        max_atom_size=max_atom_size,
+        max_episode_steps=config.max_steps,
+        step_penalty=config.step_penalty,
+        success_reward=config.success_reward,
+    )
+
+    start_time = time.time()
+    if policy.requires_training:
+        print("\nTraining SAC+HER baseline...")
+        policy.train(sac_her_env, train_data=None)
+        save_path = Path(config.save_dir) / f"{system.name}_{policy_name}"
+        policy.save(str(save_path))
+    training_time = time.time() - start_time
+
+    system.wrapped_env = sac_her_env
+
+    approach = SACHERApproach(system, policy, seed)
+
+    # Run evaluation
+    print(f"\nEvaluating SAC+HER baseline on {system.name}...")
     rewards = []
     lengths = []
     successes = []

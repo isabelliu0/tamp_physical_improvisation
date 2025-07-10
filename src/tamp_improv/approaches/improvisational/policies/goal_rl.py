@@ -282,7 +282,6 @@ class GoalConditionedRLPolicy(Policy[ObsType, ActType]):
 
         episodes_per_scenario = train_data.config.get("episodes_per_scenario", 1)
         max_steps = train_data.config.get("max_steps", 50)
-        # Note: total_timesteps to be tuned for complicated environments
         total_timesteps = len(self.valid_shortcuts) * episodes_per_scenario * max_steps
         print(f"Training for {total_timesteps} timesteps...")
 

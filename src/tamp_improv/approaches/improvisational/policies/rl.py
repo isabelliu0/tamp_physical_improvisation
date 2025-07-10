@@ -191,9 +191,6 @@ class RLPolicy(Policy[ObsType, ActType]):
     def can_initiate(self):
         """Check whether the policy can be executed given the current
         context."""
-        # Simple implementation - just check if the model exists
-        # In a more sophisticated implementation, we could check if this
-        # specific shortcut configuration is similar to what it was trained on
         return self.model is not None
 
     def train(
