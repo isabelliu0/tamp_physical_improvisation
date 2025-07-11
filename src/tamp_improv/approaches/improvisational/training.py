@@ -21,6 +21,7 @@ from tamp_improv.approaches.improvisational.policies.base import Policy, Trainin
 from tamp_improv.approaches.improvisational.policies.multi_rl import MultiRLPolicy
 from tamp_improv.approaches.pure_rl import PureRLApproach, SACHERApproach
 from tamp_improv.benchmarks.base import ImprovisationalTAMPSystem
+from tamp_improv.benchmarks.context_wrapper import ContextAwareWrapper
 from tamp_improv.benchmarks.goal_wrapper import GoalConditionedWrapper
 from tamp_improv.benchmarks.sac_her_wrapper import SACHERWrapper
 from tamp_improv.benchmarks.wrappers import PureRLWrapper
@@ -121,8 +122,6 @@ def get_or_collect_training_data(
                 train_data.config.get("seed") == config.seed
                 and train_data.config.get("collect_episodes") == config.collect_episodes
                 and train_data.config.get("max_steps") == config.max_steps
-                and train_data.config.get("using_context_wrapper", False)
-                == approach.use_context_wrapper
                 and train_data.config.get("use_random_rollouts") == use_random_rollouts
             ):
                 if (
@@ -288,8 +287,6 @@ def train_and_evaluate(
         system,
         policy,
         seed=config.seed,
-        max_atom_size=config.max_atom_size,
-        use_context_wrapper=use_context_wrapper,
     )
 
     # Load or collect training data for new policy
@@ -312,6 +309,15 @@ def train_and_evaluate(
             render_mode = getattr(system.wrapped_env, "render_mode", None)
             can_render = render_mode is not None
 
+            if use_context_wrapper:
+                context_env = ContextAwareWrapper(
+                    system.wrapped_env,
+                    system.perceiver,
+                    max_atom_size=config.max_atom_size,
+                    max_episode_steps=config.max_steps,
+                )
+                system.wrapped_env = context_env
+
             if hasattr(system.wrapped_env, "configure_training"):
                 system.wrapped_env.configure_training(train_data)
 
@@ -325,6 +331,7 @@ def train_and_evaluate(
                 )
 
             save_path = Path(config.save_dir) / f"{system.name}_{policy_name}"
+
             if isinstance(policy, MultiRLPolicy):
                 policy.train(system.wrapped_env, train_data, save_dir=str(save_path))
             else:
@@ -412,7 +419,6 @@ def train_and_evaluate_goal_conditioned(
         system,
         policy,
         seed=config.seed,
-        max_atom_size=config.max_atom_size,
     )
 
     # Collect goal-conditioned training data

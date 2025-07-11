@@ -135,31 +135,12 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         seed: int,
         planner_id: str = "pyperplan",
         max_skill_steps: int = 200,
-        max_atom_size: int = 12,
-        use_context_wrapper: bool = False,
     ) -> None:
         """Initialize approach."""
         super().__init__(system, seed)
         self.policy = policy
         self.planner_id = planner_id
         self._max_skill_steps = max_skill_steps
-        self.use_context_wrapper = use_context_wrapper
-        self.context_env = None
-        if self.use_context_wrapper:
-            if not isinstance(system.wrapped_env, ContextAwareWrapper):
-                self.context_env = ContextAwareWrapper(
-                    system.wrapped_env,
-                    system.perceiver,
-                    max_atom_size=max_atom_size,
-                )
-                system.wrapped_env = self.context_env
-            else:
-                self.context_env = system.wrapped_env
-
-            # Initialize policy with (context-aware) wrapped environment
-            policy.initialize(self.context_env)
-        else:
-            policy.initialize(system.wrapped_env)
 
         # Get domain
         self.domain = system.get_domain()
@@ -246,6 +227,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         """Step approach with new observation."""
         atoms = self.system.perceiver.step(obs)
         using_goal_env, goal_env = self._using_goal_env(self.system.wrapped_env)
+        using_context_env, context_env = self._using_context_env(
+            self.system.wrapped_env
+        )
         target_vec = None
         current_vec = None
 
@@ -288,10 +272,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                         "desired_goal": target_vec,
                     }
                     return ApproachStepResult(action=self.policy.get_action(dict_obs))  # type: ignore[arg-type] # pylint: disable=line-too-long
-            elif self.use_context_wrapper and self.context_env is not None:
-                self.context_env.set_context(atoms, self._goal_atoms)
-                aug_obs = self.context_env.augment_observation(obs)
-                return ApproachStepResult(action=self.policy.get_action(aug_obs))
+            elif using_context_env and context_env is not None:
+                aug_obs = context_env.augment_observation(obs)
+                return ApproachStepResult(action=self.policy.get_action(aug_obs))  # type: ignore[arg-type] # pylint: disable=line-too-long
             return ApproachStepResult(action=self.policy.get_action(obs))
 
         # Get next edge if needed
@@ -335,10 +318,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                         "desired_goal": target_vec,
                     }
                     return ApproachStepResult(action=self.policy.get_action(dict_obs))  # type: ignore[arg-type] # pylint: disable=line-too-long
-                if self.use_context_wrapper and self.context_env is not None:
-                    self.context_env.set_context(atoms, self._goal_atoms)
-                    aug_obs = self.context_env.augment_observation(obs)
-                    return ApproachStepResult(action=self.policy.get_action(aug_obs))
+                if using_context_env and context_env is not None:
+                    aug_obs = context_env.augment_observation(obs)
+                    return ApproachStepResult(action=self.policy.get_action(aug_obs))  # type: ignore[arg-type] # pylint: disable=line-too-long
                 return ApproachStepResult(action=self.policy.get_action(obs))
 
             # Regular edge - use operator skill
@@ -452,8 +434,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     graph.add_edge(current_node, next_node, op)
                 else:
                     # Create new node and edge
-                    # DEBUG: To get the desired node id in the graph by looking at op
-                    # Instead of Atoms
                     next_node = graph.add_node(next_atoms)
                     visited_states[next_atoms_frozen] = next_node
                     graph.add_edge(current_node, next_node, op)
@@ -566,9 +546,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     if not can_handle:
                         continue
 
-                # Configure context for environment and policy
-                if self.use_context_wrapper and self.context_env is not None:
-                    self.context_env.set_context(source_atoms, target_atoms)
+                # Configure context for policy
                 self.policy.configure_context(
                     PolicyContext(
                         goal_atoms=target_atoms,
@@ -618,6 +596,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
         raw_env = self._create_planning_env()
         using_goal_env, goal_env = self._using_goal_env(self.system.wrapped_env)
+        using_context_env, context_env = self._using_context_env(
+            self.system.wrapped_env
+        )
 
         # BFS to explore all paths
         queue = [(initial_node, empty_path)]  # (node, path)
@@ -725,9 +706,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                             "achieved_goal": current_vec,
                             "desired_goal": target_vec,
                         }
-                    elif self.use_context_wrapper and self.context_env is not None:
-                        self.context_env.set_context(init_atoms, goal_atoms)
-                        aug_obs = self.context_env.augment_observation(path_state)  # type: ignore[arg-type] # pylint: disable=line-too-long
+                    elif using_context_env and context_env is not None:
+                        aug_obs = context_env.augment_observation(path_state)  # type: ignore[assignment]
                     else:
                         aug_obs = path_state  # type: ignore[assignment]
                     skill: Policy | Skill = self.policy
@@ -781,11 +761,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                                 "achieved_goal": current_vec,
                                 "desired_goal": target_vec,
                             }
-                        elif self.use_context_wrapper and self.context_env is not None:
-                            self.context_env.set_context(atoms, goal_atoms)
-                            curr_aug_obs = self.context_env.augment_observation(
-                                curr_raw_obs  # type: ignore[arg-type]
-                            )
+                        elif using_context_env and context_env is not None:
+                            curr_aug_obs = context_env.augment_observation(curr_raw_obs)  # type: ignore[assignment]
                         else:
                             curr_aug_obs = curr_raw_obs  # type: ignore[assignment]
                     else:
@@ -906,3 +883,17 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             current_env = current_env.env
         current_env = None
         return using_goal_env, current_env
+
+    def _using_context_env(
+        self, env: gym.Env | None
+    ) -> tuple[bool, ContextAwareWrapper | None]:
+        """Check if we're using the context-aware wrapper."""
+        using_context_env = False
+        current_env = env
+        while hasattr(current_env, "env") and current_env is not None:
+            if isinstance(current_env, ContextAwareWrapper):
+                using_context_env = True
+                return using_context_env, current_env
+            current_env = current_env.env
+        current_env = None
+        return using_context_env, current_env

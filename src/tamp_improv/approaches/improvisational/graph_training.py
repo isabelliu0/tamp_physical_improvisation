@@ -262,7 +262,6 @@ def collect_graph_based_training_data(
             hasattr(approach, "planning_graph") and approach.planning_graph is not None
         )
         planning_graph = approach.planning_graph
-        context_env = approach.context_env
 
         if (
             hasattr(approach, "observed_states")
@@ -313,14 +312,7 @@ def collect_graph_based_training_data(
             source_id = candidate.source_node.id
             if source_id in observed_states and observed_states[source_id] is not None:
                 for source_state in observed_states[source_id]:
-                    if approach.use_context_wrapper and context_env is not None:
-                        context_env.set_context(
-                            candidate.source_atoms, candidate.target_atoms
-                        )
-                        augmented_obs = context_env.augment_observation(source_state)
-                        training_states.append(augmented_obs)
-                    else:
-                        training_states.append(source_state)
+                    training_states.append(source_state)
                     current_atoms_list.append(candidate.source_atoms)
                     goal_atoms_list.append(candidate.target_atoms)
 
@@ -350,15 +342,6 @@ def collect_graph_based_training_data(
     print(f"Collected {len(training_states)} examples from {collect_episodes} episodes")
     approach.training_mode = False
 
-    # Get the atom-to-index mapping from the context environment
-    atom_to_index = {}
-    if (
-        approach.use_context_wrapper
-        and context_env is not None
-        and hasattr(context_env, "get_atom_index_mapping")
-    ):
-        atom_to_index = context_env.get_atom_index_mapping()
-
     return (
         TrainingData(
             states=training_states,
@@ -367,8 +350,6 @@ def collect_graph_based_training_data(
             config={
                 **config,
                 "shortcut_info": shortcut_info,
-                "atom_to_index": atom_to_index,
-                "using_context_wrapper": approach.use_context_wrapper,
                 "use_random_rollouts": use_random_rollouts,
                 "num_rollouts_per_node": num_rollouts_per_node,
                 "max_steps_per_rollout": max_steps_per_rollout,
