@@ -1,4 +1,4 @@
-"""ClutteredDrawer environment implementation."""
+"""CleanupTable environment implementation."""
 
 from __future__ import annotations
 
@@ -9,15 +9,15 @@ import gymnasium as gym
 import numpy as np
 from gymnasium.spaces import GraphInstance
 from numpy.typing import NDArray
-from pybullet_blocks.envs.cluttered_drawer_env import (
-    ClutteredDrawerPyBulletObjectsEnv,
-    ClutteredDrawerSceneDescription,
+from pybullet_blocks.envs.cleanup_table_env import (
+    CleanupTablePyBulletObjectsEnv,
+    CleanupTableSceneDescription,
 )
-from pybullet_blocks.planning_models.action import OPERATORS_DRAWER, SKILLS_DRAWER
+from pybullet_blocks.planning_models.action import OPERATORS_CLEANUP, SKILLS_CLEANUP
 from pybullet_blocks.planning_models.perception import (
-    DRAWER_PREDICATES,
+    CLEANUP_PREDICATES,
     TYPES,
-    ClutteredDrawerPyBulletObjectsPerceiver,
+    CleanupTablePyBulletObjectsPerceiver,
 )
 from relational_structs import PDDLDomain, Predicate
 from task_then_motion_planning.structs import Skill
@@ -31,20 +31,20 @@ from tamp_improv.benchmarks.wrappers import ImprovWrapper
 
 
 @dataclass(frozen=True)
-class ClutteredDrawerPredicates:
-    """Container for ClutteredDrawer predicates."""
+class CleanupTablePredicates:
+    """Container for CleanupTable predicates."""
 
     def __getitem__(self, key: str) -> Any:
         """Get predicate by name."""
-        return next(p for p in DRAWER_PREDICATES if p.name == key)
+        return next(p for p in CLEANUP_PREDICATES if p.name == key)
 
     def as_set(self) -> set[Predicate]:
         """Convert to set of predicates."""
-        return set(DRAWER_PREDICATES)
+        return set(CLEANUP_PREDICATES)
 
 
-class BaseClutteredDrawerTAMPSystem(BaseTAMPSystem[GraphInstance, NDArray[np.float32]]):
-    """Base TAMP system for cluttered drawer environment."""
+class BaseCleanupTableTAMPSystem(BaseTAMPSystem[GraphInstance, NDArray[np.float32]]):
+    """Base TAMP system for cleanup table environment."""
 
     def __init__(
         self,
@@ -52,18 +52,16 @@ class BaseClutteredDrawerTAMPSystem(BaseTAMPSystem[GraphInstance, NDArray[np.flo
         seed: int | None = None,
         render_mode: str | None = None,
     ) -> None:
-        """Initialize cluttered drawer TAMP system."""
+        """Initialize cleanup table TAMP system."""
         self._render_mode = render_mode
-        super().__init__(
-            planning_components, name="ClutteredDrawerTAMPSystem", seed=seed
-        )
+        super().__init__(planning_components, name="CleanupTableTAMPSystem", seed=seed)
 
     def _create_env(self) -> gym.Env:
         """Create base environment."""
-        scene_description = ClutteredDrawerSceneDescription(
-            num_drawer_objects=4,
+        scene_description = CleanupTableSceneDescription(
+            num_toys=4,
         )
-        return ClutteredDrawerPyBulletObjectsEnv(
+        return CleanupTablePyBulletObjectsEnv(
             scene_description=scene_description,
             render_mode=self._render_mode,
             use_gui=False,
@@ -71,7 +69,7 @@ class BaseClutteredDrawerTAMPSystem(BaseTAMPSystem[GraphInstance, NDArray[np.flo
 
     def _get_domain_name(self) -> str:
         """Get domain name."""
-        return "cluttered-drawer-domain"
+        return "cleanup-table-domain"
 
     def get_domain(self) -> PDDLDomain:
         """Get PDDL domain."""
@@ -87,30 +85,30 @@ class BaseClutteredDrawerTAMPSystem(BaseTAMPSystem[GraphInstance, NDArray[np.flo
         cls,
         seed: int | None = None,
         render_mode: str | None = None,
-    ) -> BaseClutteredDrawerTAMPSystem:
+    ) -> BaseCleanupTableTAMPSystem:
         """Factory method for creating system with default components."""
-        scene_description = ClutteredDrawerSceneDescription(
-            num_drawer_objects=4,
+        scene_description = CleanupTableSceneDescription(
+            num_toys=4,
         )
-        sim = ClutteredDrawerPyBulletObjectsEnv(
+        sim = CleanupTablePyBulletObjectsEnv(
             scene_description=scene_description,
             render_mode=render_mode,
             use_gui=False,
         )
         pybullet_skills = {
             s(sim, max_motion_planning_time=0.1)  # type:ignore[abstract]
-            for s in SKILLS_DRAWER
+            for s in SKILLS_CLEANUP
         }
         skills: set[Skill[GraphInstance, NDArray[np.float32]]] = cast(
             set[Skill[GraphInstance, NDArray[np.float32]]], pybullet_skills
         )
-        perceiver = ClutteredDrawerPyBulletObjectsPerceiver(sim)
-        predicates = ClutteredDrawerPredicates()
+        perceiver = CleanupTablePyBulletObjectsPerceiver(sim)
+        predicates = CleanupTablePredicates()
         system = cls(
             PlanningComponents(
                 types=set(TYPES),
                 predicate_container=predicates,
-                operators=set(OPERATORS_DRAWER),
+                operators=set(OPERATORS_CLEANUP),
                 skills=skills,
                 perceiver=perceiver,
             ),
@@ -120,11 +118,11 @@ class BaseClutteredDrawerTAMPSystem(BaseTAMPSystem[GraphInstance, NDArray[np.flo
         return system
 
 
-class ClutteredDrawerTAMPSystem(
+class CleanupTableTAMPSystem(
     ImprovisationalTAMPSystem[GraphInstance, NDArray[np.float32]],
-    BaseClutteredDrawerTAMPSystem,
+    BaseCleanupTableTAMPSystem,
 ):
-    """TAMP system for cluttered drawer environment with improvisational policy
+    """TAMP system for cleanup table environment with improvisational policy
     learning enabled."""
 
     def __init__(
@@ -133,7 +131,7 @@ class ClutteredDrawerTAMPSystem(
         seed: int | None = None,
         render_mode: str | None = None,
     ) -> None:
-        """Initialize cluttered drawer TAMP system."""
+        """Initialize cleanup table TAMP system."""
         self._render_mode = render_mode
         super().__init__(planning_components, seed=seed, render_mode=render_mode)
 
@@ -154,30 +152,30 @@ class ClutteredDrawerTAMPSystem(
         cls,
         seed: int | None = None,
         render_mode: str | None = None,
-    ) -> ClutteredDrawerTAMPSystem:
+    ) -> CleanupTableTAMPSystem:
         """Factory method for creating system with default components."""
-        scene_description = ClutteredDrawerSceneDescription(
-            num_drawer_objects=4,
+        scene_description = CleanupTableSceneDescription(
+            num_toys=4,
         )
-        sim = ClutteredDrawerPyBulletObjectsEnv(
+        sim = CleanupTablePyBulletObjectsEnv(
             scene_description=scene_description,
             render_mode=render_mode,
             use_gui=False,
         )
         pybullet_skills = {
             s(sim, max_motion_planning_time=0.1)  # type:ignore[abstract]
-            for s in SKILLS_DRAWER
+            for s in SKILLS_CLEANUP
         }
         skills: set[Skill[GraphInstance, NDArray[np.float32]]] = cast(
             set[Skill[GraphInstance, NDArray[np.float32]]], pybullet_skills
         )
-        perceiver = ClutteredDrawerPyBulletObjectsPerceiver(sim)
-        predicates = ClutteredDrawerPredicates()
+        perceiver = CleanupTablePyBulletObjectsPerceiver(sim)
+        predicates = CleanupTablePredicates()
         system = cls(
             PlanningComponents(
                 types=set(TYPES),
                 predicate_container=predicates,
-                operators=set(OPERATORS_DRAWER),
+                operators=set(OPERATORS_CLEANUP),
                 skills=skills,
                 perceiver=perceiver,
             ),
