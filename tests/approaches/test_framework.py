@@ -13,6 +13,7 @@ from tamp_improv.approaches.improvisational.training import (
     train_and_evaluate,
 )
 from tamp_improv.benchmarks.obstacle2d import Obstacle2DTAMPSystem
+from tamp_improv.benchmarks.pybullet_cleanup_table import CleanupTableTAMPSystem
 from tamp_improv.benchmarks.pybullet_cluttered_drawer import ClutteredDrawerTAMPSystem
 from tamp_improv.benchmarks.pybullet_obstacle_tower import ObstacleTowerTAMPSystem
 
@@ -28,13 +29,14 @@ def _get_training_config():
     )
 
 
-@pytest.mark.skip(reason="Takes too long to run")
+# @pytest.mark.skip(reason="Takes too long to run")
 @pytest.mark.parametrize(
     "system_cls,policy_cls,env_name",
     [
-        (Obstacle2DTAMPSystem, PushingPolicy, "obstacle2d"),
-        (ObstacleTowerTAMPSystem, PybulletPushingPolicy, "pybullet"),
-        (ClutteredDrawerTAMPSystem, PybulletPushingPolicy, "cluttered_drawer"),
+        # (Obstacle2DTAMPSystem, PushingPolicy, "obstacle2d"),
+        # (ObstacleTowerTAMPSystem, PybulletPushingPolicy, "pybullet"),
+        # (ClutteredDrawerTAMPSystem, PybulletPushingPolicy, "cluttered_drawer"),
+        (CleanupTableTAMPSystem, PybulletPushingPolicy, "cleanup_table"),
     ],
 )
 def test_framework_with_hardcoded_policy(

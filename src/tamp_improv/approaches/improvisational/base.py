@@ -134,7 +134,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         policy: Policy[ObsType, ActType],
         seed: int,
         planner_id: str = "pyperplan",
-        max_skill_steps: int = 200,
+        max_skill_steps: int = 300,
     ) -> None:
         """Initialize approach."""
         super().__init__(system, seed)
@@ -395,7 +395,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         visited_states = {frozenset(init_atoms): initial_node}
         queue = deque([(initial_node, 0)])  # Queue for BFS: [(node, depth)]
         node_count = 0
-        max_nodes = 1300
+        max_nodes = 1700
         print(f"Building planning graph with max {max_nodes} nodes...")
 
         # Breadth-first search to build the graph
@@ -567,7 +567,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self,
         obs: ObsType,
         info: dict[str, Any],
-        debug: bool = False,
+        debug: bool = True,
     ) -> None:
         """Compute edge costs considering the path taken to reach each node.
 
@@ -655,6 +655,26 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 # ]  # pylint: disable=line-too-long
                 # if (node.id, edge.target.id) not in envisioned_plan:
                 #     continue
+
+                # DEBUG: Envisioned plan for clean up table env
+                envisioned_plan = [
+                    (0, 1),
+                    (1, 6),
+                    (6, 11),
+                    (11, 23),
+                    (23, 72),
+                    (72, 113),
+                    (113, 162),
+                    (162, 357),
+                    (357, 471),
+                    (471, 555),
+                    (555, 952),
+                    (952, 1113),
+                    (0, 4),
+                    (4, 9),
+                ]
+                if (node.id, edge.target.id) not in envisioned_plan:
+                    continue
 
                 frames: list[Any] = []
                 video_filename = ""
