@@ -134,7 +134,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         policy: Policy[ObsType, ActType],
         seed: int,
         planner_id: str = "pyperplan",
-        max_skill_steps: int = 300,
+        max_skill_steps: int = 200,
     ) -> None:
         """Initialize approach."""
         super().__init__(system, seed)
@@ -163,6 +163,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self.trained_signatures: list[ShortcutSignature] = []
 
         self.rng = np.random.default_rng(seed)
+
+        policy.initialize(system.wrapped_env)
 
     def reset(
         self,
@@ -395,7 +397,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         visited_states = {frozenset(init_atoms): initial_node}
         queue = deque([(initial_node, 0)])  # Queue for BFS: [(node, depth)]
         node_count = 0
-        max_nodes = 1700
+        max_nodes = 1300
         print(f"Building planning graph with max {max_nodes} nodes...")
 
         # Breadth-first search to build the graph
@@ -658,20 +660,27 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
                 # DEBUG: Envisioned plan for clean up table env
                 envisioned_plan = [
-                    (0, 1),
-                    (1, 6),
-                    (6, 11),
-                    (11, 23),
-                    (23, 72),
-                    (72, 113),
-                    (113, 162),
-                    (162, 357),
-                    (357, 471),
-                    (471, 555),
-                    (555, 952),
-                    (952, 1113),
                     (0, 4),
-                    (4, 9),
+                    (4, 8),
+                    (8, 12),
+                    (12, 16),
+                    (16, 29),
+                    (29, 42),
+                    (42, 54),
+                    (54, 59),
+                    (59, 72),
+                    (72, 91),
+                    (91, 103),
+                    (103, 112),
+                    (112, 121),
+                    (121, 132),
+                    (132, 136),
+                    (136, 139),
+                    (0, 3),
+                    (3, 7),
+                    (7, 11),
+                    (7, 132),
+                    (7, 136),
                 ]
                 if (node.id, edge.target.id) not in envisioned_plan:
                     continue

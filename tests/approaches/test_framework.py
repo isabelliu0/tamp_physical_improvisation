@@ -29,13 +29,13 @@ def _get_training_config():
     )
 
 
-# @pytest.mark.skip(reason="Takes too long to run")
+@pytest.mark.skip(reason="Takes too long to run")
 @pytest.mark.parametrize(
     "system_cls,policy_cls,env_name",
     [
-        # (Obstacle2DTAMPSystem, PushingPolicy, "obstacle2d"),
-        # (ObstacleTowerTAMPSystem, PybulletPushingPolicy, "pybullet"),
-        # (ClutteredDrawerTAMPSystem, PybulletPushingPolicy, "cluttered_drawer"),
+        (Obstacle2DTAMPSystem, PushingPolicy, "obstacle2d"),
+        (ObstacleTowerTAMPSystem, PybulletPushingPolicy, "pybullet"),
+        (ClutteredDrawerTAMPSystem, PybulletPushingPolicy, "cluttered_drawer"),
         (CleanupTableTAMPSystem, PybulletPushingPolicy, "cleanup_table"),
     ],
 )

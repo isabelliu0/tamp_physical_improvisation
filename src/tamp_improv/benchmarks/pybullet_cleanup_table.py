@@ -59,7 +59,7 @@ class BaseCleanupTableTAMPSystem(BaseTAMPSystem[GraphInstance, NDArray[np.float3
     def _create_env(self) -> gym.Env:
         """Create base environment."""
         scene_description = CleanupTableSceneDescription(
-            num_toys=4,
+            num_toys=3,
         )
         return CleanupTablePyBulletObjectsEnv(
             scene_description=scene_description,
@@ -88,7 +88,7 @@ class BaseCleanupTableTAMPSystem(BaseTAMPSystem[GraphInstance, NDArray[np.float3
     ) -> BaseCleanupTableTAMPSystem:
         """Factory method for creating system with default components."""
         scene_description = CleanupTableSceneDescription(
-            num_toys=4,
+            num_toys=3,
         )
         sim = CleanupTablePyBulletObjectsEnv(
             scene_description=scene_description,
@@ -155,7 +155,7 @@ class CleanupTableTAMPSystem(
     ) -> CleanupTableTAMPSystem:
         """Factory method for creating system with default components."""
         scene_description = CleanupTableSceneDescription(
-            num_toys=4,
+            num_toys=3,
         )
         sim = CleanupTablePyBulletObjectsEnv(
             scene_description=scene_description,
