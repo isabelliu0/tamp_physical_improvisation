@@ -119,8 +119,7 @@ def get_or_collect_training_data(
                 print(f"Loaded {len(approach.trained_signatures)} trained signatures")
             # Verify config matches
             if (
-                train_data.config.get("seed") == config.seed
-                and train_data.config.get("collect_episodes") == config.collect_episodes
+                train_data.config.get("collect_episodes") == config.collect_episodes
                 and train_data.config.get("max_steps") == config.max_steps
                 and train_data.config.get("use_random_rollouts") == use_random_rollouts
             ):

@@ -160,7 +160,7 @@ class CleanupTableTAMPSystem(
         sim = CleanupTablePyBulletObjectsEnv(
             scene_description=scene_description,
             render_mode=render_mode,
-            use_gui=True,
+            use_gui=False,
         )
         pybullet_skills = {
             s(sim, max_motion_planning_time=0.1)  # type:ignore[abstract]

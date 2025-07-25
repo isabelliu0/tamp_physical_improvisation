@@ -22,6 +22,7 @@ dependencies = [
    "pybullet-blocks@git+https://github.com/tomsilver/pybullet-blocks.git",
    "pybullet_helpers@git+https://github.com/tomsilver/pybullet-helpers.git",
    "gymnasium>=1.0.0",
+   "objaverse",
    "moviepy",
    "stable_baselines3==2.4.0",
    "types-tabulate",
@@ -65,5 +66,6 @@ exclude = ["venv/*", "scripts/*"]
 module = [
     "matplotlib.*",
     "networkx.*",
+    "objaverse.*",
 ]
 ignore_missing_imports = true
