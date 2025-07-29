@@ -263,6 +263,18 @@ class Obstacle2DPerceiver(Perceiver[NDArray[np.float32]]):
             raise RuntimeError("Predicates not initialized. Call initialize() first.")
         return self._predicates
 
+    def get_objects(self):
+        """Get all objects in the environment."""
+        return set(
+            [
+                self._robot,
+                self._block_1,
+                self._block_2,
+                self._table,
+                self._target_area,
+            ]
+        )
+
     def reset(
         self,
         obs: NDArray[np.float32],

@@ -666,7 +666,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
                 new_total_cost = current_cost + edge_cost
                 print(
-                    f"    Edge executed successfully with cost {edge_cost}. Is shortcut? {edge.is_shortcut}."   # pylint: disable=line-too-long
+                    f"    Edge executed successfully with cost {edge_cost}. Is shortcut? {edge.is_shortcut}."  # pylint: disable=line-too-long
                 )
 
                 new_path_edges = path_edges + [edge]
@@ -712,7 +712,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         if best_goal_cost < float("inf"):
             assert best_goal_node is not None
             print(
-                f"Optimal path found with cost {best_goal_cost} to node {best_goal_node.id}"    # pylint: disable=line-too-long
+                f"Optimal path found with cost {best_goal_cost} to node {best_goal_node.id}"  # pylint: disable=line-too-long
             )
             return best_goal_path
         print("No path found to goal")

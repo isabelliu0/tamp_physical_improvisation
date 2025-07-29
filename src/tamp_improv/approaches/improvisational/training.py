@@ -6,12 +6,13 @@ import time
 from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, TypeVar, cast
+from typing import Any, Callable, TypeVar, Union, cast
 
 import numpy as np
 import torch
 from gymnasium.wrappers import RecordVideo
 
+from tamp_improv.approaches.hierarchical_rl import HierarchicalRLApproach
 from tamp_improv.approaches.improvisational.base import ImprovisationalTAMPApproach
 from tamp_improv.approaches.improvisational.graph_training import (
     collect_goal_conditioned_training_data,
@@ -23,6 +24,7 @@ from tamp_improv.approaches.pure_rl import PureRLApproach, SACHERApproach
 from tamp_improv.benchmarks.base import ImprovisationalTAMPSystem
 from tamp_improv.benchmarks.context_wrapper import ContextAwareWrapper
 from tamp_improv.benchmarks.goal_wrapper import GoalConditionedWrapper
+from tamp_improv.benchmarks.hierarchical_wrapper import HierarchicalRLWrapper
 from tamp_improv.benchmarks.sac_her_wrapper import SACHERWrapper
 from tamp_improv.benchmarks.wrappers import PureRLWrapper
 from tamp_improv.utils.gpu_utils import get_gpu_memory_info, set_torch_seed
@@ -60,7 +62,7 @@ class TrainingConfig:
     batch_size: int = 32
 
     # Policy-specific settings
-    policy_config: dict[str, Any] | None = None
+    policy_config: Union[dict[str, Any], None] = None
 
     # Shortcut information
     shortcut_info: list[dict[str, Any]] = field(default_factory=list)
@@ -100,7 +102,7 @@ def get_or_collect_training_data(
     num_rollouts_per_node: int = 50,
     max_steps_per_rollout: int = 50,
     shortcut_success_threshold: int = 1,
-    rng: np.random.Generator | None = None,
+    rng: Union[np.random.Generator, None] = None,
 ) -> TrainingData:
     """Get existing or collect new training data."""
     # Check if saved data exists
@@ -169,11 +171,12 @@ def get_or_collect_training_data(
 
 def run_evaluation_episode(
     system: ImprovisationalTAMPSystem[ObsType, ActType],
-    approach: (
-        ImprovisationalTAMPApproach[ObsType, ActType]
-        | PureRLApproach[ObsType, ActType]
-        | SACHERApproach[ObsType, ActType]
-    ),
+    approach: Union[
+        ImprovisationalTAMPApproach[ObsType, ActType],
+        PureRLApproach[ObsType, ActType],
+        SACHERApproach[ObsType, ActType],
+        HierarchicalRLApproach[ObsType, ActType],
+    ],
     policy_name: str,
     config: TrainingConfig,
     episode_num: int = 0,
@@ -636,6 +639,94 @@ def train_and_evaluate_sac_her(
 
     # Run evaluation
     print(f"\nEvaluating SAC+HER baseline on {system.name}...")
+    rewards = []
+    lengths = []
+    successes = []
+
+    for episode in range(config.num_episodes):
+        print(f"\nEvaluation Episode {episode + 1}/{config.num_episodes}")
+        reward, length, success = run_evaluation_episode(
+            system,
+            approach,
+            policy_name,
+            config,
+            episode_num=episode,
+        )
+        rewards.append(reward)
+        lengths.append(length)
+        successes.append(success)
+
+        print(f"Current Success Rate: {sum(successes)/(episode+1):.2%}")
+        print(f"Current Avg Episode Length: {np.mean(lengths):.2f}")
+        print(f"Current Avg Reward: {np.mean(rewards):.2f}")
+
+    total_time = time.time() - start_time
+    return Metrics(
+        success_rate=float(sum(successes) / len(successes)),
+        avg_episode_length=float(np.mean(lengths)),
+        avg_reward=float(np.mean(rewards)),
+        training_time=training_time,
+        total_time=total_time,
+    )
+
+
+def train_and_evaluate_hierarchical_rl(
+    system: ImprovisationalTAMPSystem[ObsType, ActType],
+    policy_factory: Callable[[int], Policy[ObsType, ActType]],
+    config: TrainingConfig,
+    policy_name: str,
+    single_step_skills: bool = True,
+    max_skill_steps: int = 50,
+    skill_failure_penalty: float = -1.0,
+) -> Metrics:
+    """Train and evaluate a hierarchical RL policy on a system."""
+    print(f"\nInitializing hierarchical RL baseline training for {system.name}...")
+    seed = config.seed
+    set_torch_seed(seed)
+
+    policy = policy_factory(seed)
+
+    obs, info = system.reset()
+    _, _, _ = system.perceiver.reset(obs, info)
+
+    hierarchical_rl_env = HierarchicalRLWrapper(
+        tamp_system=system,
+        max_episode_steps=config.max_steps,
+        max_skill_steps=max_skill_steps,
+        step_penalty=config.step_penalty,
+        achievement_bonus=config.success_reward,
+        action_scale=config.action_scale,
+        skill_failure_penalty=skill_failure_penalty,
+        single_step_skills=single_step_skills,
+    )
+
+    render_mode = getattr(hierarchical_rl_env, "render_mode", None)
+    can_render = render_mode is not None
+    if config.record_training and can_render:
+        video_folder = Path(f"videos/{system.name}_{policy_name}_train")
+        video_folder.mkdir(parents=True, exist_ok=True)
+        hierarchical_rl_env = RecordVideo(
+            hierarchical_rl_env,  # type: ignore[assignment]
+            str(video_folder),
+            episode_trigger=lambda x: x % config.training_record_interval == 0,
+            name_prefix="training",
+        )
+
+    # Train policy
+    start_time = time.time()
+    if policy.requires_training:
+        print("\nTraining hierarchical RL policy...")
+        policy.train(hierarchical_rl_env, train_data=None)
+
+        save_path = Path(config.save_dir) / f"{system.name}_{policy_name}"
+        policy.save(str(save_path))
+
+    training_time = time.time() - start_time
+
+    approach = HierarchicalRLApproach(system, policy, seed, hierarchical_rl_env)
+
+    # Run evaluation
+    print(f"\nEvaluating hierarchical RL policy on {system.name}...")
     rewards = []
     lengths = []
     successes = []
