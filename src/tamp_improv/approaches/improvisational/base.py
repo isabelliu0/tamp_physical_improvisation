@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import heapq
 import itertools
 import os
 from collections import deque
@@ -199,15 +200,13 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self.observed_states[initial_node.id] = []
         self.observed_states[initial_node.id].append(obs)
 
-        # Try to add shortcuts
+        # Compute edge costs and find shortest path
         if not self.training_mode:
             self._try_add_shortcuts(self.planning_graph)
-
-        # Compute edge costs
-        self._compute_planning_graph_edge_costs(obs, info)
-
-        # Find shortest path
-        self._current_path = self.planning_graph.find_shortest_path(atoms, goal)
+            self._current_path = self._compute_eval_path(obs, info, goal)
+        else:
+            self._compute_planning_graph_edge_costs(obs, info)
+            self._current_path = self.planning_graph.find_shortest_path(atoms, goal)
 
         # Reset state
         self._current_operator = None
@@ -565,11 +564,338 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     )
                     graph.add_edge(source_node, target_node, None, is_shortcut=True)
 
+    def _compute_eval_path(
+        self,
+        obs: ObsType,
+        info: dict[str, Any],
+        goal: set[GroundAtom],
+        debug: bool = False,
+    ) -> list[PlanningGraphEdge]:
+        """Efficiently compute shortest path during evaluation."""
+        assert self.planning_graph is not None
+
+        if debug:
+            edge_videos_dir = "videos/edge_computation_videos"
+            os.makedirs(edge_videos_dir, exist_ok=True)
+
+        _, init_atoms, _ = self.system.perceiver.reset(obs, info)
+        initial_node = self.planning_graph.node_map[frozenset(init_atoms)]
+        goal_nodes = [
+            node for node in self.planning_graph.nodes if goal.issubset(node.atoms)
+        ]
+
+        if not goal_nodes:
+            print("No goal nodes found in planning graph")
+            return []
+
+        raw_env = self._create_planning_env()
+        using_goal_env, goal_env = self._using_goal_env(self.system.wrapped_env)
+        using_context_env, context_env = self._using_context_env(
+            self.system.wrapped_env
+        )
+
+        # (total_cost, counter, node, path_tuple, path_edges, path_state_info)
+        counter = itertools.count()
+        empty_path: tuple[int, ...] = tuple()
+        pq: list[
+            tuple[
+                int,
+                int,
+                PlanningGraphNode,
+                tuple[int, ...],
+                list[PlanningGraphEdge],
+                tuple[ObsType, dict[str, Any]],
+            ]
+        ] = [(0, next(counter), initial_node, empty_path, [], (obs, info))]
+
+        # Track best cost to reach each (node, path) state
+        distances: dict[tuple[int, tuple[int, ...]], float] = {}
+        distances[(initial_node.id, empty_path)] = 0
+
+        # Track best goal path found so far
+        best_goal_cost = float("inf")
+        best_goal_path: list[PlanningGraphEdge] = []
+        best_goal_node: PlanningGraphNode | None = None
+
+        max_path_length = len(self.planning_graph.nodes) * 2  # Prevent infinite loops
+
+        while pq:
+            (
+                current_cost,
+                _,
+                current_node,
+                current_path,
+                path_edges,
+                (path_state, path_info),
+            ) = heapq.heappop(pq)
+
+            if current_cost >= best_goal_cost:
+                break
+
+            if len(current_path) > max_path_length:
+                continue
+
+            # Skip if we've found a better path to this (node, path) state
+            state_key = (current_node.id, current_path)
+            if state_key in distances and current_cost > distances[state_key]:
+                continue
+
+            # Expand outgoing edges from current node
+            for edge in self.planning_graph.node_to_outgoing_edges.get(
+                current_node, []
+            ):
+                if edge.target.id <= current_node.id:
+                    continue
+
+                edge_cost, end_state, end_info, success = self._execute_edge(
+                    edge,
+                    path_state,
+                    path_info,
+                    raw_env,
+                    using_goal_env,
+                    goal_env,
+                    using_context_env,
+                    context_env,
+                    debug,
+                    current_path,
+                )
+
+                if not success:
+                    print("    Edge execution failed.")
+                    continue
+
+                new_total_cost = current_cost + edge_cost
+                print(
+                    f"    Edge executed successfully with cost {edge_cost}. Is shortcut? {edge.is_shortcut}."   # pylint: disable=line-too-long
+                )
+
+                new_path_edges = path_edges + [edge]
+
+                if edge.target in goal_nodes:
+                    if new_total_cost < best_goal_cost:
+                        best_goal_cost = new_total_cost
+                        best_goal_path = new_path_edges
+                        best_goal_node = edge.target
+                        # Continue to explore other paths
+                    else:
+                        continue
+
+                if new_total_cost >= best_goal_cost:
+                    continue
+
+                # Store cost for this specific path
+                edge.costs[(current_path, current_node.id)] = edge_cost
+                if edge.cost == float("inf") or edge_cost < edge.cost:
+                    edge.cost = edge_cost
+
+                new_path = current_path + (current_node.id,)
+                new_state_key = (edge.target.id, new_path)
+
+                # Only add to queue if this is a better path to this (node, path) state
+                if (
+                    new_state_key not in distances
+                    or new_total_cost < distances[new_state_key]
+                ):
+                    distances[new_state_key] = new_total_cost
+                    heapq.heappush(  # type: ignore[misc]
+                        pq,
+                        (
+                            new_total_cost,
+                            next(counter),
+                            edge.target,
+                            new_path,
+                            new_path_edges,
+                            (end_state, end_info),
+                        ),
+                    )
+
+        if best_goal_cost < float("inf"):
+            assert best_goal_node is not None
+            print(
+                f"Optimal path found with cost {best_goal_cost} to node {best_goal_node.id}"    # pylint: disable=line-too-long
+            )
+            return best_goal_path
+        print("No path found to goal")
+        return []
+
+    def _execute_edge(
+        self,
+        edge: PlanningGraphEdge,
+        start_state: ObsType,
+        start_info: dict[str, Any],
+        raw_env: gym.Env,
+        using_goal_env: bool,
+        goal_env: GoalConditionedWrapper | None,
+        using_context_env: bool,
+        context_env: ContextAwareWrapper | None,
+        debug: bool = True,
+        current_path: tuple[int, ...] = tuple(),
+    ) -> tuple[float, ObsType, dict[str, Any], bool]:
+        """Execute a single edge and return the cost and end state."""
+        raw_env.reset_from_state(start_state)  # type: ignore
+
+        frames: list[Any] = []
+        video_filename = ""
+        if debug:
+            edge_type = "shortcut" if edge.is_shortcut else "regular"
+            path_str = (
+                "-".join(str(node_id) for node_id in current_path)
+                if current_path
+                else "start"
+            )
+            video_filename = f"videos/edge_computation_videos/edge_{edge.source.id}_to_{edge.target.id}_{edge_type}_via_{path_str}.mp4"  # pylint: disable=line-too-long
+
+        if debug and hasattr(raw_env, "render") and not self.training_mode:
+            try:
+                frames.append(raw_env.render())
+            except Exception as e:
+                print(f"Error rendering initial frame: {e}")
+
+        output_dir = "videos/debug_frames"
+        os.makedirs(output_dir, exist_ok=True)
+
+        _, init_atoms, _ = self.system.perceiver.reset(start_state, start_info)
+        goal_atoms = set(edge.target.atoms)
+
+        if edge.is_shortcut:
+            self.policy.configure_context(
+                PolicyContext(
+                    goal_atoms=goal_atoms,
+                    current_atoms=init_atoms,
+                    info={
+                        "source_node_id": edge.source.id,
+                        "target_node_id": edge.target.id,
+                    },
+                )
+            )
+            if using_goal_env and goal_env is not None:
+                assert hasattr(
+                    self.policy, "node_states"
+                ), "Policy must have node_states"
+                target_state = self.policy.node_states[edge.target.id]
+                if isinstance(target_state, list):
+                    target_state = target_state[0]
+                target_atoms_set = set(edge.target.atoms)
+                if goal_env.use_atom_as_obs is True:
+                    target_vec = goal_env.create_atom_vector(target_atoms_set)
+                    current_vec = goal_env.create_atom_vector(init_atoms)
+                else:
+                    target_vec = goal_env.flatten_obs(target_state)
+                    current_vec = goal_env.flatten_obs(start_state)
+                aug_obs = {
+                    "observation": goal_env.flatten_obs(start_state),
+                    "achieved_goal": current_vec,
+                    "desired_goal": target_vec,
+                }
+            elif using_context_env and context_env is not None:
+                aug_obs = context_env.augment_observation(start_state)  # type: ignore[assignment]  # pylint: disable=line-too-long
+            else:
+                aug_obs = start_state  # type: ignore[assignment]
+            skill: Policy | Skill = self.policy
+        else:
+            assert edge.operator is not None
+            skill = self._get_skill(edge.operator)
+            skill.reset(edge.operator)
+            aug_obs = start_state  # type: ignore[assignment]
+
+        num_steps = 0
+        curr_raw_obs = start_state
+        curr_aug_obs = aug_obs
+        frame_counter = 0
+        # frame = raw_env.render()
+        # iio.imwrite(
+        #     f"{output_dir}/frame_{frame_counter:06d}.png", frame
+        # )
+
+        for _ in range(self._max_skill_steps):
+            act = skill.get_action(curr_aug_obs)
+            if act is None:
+                print("No action returned by skill")
+                return float("inf"), start_state, start_info, False
+
+            next_raw_obs, _, _, _, info = raw_env.step(act)
+            curr_raw_obs = next_raw_obs
+            atoms = self.system.perceiver.step(curr_raw_obs)
+            frame_counter += 1
+            # frame = raw_env.render()
+            # iio.imwrite(
+            #     f"{output_dir}/frame_{frame_counter:06d}.png", frame
+            # )
+
+            if debug and hasattr(raw_env, "render") and not self.training_mode:
+                frames.append(raw_env.render())
+
+            if edge.is_shortcut:
+                if using_goal_env and goal_env is not None:
+                    target_state = self.policy.node_states[edge.target.id]
+                    if isinstance(target_state, list):
+                        target_state = target_state[0]
+                    target_atoms_set = set(edge.target.atoms)
+                    if goal_env.use_atom_as_obs is True:
+                        target_vec = goal_env.create_atom_vector(target_atoms_set)
+                        current_vec = goal_env.create_atom_vector(atoms)
+                    else:
+                        target_vec = goal_env.flatten_obs(target_state)
+                        current_vec = goal_env.flatten_obs(curr_raw_obs)
+                    curr_aug_obs = {
+                        "observation": goal_env.flatten_obs(curr_raw_obs),
+                        "achieved_goal": current_vec,
+                        "desired_goal": target_vec,
+                    }
+                elif using_context_env and context_env is not None:
+                    curr_aug_obs = context_env.augment_observation(curr_raw_obs)  # type: ignore[assignment]  # pylint: disable=line-too-long
+                else:
+                    curr_aug_obs = curr_raw_obs  # type: ignore[assignment]
+            else:
+                curr_aug_obs = curr_raw_obs  # type: ignore[assignment]
+
+            num_steps += 1
+
+            # Check if we've reached the goal
+            if goal_atoms == atoms:
+                # Store the observed state for the target node
+                target_id = edge.target.id
+                if target_id not in self.observed_states:
+                    self.observed_states[target_id] = []
+                is_duplicate = False
+                if hasattr(curr_raw_obs, "nodes"):
+                    for existing_obs in self.observed_states[target_id]:
+                        assert hasattr(existing_obs, "nodes")
+                        if np.array_equal(existing_obs.nodes, curr_raw_obs.nodes):
+                            is_duplicate = True
+                            break
+                elif isinstance(curr_raw_obs, np.ndarray):
+                    for existing_obs in self.observed_states[target_id]:
+                        assert isinstance(existing_obs, np.ndarray)
+                        if np.array_equal(existing_obs, curr_raw_obs):
+                            is_duplicate = True
+                            break
+                else:
+                    raise TypeError("Unsupported observation type for duplicate check")
+
+                if not is_duplicate:
+                    self.observed_states[target_id].append(curr_raw_obs)
+
+                if debug and frames:
+                    iio.mimsave(
+                        video_filename.replace(".mp4", "_success.mp4"),
+                        frames,
+                        fps=5,
+                    )
+
+                return num_steps, curr_raw_obs, info, True
+
+        if debug and frames:
+            iio.mimsave(video_filename, frames, fps=5)
+
+        # Skill timed out
+        return float("inf"), start_state, start_info, False
+
     def _compute_planning_graph_edge_costs(
         self,
         obs: ObsType,
         info: dict[str, Any],
-        debug: bool = True,
+        debug: bool = False,
     ) -> None:
         """Compute edge costs considering the path taken to reach each node.
 
@@ -658,32 +984,32 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 # if (node.id, edge.target.id) not in envisioned_plan:
                 #     continue
 
-                # DEBUG: Envisioned plan for clean up table env
-                envisioned_plan = [
-                    (0, 4),
-                    (4, 8),
-                    (8, 12),
-                    (12, 16),
-                    (16, 29),
-                    (29, 42),
-                    (42, 54),
-                    (54, 59),
-                    (59, 72),
-                    (72, 91),
-                    (91, 103),
-                    (103, 112),
-                    (112, 121),
-                    (121, 132),
-                    (132, 136),
-                    (136, 139),
-                    (0, 3),
-                    (3, 7),
-                    (7, 11),
-                    (7, 132),
-                    (7, 136),
-                ]
-                if (node.id, edge.target.id) not in envisioned_plan:
-                    continue
+                # # DEBUG: Envisioned plan for clean up table env
+                # envisioned_plan = [
+                #     (0, 4),
+                #     (4, 8),
+                #     (8, 12),
+                #     (12, 16),
+                #     (16, 29),
+                #     (29, 42),
+                #     (42, 54),
+                #     (54, 59),
+                #     (59, 72),
+                #     (72, 91),
+                #     (91, 103),
+                #     (103, 112),
+                #     (112, 121),
+                #     (121, 132),
+                #     (132, 136),
+                #     (136, 139),
+                #     (0, 3),
+                #     (3, 7),
+                #     (7, 11),
+                #     (7, 132),
+                #     (7, 136),
+                # ]
+                # if (node.id, edge.target.id) not in envisioned_plan:
+                #     continue
 
                 frames: list[Any] = []
                 video_filename = ""
@@ -702,148 +1028,22 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     except Exception as e:
                         print(f"Error rendering initial frame: {e}")
 
-                _, init_atoms, _ = self.system.perceiver.reset(path_state, path_info)
-                goal_atoms = set(edge.target.atoms)
+                _ = self.system.perceiver.reset(path_state, path_info)
 
-                if edge.is_shortcut:
-                    self.policy.configure_context(
-                        PolicyContext(
-                            goal_atoms=goal_atoms,
-                            current_atoms=init_atoms,
-                            info={
-                                "source_node_id": node.id,
-                                "target_node_id": edge.target.id,
-                            },
-                        )
-                    )
-                    if using_goal_env and goal_env is not None:
-                        assert hasattr(
-                            self.policy, "node_states"
-                        ), "Policy must have node_states"
-                        target_state = self.policy.node_states[edge.target.id]
-                        if isinstance(target_state, list):
-                            target_state = target_state[0]
-                        target_atoms = set(edge.target.atoms)
-                        if goal_env.use_atom_as_obs is True:
-                            target_vec = goal_env.create_atom_vector(target_atoms)
-                            current_vec = goal_env.create_atom_vector(init_atoms)
-                        else:
-                            target_vec = goal_env.flatten_obs(target_state)
-                            current_vec = goal_env.flatten_obs(path_state)
-                        aug_obs = {
-                            "observation": goal_env.flatten_obs(path_state),
-                            "achieved_goal": current_vec,
-                            "desired_goal": target_vec,
-                        }
-                    elif using_context_env and context_env is not None:
-                        aug_obs = context_env.augment_observation(path_state)  # type: ignore[assignment]
-                    else:
-                        aug_obs = path_state  # type: ignore[assignment]
-                    skill: Policy | Skill = self.policy
-                else:
-                    assert edge.operator is not None
-                    skill = self._get_skill(edge.operator)
-                    skill.reset(edge.operator)
-                    aug_obs = path_state  # type: ignore[assignment]
+                edge_cost, end_state, _, success = self._execute_edge(
+                    edge,
+                    path_state,
+                    path_info,
+                    raw_env,
+                    using_goal_env,
+                    goal_env,
+                    using_context_env,
+                    context_env,
+                    debug,
+                    path,
+                )
 
-                # Execute the skill and track steps
-                num_steps = 0
-                curr_raw_obs = path_state
-                curr_aug_obs = aug_obs
-                frame_counter = 0
-                # frame = raw_env.render()
-                # iio.imwrite(
-                #     f"{output_dir}/frame_{frame_counter:06d}.png", frame
-                # )
-                is_success = False
-                for _ in range(self._max_skill_steps):
-                    act = skill.get_action(curr_aug_obs)
-                    if act is None:
-                        print("No action returned by skill")
-                        break
-                    next_raw_obs, _, _, _, info = raw_env.step(act)
-                    curr_raw_obs = next_raw_obs
-                    atoms = self.system.perceiver.step(curr_raw_obs)
-                    frame_counter += 1
-                    # frame = raw_env.render()
-                    # iio.imwrite(
-                    #     f"{output_dir}/frame_{frame_counter:06d}.png", frame
-                    # )
-
-                    if debug and hasattr(raw_env, "render") and not self.training_mode:
-                        frames.append(raw_env.render())
-
-                    if edge.is_shortcut:
-                        if using_goal_env and goal_env is not None:
-                            target_state = self.policy.node_states[edge.target.id]
-                            if isinstance(target_state, list):
-                                target_state = target_state[0]
-                            target_atoms = set(edge.target.atoms)
-                            if goal_env.use_atom_as_obs is True:
-                                target_vec = goal_env.create_atom_vector(target_atoms)
-                                current_vec = goal_env.create_atom_vector(atoms)
-                            else:
-                                target_vec = goal_env.flatten_obs(target_state)
-                                current_vec = goal_env.flatten_obs(curr_raw_obs)
-                            curr_aug_obs = {
-                                "observation": goal_env.flatten_obs(curr_raw_obs),
-                                "achieved_goal": current_vec,
-                                "desired_goal": target_vec,
-                            }
-                        elif using_context_env and context_env is not None:
-                            curr_aug_obs = context_env.augment_observation(curr_raw_obs)  # type: ignore[assignment]
-                        else:
-                            curr_aug_obs = curr_raw_obs  # type: ignore[assignment]
-                    else:
-                        curr_aug_obs = curr_raw_obs  # type: ignore[assignment]
-
-                    num_steps += 1
-
-                    if goal_atoms == atoms:
-                        # Store the observed state for the target node
-                        target_id = edge.target.id
-                        if target_id not in self.observed_states:
-                            self.observed_states[target_id] = []
-                        is_duplicate = False
-                        if hasattr(curr_raw_obs, "nodes"):
-                            for existing_obs in self.observed_states[target_id]:
-                                assert hasattr(existing_obs, "nodes")
-                                if np.array_equal(
-                                    existing_obs.nodes, curr_raw_obs.nodes
-                                ):
-                                    is_duplicate = True
-                                    break
-                        elif isinstance(curr_raw_obs, np.ndarray):
-                            for existing_obs in self.observed_states[target_id]:
-                                assert isinstance(existing_obs, np.ndarray)
-                                if np.array_equal(existing_obs, curr_raw_obs):
-                                    is_duplicate = True
-                                    break
-                        else:
-                            raise TypeError(
-                                "Unsupported observation type for duplicate check"
-                            )
-                        if not is_duplicate:
-                            self.observed_states[target_id].append(curr_raw_obs)
-
-                        path_str = (
-                            "-".join(str(node_id) for node_id in path)
-                            if path
-                            else "start"
-                        )
-                        print(
-                            f"Added edge {edge.source.id} -> {edge.target.id} cost: {num_steps} via {path_str}. Is shortcut? {edge.is_shortcut}"  # pylint: disable=line-too-long
-                        )
-                        if debug and frames:
-                            iio.mimsave(
-                                video_filename.replace(".mp4", "_success.mp4"),
-                                frames,
-                                fps=5,
-                            )
-                        is_success = True
-                        break  # success
-
-                if not is_success:
+                if not success:
                     # Edge expansion failed.
                     if debug and frames:
                         iio.mimsave(video_filename, frames, fps=5)
@@ -853,13 +1053,20 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     continue
 
                 # Store cost for this specific path
-                edge.costs[(path, node.id)] = num_steps
-                if edge.cost == float("inf") or num_steps < edge.cost:
-                    edge.cost = num_steps
+                edge.costs[(path, node.id)] = edge_cost
+                if edge.cost == float("inf") or edge_cost < edge.cost:
+                    edge.cost = edge_cost
+
+                path_str = (
+                    "-".join(str(node_id) for node_id in path) if path else "start"
+                )
+                print(
+                    f"Added edge {edge.source.id} -> {edge.target.id} cost: {edge_cost} via {path_str}. Is shortcut? {edge.is_shortcut}"  # pylint: disable=line-too-long
+                )
 
                 # Update path to include current node for next traversal
                 new_path = path + (node.id,)
-                path_states[(new_path, edge.target, edge.target)] = (curr_raw_obs, info)
+                path_states[(new_path, edge.target, edge.target)] = (end_state, info)
                 queue.append((edge.target, new_path))
 
         print("\nAll path costs:")
@@ -892,10 +1099,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
         if hasattr(base_env, "clone"):
             planning_env = base_env.clone()
-            print("Created planning environment using custom clone() method.")
             return planning_env
         planning_env = copy.deepcopy(base_env)
-        print("No custom clone() found. Created planning environment using deepcopy().")
         return planning_env
 
     def _using_goal_env(
