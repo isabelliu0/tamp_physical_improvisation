@@ -626,6 +626,161 @@ def identify_promising_shortcuts_with_rollouts(
     return promising_candidates
 
 
+def identify_unreachable_shortcuts_with_rollouts(
+    system,
+    planning_graph,
+    observed_states: dict[int, list[ObsType]],
+    num_rollouts_per_node: int = 50,
+    max_steps_per_rollout: int = 30,
+    shortcut_failure_threshold: int = 0,
+    action_scale: float = 1.0,
+    random_seed: int = 42,
+) -> list[ShortcutCandidate]:
+    """Identify shortcuts that are NOT reached by performing random rollouts
+    from each node.
+
+    This function runs random rollouts from each source node in the planning graph
+    and tracks which nodes' atoms are reached during exploration. Shortcuts that
+    are reached FEWER than or equal to `shortcut_failure_threshold` times through
+    random exploration are considered unreachable candidates for training.
+    """
+    print("\n=== Identifying Unreachable Shortcuts with Random Rollouts ===")
+    shortcut_success_counts: defaultdict[tuple[int, int], int] = defaultdict(
+        int
+    )  # (source_node_id, target_node_id) -> count
+
+    # Track all valid shortcut pairs (respecting constraints)
+    valid_shortcut_pairs: set[tuple[int, int]] = set()
+
+    # Get the base environment for running rollouts
+    raw_env = system.env
+    sampling_space = gym.spaces.Box(
+        low=raw_env.action_space.low * action_scale,
+        high=raw_env.action_space.high * action_scale,
+        dtype=raw_env.action_space.dtype,
+    )
+    sampling_space.seed(random_seed)
+
+    # First, identify all valid shortcut pairs based on constraints
+    print("Identifying valid shortcut pairs...")
+    for source_node in planning_graph.nodes:
+        if source_node.id not in observed_states:
+            continue
+
+        for target_node in planning_graph.nodes:
+            # Constraint 1: target_node.id > source_node.id
+            if target_node.id <= source_node.id:
+                continue
+
+            # Constraint 2: no existing direct edge between them
+            has_direct_edge = False
+            for edge in planning_graph.node_to_outgoing_edges.get(source_node, []):
+                if edge.target == target_node and not edge.is_shortcut:
+                    has_direct_edge = True
+                    break
+            if has_direct_edge:
+                continue
+
+            # This is a valid shortcut pair
+            valid_shortcut_pairs.add((source_node.id, target_node.id))
+
+    print(f"Found {len(valid_shortcut_pairs)} valid potential shortcut pairs")
+
+    # For each node with an observed state, perform random rollouts
+    for source_node_id, source_states in observed_states.items():
+        source_node = next(
+            (n for n in planning_graph.nodes if n.id == source_node_id), None
+        )
+        assert source_node is not None
+        source_atoms = set(source_node.atoms)
+
+        # Calculate rollouts per state to maintain roughly the same total
+        rollouts_per_state = max(1, num_rollouts_per_node // len(source_states))
+        print(
+            f"\nPerforming {rollouts_per_state} rollouts for each of {len(source_states)} state(s) from node {source_node_id}"  # pylint: disable=line-too-long
+        )
+
+        # Track nodes reached from this source node
+        reached_nodes: defaultdict[int, int] = defaultdict(int)
+
+        # Perform random rollouts
+        for _, source_state in enumerate(source_states):
+            for rollout_idx in range(rollouts_per_state):
+                if rollout_idx > 0 and rollout_idx % 100 == 0:
+                    print(f"Completed {rollout_idx}/{rollouts_per_state} rollouts")
+
+                # Reset the environment to source state
+                raw_env.reset_from_state(source_state)
+                curr_atoms = source_atoms.copy()
+
+                # Execute random actions
+                reached_in_this_rollout: set[int] = set()
+                for _ in range(max_steps_per_rollout):
+                    action = sampling_space.sample()
+                    obs, _, terminated, truncated, _ = raw_env.step(action)
+                    curr_atoms = system.perceiver.step(obs)
+
+                    # Check if any valid target node is reached
+                    for target_node in planning_graph.nodes:
+                        if (source_node_id, target_node.id) not in valid_shortcut_pairs:
+                            continue
+
+                        # Note: no need to stop this rollout when we reach a node
+                        # since we want to explore all reachable nodes
+                        if (
+                            set(target_node.atoms) == curr_atoms
+                            and target_node.id not in reached_in_this_rollout
+                        ):
+                            reached_nodes[target_node.id] += 1
+                            shortcut_success_counts[
+                                (source_node_id, target_node.id)
+                            ] += 1
+                            reached_in_this_rollout.add(target_node.id)
+
+                    if terminated or truncated:
+                        break
+
+        if reached_nodes:
+            print(f"  Nodes whose atoms are reached from node {source_node_id}:")
+            for target_id, count in sorted(reached_nodes.items(), key=lambda x: -x[1]):
+                print(f"    → Node {target_id}: {count}/{num_rollouts_per_node} times")
+        else:
+            print(f"  No nodes whose atoms are reached from node {source_node_id}")
+
+    # Collect unreachable shortcut candidates
+    unreachable_candidates = []
+    print(
+        f"\nShortcuts NOT reaching success threshold (≤{shortcut_failure_threshold}):"
+    )
+
+    for source_id, target_id in valid_shortcut_pairs:
+        success_count = shortcut_success_counts.get((source_id, target_id), 0)
+
+        if success_count <= shortcut_failure_threshold:
+            source_node = next(
+                (n for n in planning_graph.nodes if n.id == source_id), None
+            )
+            target_node = next(
+                (n for n in planning_graph.nodes if n.id == target_id), None
+            )
+
+            assert source_node is not None and target_node is not None
+            print(f"  Node {source_id} → Node {target_id}: {success_count} successes")
+
+            source_state = observed_states[source_id][0]
+            candidate = ShortcutCandidate(
+                source_node=source_node,
+                target_node=target_node,
+                source_atoms=set(source_node.atoms),
+                target_atoms=set(target_node.atoms),
+                source_state=source_state,
+            )
+            unreachable_candidates.append(candidate)
+
+    print(f"\nFound {len(unreachable_candidates)} unreachable shortcut candidates")
+    return unreachable_candidates
+
+
 def select_random_shortcuts(
     candidates: list[ShortcutCandidate],
     max_shortcuts: int,

@@ -1069,17 +1069,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 path_states[(new_path, edge.target, edge.target)] = (end_state, info)
                 queue.append((edge.target, new_path))
 
-        print("\nAll path costs:")
-        for edge in self.planning_graph.edges:
-            if edge.costs:
-                cost_details = []
-                for (p, _), cost in edge.costs.items():
-                    path_str = "-".join(str(node_id) for node_id in p) if p else "start"
-                    cost_details.append(f"via {path_str}: {cost}")
-                print(
-                    f"Edge {edge.source.id}->{edge.target.id}: {', '.join(cost_details)}"
-                )
-
     def _create_planning_env(self) -> gym.Env:
         """Create a separate environment instance for planning simulations."""
         current_env = self.system.env

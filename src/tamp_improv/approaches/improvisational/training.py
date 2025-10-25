@@ -252,6 +252,7 @@ def train_and_evaluate(
     max_steps_per_rollout: int = 50,
     shortcut_success_threshold: int = 1,
     select_random_goal: bool = False,
+    enable_generalization: bool = False,
 ) -> Metrics:
     """Train and evaluate a policy on a system."""
     print(f"\nInitializing training for {system.name}...")
@@ -283,6 +284,10 @@ def train_and_evaluate(
 
     # Create policy using factory
     policy = policy_factory(config.seed)
+
+    # Set enable_generalization if policy is MultiRLPolicy
+    if isinstance(policy, MultiRLPolicy):
+        policy.enable_generalization = enable_generalization
 
     # Create approach with properly initialized policy
     approach = ImprovisationalTAMPApproach(
