@@ -152,8 +152,6 @@ def test_multi_rl_obstacle2d_pipeline(system_cls):
     print(f"Success Rate: {metrics.success_rate:.2%}")
     print(f"Average Episode Length: {metrics.avg_episode_length:.2f}")
     print(f"Average Reward: {metrics.avg_reward:.2f}")
-    print(f"Training Time: {metrics.training_time:.2f} seconds")
-    print(f"Total Time: {metrics.total_time:.2f} seconds")
 
     return metrics
 
@@ -237,10 +235,10 @@ def test_multi_rl_obstacle_tower_pipeline(system_cls, use_context_wrapper):
         max_steps=500,
         max_training_steps_per_shortcut=100,
         collect_episodes=1,
-        episodes_per_scenario=3000,
+        episodes_per_scenario=850,
         force_collect=False,
         render=True,
-        record_training=False,
+        record_training=True,
         training_record_interval=100,
         training_data_dir="training_data/graph_training_data",
         save_dir=f"trained_policies/multi_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
@@ -255,6 +253,7 @@ def test_multi_rl_obstacle_tower_pipeline(system_cls, use_context_wrapper):
         n_epochs=10,
         gamma=0.99,
         ent_coef=0.01,
+        deterministic=True,
         device="cuda" if torch.cuda.is_available() else "cpu",
     )
 
@@ -318,6 +317,7 @@ def test_multi_rl_obstacle_tower_loaded(system_cls=GraphObstacleTowerTAMPSystem)
         n_epochs=10,
         gamma=0.99,
         ent_coef=0.01,
+        deterministic=True,
         device="cuda" if torch.cuda.is_available() else "cpu",
     )
 

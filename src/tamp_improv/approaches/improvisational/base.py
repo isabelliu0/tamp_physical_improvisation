@@ -135,7 +135,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         policy: Policy[ObsType, ActType],
         seed: int,
         planner_id: str = "pyperplan",
-        max_skill_steps: int = 200,
+        max_skill_steps: int = 100,
     ) -> None:
         """Initialize approach."""
         super().__init__(system, seed)
@@ -178,10 +178,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self._goal = goal
         self.observed_states = {}
 
-        # Create planning graph
         self.planning_graph = self._create_planning_graph(objects, atoms)
 
-        # If random goal selection, pick a random node as goal
         if select_random_goal:
             initial_node = self.planning_graph.node_map[frozenset(atoms)]
             higher_nodes = [
@@ -208,7 +206,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             self._compute_planning_graph_edge_costs(obs, info)
             self._current_path = self.planning_graph.find_shortest_path(atoms, goal)
 
-        # Reset state
         self._current_operator = None
         self._current_skill = None
         self._current_edge = None
@@ -245,7 +242,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         if self.policy_active and self.planning_graph:
             current_node = self._current_edge.source if self._current_edge else None
             if current_node and self._goal_atoms == atoms:
-                print("Policy successfully achieved goal atoms!")
                 self._current_edge = None
                 self.policy_active = False
                 self._goal_atoms = set()
@@ -284,7 +280,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             self._current_edge = self._current_path.pop(0)
 
             if self._current_edge.is_shortcut:
-                print("Using shortcut edge")
                 self.policy_active = True
 
                 # Get goal nodes for the target node
@@ -336,7 +331,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
         # Check if current edge's target state is achieved
         if self._current_edge and set(self._current_edge.target.atoms) == atoms:
-            print("Edge target achieved")
             self._current_edge = None
             return self.step(obs, reward, terminated, truncated, info)
 
@@ -569,7 +563,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         obs: ObsType,
         info: dict[str, Any],
         goal: set[GroundAtom],
-        debug: bool = False,
+        debug: bool = True,
     ) -> list[PlanningGraphEdge]:
         """Efficiently compute shortest path during evaluation."""
         assert self.planning_graph is not None
@@ -661,12 +655,12 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 )
 
                 if not success:
-                    print("    Edge execution failed.")
+                    print(f"    Edge {current_node.id} -> {edge.target.id} execution failed.")
                     continue
 
                 new_total_cost = current_cost + edge_cost
                 print(
-                    f"    Edge executed successfully with cost {edge_cost}. Is shortcut? {edge.is_shortcut}."  # pylint: disable=line-too-long
+                    f"    Edge {current_node.id} -> {edge.target.id} executed with cost {edge_cost}. Is shortcut? {edge.is_shortcut}."  # pylint: disable=line-too-long
                 )
 
                 new_path_edges = path_edges + [edge]
@@ -711,10 +705,21 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
         if best_goal_cost < float("inf"):
             assert best_goal_node is not None
-            print(
-                f"Optimal path found with cost {best_goal_cost} to node {best_goal_node.id}"  # pylint: disable=line-too-long
-            )
+            node_ids = [edge.source.id for edge in best_goal_path]
+            node_ids.append(best_goal_path[-1].target.id)
+            node_str = " -> ".join(map(str, node_ids))
+            shortcut_edges = [
+                f"{edge.source.id} -> {edge.target.id}"
+                for edge in best_goal_path
+                if edge.is_shortcut
+            ]
+            if shortcut_edges:
+                shortcut_str = ", ".join(shortcut_edges)
+                print(f"Optimal path found with cost {best_goal_cost}: {node_str} (with shortcut(s) {shortcut_str})")
+            else:
+                print(f"Optimal path found with cost {best_goal_cost}: {node_str}")
             return best_goal_path
+
         print("No path found to goal")
         return []
 

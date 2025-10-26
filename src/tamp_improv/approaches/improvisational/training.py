@@ -12,7 +12,6 @@ import numpy as np
 import torch
 from gymnasium.wrappers import RecordVideo
 
-from tamp_improv.approaches.hierarchical_rl import HierarchicalRLApproach
 from tamp_improv.approaches.improvisational.base import ImprovisationalTAMPApproach
 from tamp_improv.approaches.improvisational.graph_training import (
     collect_goal_conditioned_training_data,
@@ -21,6 +20,7 @@ from tamp_improv.approaches.improvisational.graph_training import (
 from tamp_improv.approaches.improvisational.policies.base import Policy, TrainingData
 from tamp_improv.approaches.improvisational.policies.multi_rl import MultiRLPolicy
 from tamp_improv.approaches.pure_rl import PureRLApproach, SACHERApproach
+from tamp_improv.approaches.hierarchical_rl import HierarchicalRLApproach
 from tamp_improv.benchmarks.base import ImprovisationalTAMPSystem
 from tamp_improv.benchmarks.context_wrapper import ContextAwareWrapper
 from tamp_improv.benchmarks.goal_wrapper import GoalConditionedWrapper
@@ -172,10 +172,8 @@ def get_or_collect_training_data(
 def run_evaluation_episode(
     system: ImprovisationalTAMPSystem[ObsType, ActType],
     approach: Union[
-        ImprovisationalTAMPApproach[ObsType, ActType],
-        PureRLApproach[ObsType, ActType],
-        SACHERApproach[ObsType, ActType],
-        HierarchicalRLApproach[ObsType, ActType],
+        ImprovisationalTAMPApproach[ObsType, ActType], PureRLApproach[ObsType, ActType], SACHERApproach[ObsType, ActType],
+        HierarchicalRLApproach[ObsType, ActType]
     ],
     policy_name: str,
     config: TrainingConfig,
@@ -209,6 +207,9 @@ def run_evaluation_episode(
     else:
         step_result = approach.reset(obs, info)
 
+    # Evaluation reruns the full best-path execution in the real environment
+    # for the sake of rendering and step counts
+    # NOTE: Evaluation is slower than necessary
     total_reward = 0.0
     step_count = 0
     success = False

@@ -30,6 +30,7 @@ class RLConfig:
     gamma: float = 0.99
     ent_coef: float = 0.01
     device: str = "cuda"
+    deterministic: bool = False
 
 
 class TrainingProgressCallback(BaseCallback):
@@ -298,7 +299,7 @@ class RLPolicy(Policy[ObsType, ActType]):
             obs_numpy = self.device_ctx.numpy(obs_cpu)
 
         with torch.no_grad():
-            action, _ = self.model.predict(obs_numpy, deterministic=False)
+            action, _ = self.model.predict(obs_numpy, deterministic=self.config.deterministic)
 
         # Convert back to original type
         if isinstance(obs, (int, float)):
