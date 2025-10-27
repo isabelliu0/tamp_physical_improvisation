@@ -187,6 +187,7 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
             and torch.cuda.is_available()
             and torch.cuda.device_count() > 1
         ):
+            #TODO: save best checkpoints in parallel training as well
             print(f"\nUsing parallel training with {torch.cuda.device_count()} GPUs")
             trainer: GPUParallelTrainer = GPUParallelTrainer(use_cuda=True)
             train_kwargs = {}
@@ -210,9 +211,12 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
                 group_data,
             ) in policies_to_train.items():
                 print(f"\nTraining policy for shortcut type: {policy_key}")
-                train_single_policy(
-                    policy, policy_env, group_data, policy_key=policy_key
+                result = train_single_policy(
+                    policy, policy_env, group_data, policy_key=policy_key, save_dir=save_dir
                 )
+                if isinstance(result, dict) and result.get("best_checkpoint"):
+                    print(f"Loading best checkpoint: {result['best_checkpoint']}")
+                    policy.load(result["best_checkpoint"])
 
         print(f"\nCompleted training {len(self.policies)} specialized policies")
 
@@ -446,17 +450,23 @@ def train_single_policy(
     env: gym.Env,
     train_data: TrainingData,
     policy_key: str | None = None,
+    save_dir: str | None = None,
 ):
     """Train a single policy with a callback."""
+    checkpoint_dir = None
+    if save_dir:
+        checkpoint_dir = str(Path(save_dir) / "checkpoints")
     callback = TrainingProgressCallback(
         check_freq=train_data.config.get("training_record_interval", 100),
         early_stopping=True,
         early_stopping_patience=1,
         early_stopping_threshold=0.8,
         policy_key=policy_key,
+        save_checkpoints=True,
+        checkpoint_dir=checkpoint_dir,
     )
     policy.train(env, train_data, callback=callback)
-    return True
+    return {"success": True, "best_checkpoint": callback.best_checkpoint_path}
 
 
 def find_atom_substitution(

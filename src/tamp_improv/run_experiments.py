@@ -173,6 +173,7 @@ def run_obstacle_tower_multi_seed_experiment(
         n_epochs=10,
         gamma=0.99,
         ent_coef=0.01,
+        deterministic=True,
         device="cuda" if torch.cuda.is_available() else "cpu",
     )
 
@@ -354,7 +355,7 @@ def run_cluttered_drawer_multi_seed_experiment(
             use_random_rollouts=True,
             num_rollouts_per_node=100,
             max_steps_per_rollout=300,
-            shortcut_success_threshold=1,
+            shortcut_success_threshold=20,
         )
 
         all_metrics.append(metrics)

@@ -237,7 +237,7 @@ def test_multi_rl_obstacle_tower_pipeline(system_cls, use_context_wrapper):
         collect_episodes=1,
         episodes_per_scenario=850,
         force_collect=False,
-        render=True,
+        render=False,
         record_training=False,
         training_record_interval=100,
         training_data_dir="training_data/graph_training_data",
@@ -371,11 +371,11 @@ def test_multi_rl_cluttered_drawer_pipeline(system_cls, use_context_wrapper):
         max_steps=500,
         max_training_steps_per_shortcut=100,
         collect_episodes=1,
-        episodes_per_scenario=400,
+        episodes_per_scenario=475,
         force_collect=False,
-        render=True,
+        render=False,
         record_training=False,
-        training_record_interval=100,
+        training_record_interval=25,
         training_data_dir="training_data/graph_training_data",
         save_dir=f"trained_policies/multi_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
         batch_size=16,
@@ -503,9 +503,9 @@ def test_multi_rl_cleanup_table_pipeline(system_cls, use_context_wrapper):
         max_steps=600,
         max_training_steps_per_shortcut=300,
         collect_episodes=1,
-        episodes_per_scenario=70,
+        episodes_per_scenario=150,
         force_collect=False,
-        render=True,
+        render=False,
         record_training=False,
         training_record_interval=10,
         training_data_dir="training_data/graph_training_data",
@@ -575,6 +575,7 @@ def test_multi_rl_cleanup_table_loaded(system_cls=CleanupTableTAMPSystem):
         record_training=False,
         training_data_dir="training_data/graph_training_data",
         save_dir="trained_policies/multi_rl",
+        fast_eval=True,
     )
 
     # RL configuration

@@ -135,7 +135,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         policy: Policy[ObsType, ActType],
         seed: int,
         planner_id: str = "pyperplan",
-        max_skill_steps: int = 100,
+        max_skill_steps: int = 150,
     ) -> None:
         """Initialize approach."""
         super().__init__(system, seed)
@@ -572,7 +572,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         obs: ObsType,
         info: dict[str, Any],
         goal: set[GroundAtom],
-        debug: bool = True,
+        debug: bool = False,
     ) -> list[PlanningGraphEdge]:
         """Efficiently compute shortest path during evaluation."""
         assert self.planning_graph is not None
@@ -679,6 +679,33 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 # if (current_node.id, edge.target.id) not in envisioned_plan:
                 #     continue
 
+                # # DEBUG: Envisioned plan for clean up table env
+                # envisioned_plan = [
+                #     (0, 4),
+                #     (4, 8),
+                #     (8, 12),
+                #     (12, 16),
+                #     (16, 29),
+                #     (29, 42),
+                #     (42, 54),
+                #     (54, 59),
+                #     (59, 72),
+                #     (72, 91),
+                #     (91, 103),
+                #     (103, 112),
+                #     (112, 121),
+                #     (121, 132),
+                #     (132, 136),
+                #     (136, 139),
+                #     (0, 3),
+                #     (3, 7),
+                #     (7, 11),
+                #     (7, 132),
+                #     (7, 136),
+                # ]
+                # if (current_node.id, edge.target.id) not in envisioned_plan:
+                #     continue
+
                 edge_cost, end_state, end_info, success = self._execute_edge(
                     edge,
                     path_state,
@@ -771,7 +798,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         goal_env: GoalConditionedWrapper | None,
         using_context_env: bool,
         context_env: ContextAwareWrapper | None,
-        debug: bool = True,
+        debug: bool = False,
         current_path: tuple[int, ...] = tuple(),
     ) -> tuple[float, ObsType, dict[str, Any], bool]:
         """Execute a single edge and return the cost and end state."""

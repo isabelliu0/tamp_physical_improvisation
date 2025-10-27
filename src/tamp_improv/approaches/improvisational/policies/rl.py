@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 from typing import cast
+from pathlib import Path
+import shutil
 
 import gymnasium as gym
 import numpy as np
@@ -44,7 +46,7 @@ class TrainingProgressCallback(BaseCallback):
         early_stopping_patience: int = 1,
         early_stopping_threshold: float = 0.7,
         policy_key: str | None = None,
-        checkpoint_timesteps: list[int] | None = None,
+        save_checkpoints: bool = True,
         checkpoint_dir: str | None = None,
     ):
         super().__init__(verbose)
@@ -55,7 +57,6 @@ class TrainingProgressCallback(BaseCallback):
         self.current_length = 0
         self.current_reward = 0.0
 
-        # Early stopping parameters
         self.early_stopping = early_stopping
         self.early_stopping_patience = early_stopping_patience
         self.early_stopping_threshold = early_stopping_threshold
@@ -63,10 +64,10 @@ class TrainingProgressCallback(BaseCallback):
         self.plateau_count: int = 0
         self.success_rates: list[float] = []
 
-        # TEMPORARY: Checkpoint saving
-        self.checkpoint_timesteps = [100, 200, 250, 275, 300, 325, 350, 375, 400, 425, 450, 475, 500]
-        self.checkpoint_dir = "/Users/isabelliu/Documents/robotics/tamp_physical_improvisation/trained_policies/multi_rl/ClutteredDrawerTAMPSystem_MultiRL"
-        self.saved_checkpoints: set[int] = set()
+        self.save_checkpoints = save_checkpoints
+        self.checkpoint_dir = checkpoint_dir
+        self.checkpoints: list[tuple[int, float, str]] = []
+        self.best_checkpoint_path: str | None = None
 
     def _on_step(self) -> bool:
         self.current_length += 1
@@ -75,50 +76,39 @@ class TrainingProgressCallback(BaseCallback):
         infos = self.locals["infos"]
 
         if dones[0]:
-            # Episode finished - record metrics
             success = not infos[0].get("TimeLimit.truncated", False)
             self.success_history.append(success)
             self.episode_lengths.append(self.current_length)
             self.episode_rewards.append(self.current_reward)
 
-            # Reset counters
             self.current_length = 0
             self.current_reward = 0.0
 
-            # TEMPORARY: Save checkpoint at specific episode counts
-            if self.checkpoint_timesteps and self.checkpoint_dir:
-                current_episode = len(self.success_history)
-                for checkpoint_episode in self.checkpoint_timesteps:
-                    if checkpoint_episode not in self.saved_checkpoints and current_episode >= checkpoint_episode:
-                        from pathlib import Path
-                        checkpoint_path = Path(self.checkpoint_dir)
-                        checkpoint_path.mkdir(parents=True, exist_ok=True)
-                        policy_suffix = f"_{self.policy_key}" if self.policy_key else ""
-                        save_filename = f"checkpoint_ep_{checkpoint_episode}{policy_suffix}"
-                        save_path = str(checkpoint_path / save_filename)
-                        self.model.save(save_path)
-                        print(f"\n✓ Saved checkpoint at episode {checkpoint_episode} to {save_path}.zip")
-                        self.saved_checkpoints.add(checkpoint_episode)
-
-            # Print prorgess regularly
             n_episodes = len(self.success_history)
             if n_episodes % self.check_freq == 0:
                 recent_successes = self.success_history[-self.check_freq :]
                 recent_lengths = self.episode_lengths[-self.check_freq :]
                 recent_rewards = self.episode_rewards[-self.check_freq :]
                 success_rate = sum(recent_successes) / len(recent_successes)
-
                 print("\nTraining Progress:")
                 print(f"Episodes: {n_episodes}")
                 print(f"Recent Success%: {success_rate:.2%}")
                 print(f"Recent Avg Episode Length: {np.mean(recent_lengths):.2f}")
                 print(f"Recent Avg Reward: {np.mean(recent_rewards):.2f}")
 
+                if self.save_checkpoints and self.checkpoint_dir is not None:
+                    checkpoint_path = Path(self.checkpoint_dir)
+                    checkpoint_path.mkdir(parents=True, exist_ok=True)
+                    policy_suffix = f"_{self.policy_key}" if self.policy_key else ""
+                    save_filename = f"checkpoint_ep_{n_episodes}{policy_suffix}"
+                    save_path = str(checkpoint_path / save_filename)
+                    self.model.save(save_path)
+                    self.checkpoints.append((n_episodes, success_rate, save_path))
+
                 if self.early_stopping:
                     self.success_rates.append(success_rate)
                     if len(self.success_rates) >= 3:
                         recent_rates = self.success_rates[-3:]
-
                         if all(
                             r >= self.early_stopping_threshold for r in recent_rates
                         ):
@@ -126,7 +116,6 @@ class TrainingProgressCallback(BaseCallback):
                             print(
                                 f"Plateau detected: {self.plateau_count}/{self.early_stopping_patience}"  # pylint: disable=line-too-long
                             )
-
                         if self.plateau_count >= self.early_stopping_patience:
                             policy_info = (
                                 f" for {self.policy_key}" if self.policy_key else ""
@@ -152,6 +141,16 @@ class TrainingProgressCallback(BaseCallback):
                 print("Training stopped early due to plateau in performance.")
         else:
             print("No episodes completed during training.")
+        
+        if self.save_checkpoints and self.checkpoints:
+            best_episode, best_success_rate, best_path = max(self.checkpoints, key=lambda x: x[1])
+            print(f"\nBest checkpoint: Episode {best_episode} (success rate: {best_success_rate:.2%})")
+            self.best_checkpoint_path = best_path
+            for _, _, path in self.checkpoints:
+                if path != best_path:
+                    zip_path = Path(f"{path}.zip")
+                    if zip_path.exists():
+                        zip_path.unlink()
 
     @property
     def _get_success_rate(self) -> float:
