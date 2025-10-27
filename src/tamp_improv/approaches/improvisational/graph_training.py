@@ -524,7 +524,7 @@ def identify_promising_shortcuts_with_rollouts(
         )
 
         # # DEBUG:
-        # if source_node_id != 1 and source_node_id != 15:
+        # if source_node_id != 7:
         #     continue
 
         # Calculate rollouts per state to maintain roughly the same total
@@ -561,8 +561,7 @@ def identify_promising_shortcuts_with_rollouts(
                             continue
 
                         # # DEBUG:
-                        # # if (source_node_id == 4 and target_node.id not in [50, 12]) or (source_node_id == 28 and target_node.id != 55):
-                        # if (source_node_id == 1 and target_node.id != 10) or (source_node_id == 15 and target_node.id != 50):
+                        # if target_node.id not in [132, 136]:
                         #     continue
 
                         has_direct_edge = False
