@@ -238,7 +238,7 @@ def test_multi_rl_obstacle_tower_pipeline(system_cls, use_context_wrapper):
         episodes_per_scenario=850,
         force_collect=False,
         render=True,
-        record_training=True,
+        record_training=False,
         training_record_interval=100,
         training_data_dir="training_data/graph_training_data",
         save_dir=f"trained_policies/multi_rl{'_context' if use_context_wrapper else ''}",  # pylint: disable=line-too-long
@@ -301,13 +301,14 @@ def test_multi_rl_obstacle_tower_loaded(system_cls=GraphObstacleTowerTAMPSystem)
         seed=42,
         num_episodes=1,
         max_steps=500,
-        render=True,
+        render=False,
         collect_episodes=0,
         episodes_per_scenario=0,
         force_collect=False,
         record_training=False,
         training_data_dir="training_data/graph_training_data",
         save_dir="trained_policies/multi_rl",
+        fast_eval=True,
     )
 
     # RL configuration
@@ -370,7 +371,7 @@ def test_multi_rl_cluttered_drawer_pipeline(system_cls, use_context_wrapper):
         max_steps=500,
         max_training_steps_per_shortcut=100,
         collect_episodes=1,
-        episodes_per_scenario=1500,
+        episodes_per_scenario=400,
         force_collect=False,
         render=True,
         record_training=False,
@@ -435,13 +436,14 @@ def test_multi_rl_cluttered_drawer_loaded(system_cls=ClutteredDrawerTAMPSystem):
         seed=42,
         num_episodes=1,
         max_steps=500,
-        render=True,
+        render=False,
         collect_episodes=0,
         episodes_per_scenario=0,
         force_collect=False,
         record_training=False,
         training_data_dir="training_data/graph_training_data",
         save_dir="trained_policies/multi_rl",
+        fast_eval=True,
     )
 
     # RL configuration

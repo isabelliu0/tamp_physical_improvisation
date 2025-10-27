@@ -159,6 +159,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self._goal_atoms: set[GroundAtom] = set()
         self.policy_active = False
         self.observed_states: dict[int, list[ObsType]] = {}
+        self.best_eval_path: list[PlanningGraphEdge] = []
+        self.best_eval_total_steps: int = 0
+        self._edge_action_cache: dict[tuple[int, int, tuple[int, ...]], list[Any]] = {}
 
         # Shortcut signatures for similarity matching
         self.trained_signatures: list[ShortcutSignature] = []
@@ -177,6 +180,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         objects, atoms, goal = self.system.perceiver.reset(obs, info)
         self._goal = goal
         self.observed_states = {}
+        self._edge_action_cache.clear()
 
         self.planning_graph = self._create_planning_graph(objects, atoms)
 
@@ -205,6 +209,11 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         else:
             self._compute_planning_graph_edge_costs(obs, info)
             self._current_path = self.planning_graph.find_shortest_path(atoms, goal)
+        
+        self.best_eval_path = list(self._current_path)
+        self.best_eval_total_steps = int(sum(
+            (e.cost if e.cost != float("inf") else 0) for e in self.best_eval_path
+        ))
 
         self._current_operator = None
         self._current_skill = None
@@ -641,6 +650,35 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 if edge.target.id <= current_node.id:
                     continue
 
+                # # E->D->T
+                # envisioned_plan = [
+                #     (0, 1),
+                #     (1, 6),
+                #     (6, 10),
+                #     (10, 15),
+                #     (15, 35),
+                #     (35, 50),
+                #     (50, 58),
+                #     (58, 88),
+                #     (88, 111),
+                #     (1, 10),
+                #     (15, 50),
+                #     # (0, 4),
+                #     # (4, 8),
+                #     # (8, 12),
+                #     # (12, 28),
+                #     # (28, 45),
+                #     # (45, 55),
+                #     # (55, 83),
+                #     # (83, 88),
+                #     # (88, 111),
+                #     # (4, 12),
+                #     # (28, 55),
+                #     # (4, 50),
+                # ]  # pylint: disable=line-too-long
+                # if (current_node.id, edge.target.id) not in envisioned_plan:
+                #     continue
+
                 edge_cost, end_state, end_info, success = self._execute_edge(
                     edge,
                     path_state,
@@ -761,6 +799,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
         _, init_atoms, _ = self.system.perceiver.reset(start_state, start_info)
         goal_atoms = set(edge.target.atoms)
+        actions: list[Any] = []
 
         if edge.is_shortcut:
             self.policy.configure_context(
@@ -817,7 +856,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             if act is None:
                 print("No action returned by skill")
                 return float("inf"), start_state, start_info, False
-
+            actions.append(copy.deepcopy(act))
             next_raw_obs, _, _, _, info = raw_env.step(act)
             curr_raw_obs = next_raw_obs
             atoms = self.system.perceiver.step(curr_raw_obs)
@@ -880,6 +919,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
                 if not is_duplicate:
                     self.observed_states[target_id].append(curr_raw_obs)
+
+                key = (edge.source.id, edge.target.id, current_path)
+                self._edge_action_cache[key] = actions.copy()
 
                 if debug and frames:
                     iio.mimsave(
@@ -969,6 +1011,31 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 #     (88, 111),
                 #     (1, 10),
                 #     (15, 50),
+                # ]  # pylint: disable=line-too-long
+                # # E->D->T
+                # envisioned_plan = [
+                #     (0, 1),
+                #     (1, 6),
+                #     (6, 10),
+                #     (10, 15),
+                #     (15, 35),
+                #     (35, 50),
+                #     (50, 58),
+                #     (58, 88),
+                #     (1, 10),
+                #     (15, 50),
+                #     (0, 4),
+                #     (4, 8),
+                #     (8, 12),
+                #     (12, 28),
+                #     (28, 45),
+                #     (45, 55),
+                #     (55, 83),
+                #     (83, 88),
+                #     (88, 111),
+                #     (4, 12),
+                #     (28, 55),
+                #     (4, 50),
                 # ]  # pylint: disable=line-too-long
                 # if (node.id, edge.target.id) not in envisioned_plan:
                 #     continue

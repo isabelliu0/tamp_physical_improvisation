@@ -523,8 +523,8 @@ def identify_promising_shortcuts_with_rollouts(
             f"\nPerforming {rollouts_per_state} rollouts for each of {len(source_states)} state(s) from node {source_node_id}"  # pylint: disable=line-too-long
         )
 
-        # DEBUG:
-        # if source_node_id != 7:
+        # # DEBUG:
+        # if source_node_id != 1 and source_node_id != 15:
         #     continue
 
         # Calculate rollouts per state to maintain roughly the same total
@@ -560,8 +560,9 @@ def identify_promising_shortcuts_with_rollouts(
                         if target_node.id <= source_node_id:
                             continue
 
-                        # DEBUG:
-                        # if target_node.id not in [132, 136]:
+                        # # DEBUG:
+                        # # if (source_node_id == 4 and target_node.id not in [50, 12]) or (source_node_id == 28 and target_node.id != 55):
+                        # if (source_node_id == 1 and target_node.id != 10) or (source_node_id == 15 and target_node.id != 50):
                         #     continue
 
                         has_direct_edge = False

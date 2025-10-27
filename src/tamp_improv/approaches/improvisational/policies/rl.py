@@ -42,8 +42,10 @@ class TrainingProgressCallback(BaseCallback):
         verbose: int = 1,
         early_stopping: bool = False,
         early_stopping_patience: int = 1,
-        early_stopping_threshold: float = 0.8,
+        early_stopping_threshold: float = 0.7,
         policy_key: str | None = None,
+        checkpoint_timesteps: list[int] | None = None,
+        checkpoint_dir: str | None = None,
     ):
         super().__init__(verbose)
         self.check_freq = check_freq
@@ -61,6 +63,11 @@ class TrainingProgressCallback(BaseCallback):
         self.plateau_count: int = 0
         self.success_rates: list[float] = []
 
+        # TEMPORARY: Checkpoint saving
+        self.checkpoint_timesteps = [100, 200, 250, 275, 300, 325, 350, 375, 400, 425, 450, 475, 500]
+        self.checkpoint_dir = "/Users/isabelliu/Documents/robotics/tamp_physical_improvisation/trained_policies/multi_rl/ClutteredDrawerTAMPSystem_MultiRL"
+        self.saved_checkpoints: set[int] = set()
+
     def _on_step(self) -> bool:
         self.current_length += 1
         self.current_reward += self.locals["rewards"][0]
@@ -77,6 +84,21 @@ class TrainingProgressCallback(BaseCallback):
             # Reset counters
             self.current_length = 0
             self.current_reward = 0.0
+
+            # TEMPORARY: Save checkpoint at specific episode counts
+            if self.checkpoint_timesteps and self.checkpoint_dir:
+                current_episode = len(self.success_history)
+                for checkpoint_episode in self.checkpoint_timesteps:
+                    if checkpoint_episode not in self.saved_checkpoints and current_episode >= checkpoint_episode:
+                        from pathlib import Path
+                        checkpoint_path = Path(self.checkpoint_dir)
+                        checkpoint_path.mkdir(parents=True, exist_ok=True)
+                        policy_suffix = f"_{self.policy_key}" if self.policy_key else ""
+                        save_filename = f"checkpoint_ep_{checkpoint_episode}{policy_suffix}"
+                        save_path = str(checkpoint_path / save_filename)
+                        self.model.save(save_path)
+                        print(f"\n✓ Saved checkpoint at episode {checkpoint_episode} to {save_path}.zip")
+                        self.saved_checkpoints.add(checkpoint_episode)
 
             # Print prorgess regularly
             n_episodes = len(self.success_history)

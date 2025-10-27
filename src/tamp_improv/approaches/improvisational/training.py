@@ -37,45 +37,33 @@ ActType = TypeVar("ActType")
 class TrainingConfig:
     """Configuration for training."""
 
-    # General settings
     seed: int = 42
     num_episodes: int = 50
     max_steps: int = 100
     max_training_steps_per_shortcut: int = 50
 
-    # Collection settings
     collect_episodes: int = 100
     episodes_per_scenario: int = 1
     force_collect: bool = False
 
-    # Save/Load settings
     save_dir: str = "trained_policies"
     training_data_dir: str = "training_data"
 
-    # Visualization settings
     render: bool = False
     record_training: bool = False
     training_record_interval: int = 50
+    fast_eval: bool = False
 
-    # Device settings
     device: str = "cuda"
     batch_size: int = 32
 
-    # Policy-specific settings
     policy_config: Union[dict[str, Any], None] = None
-
-    # Shortcut information
     shortcut_info: list[dict[str, Any]] = field(default_factory=list)
-
-    # Context size for augmenting observations
     max_atom_size: int = 12
 
-    # Goal-conditioned training settings
     success_threshold: float = 0.01
     success_reward: float = 10.0
     step_penalty: float = -0.5
-
-    # Action scaling
     action_scale: float = 1.0
 
     def get_training_data_path(self, system_name: str) -> Path:
@@ -207,9 +195,6 @@ def run_evaluation_episode(
     else:
         step_result = approach.reset(obs, info)
 
-    # Evaluation reruns the full best-path execution in the real environment
-    # for the sake of rendering and step counts
-    # NOTE: Evaluation is slower than necessary
     total_reward = 0.0
     step_count = 0
     success = False
@@ -234,6 +219,139 @@ def run_evaluation_episode(
         if step_result.terminate or terminated or truncated:
             success = step_result.terminate or terminated
             break
+
+    if config.render and can_render:
+        cast(Any, system.env).close()
+        system.env = recording_env
+
+    return total_reward, step_count, success
+
+
+def run_evaluation_episode_with_caching(
+    system: ImprovisationalTAMPSystem[ObsType, ActType],
+    approach: Union[
+        ImprovisationalTAMPApproach[ObsType, ActType], PureRLApproach[ObsType, ActType], SACHERApproach[ObsType, ActType],
+        HierarchicalRLApproach[ObsType, ActType]
+    ],
+    policy_name: str,
+    config: TrainingConfig,
+    episode_num: int = 0,
+    select_random_goal: bool = False,
+) -> tuple[float, int, bool]:
+    """Run single evaluation episode."""
+    # Set up rendering if available
+    render_mode = getattr(system.env, "render_mode", None)
+    can_render = render_mode is not None
+    if config.render and can_render:
+        video_folder = Path(f"videos/{system.name}_{policy_name}_eval")
+        video_folder.mkdir(parents=True, exist_ok=True)
+
+        # Record only the base environment, not the planning environment
+        recording_env = deepcopy(system.env)
+        system.env = RecordVideo(
+            recording_env,
+            str(video_folder),
+            episode_trigger=lambda _: True,
+            name_prefix=f"episode_{episode_num}",
+            disable_logger=True,
+        )
+
+    obs, info = system.reset()
+    if (
+        hasattr(approach, "reset")
+        and "select_random_goal" in inspect.signature(approach.reset).parameters
+    ):
+        step_result = approach.reset(obs, info, select_random_goal=select_random_goal)  # type: ignore[call-arg]  # pylint: disable=line-too-long
+    else:
+        step_result = approach.reset(obs, info)
+    
+    if config.fast_eval and not (config.render and can_render):
+        step_count = approach.best_eval_total_steps
+        success = bool(approach.best_eval_path)
+        return success, step_count, success
+
+    best_edges = approach._current_path
+    if not best_edges:
+        return 0.0, 0, False
+    prefix_ids_for_edge: list[tuple[int, ...]] = []
+    running_prefix: tuple[int, ...] = (0,)
+    for edge in best_edges:
+        prefix_ids_for_edge.append(running_prefix)
+        running_prefix = running_prefix + (edge.source.id,)
+
+    total_reward = 0.0
+    step_count = 0
+    done = False
+    success = True
+
+    # Execute first action from the reset
+    obs, reward, terminated, truncated, info = system.env.step(step_result.action)
+    total_reward += float(reward)
+    step_count += 1
+    if step_result.terminate or terminated or truncated:
+        success = step_result.terminate or terminated
+        if config.render and can_render:
+            cast(Any, system.env).close()
+            system.env = recording_env
+        return total_reward, step_count, success
+
+    key = (0, best_edges[0].source.id, ())
+    actions = approach._edge_action_cache.get(key, None)
+    if actions is not None:
+        for a in actions:
+            obs, reward, terminated, truncated, info = system.env.step(a)
+            total_reward += float(reward)
+            step_count += 1
+            done = bool(terminated or truncated)
+            if done:
+                break
+    else:
+        for _ in range(approach._max_skill_steps):
+            step_result = approach.step(obs, total_reward, False, False, info)
+            obs, reward, terminated, truncated, info = system.env.step(step_result.action)
+            total_reward += float(reward)
+            step_count += 1
+            done = bool(step_result.terminate or terminated or truncated)
+            if step_result.terminate or terminated or truncated:
+                success = step_result.terminate or terminated
+                break
+    for i, edge in enumerate(best_edges):
+        if done:
+            break
+        key = (edge.source.id, edge.target.id, prefix_ids_for_edge[i])
+        actions = approach._edge_action_cache.get(key, None)
+        if actions is not None:
+            for a in actions:
+                obs, reward, terminated, truncated, info = system.env.step(a)
+                total_reward += float(reward)
+                step_count += 1
+                done = bool(terminated or truncated)
+                if done:
+                    break
+            if done:
+                break
+        else:
+            for _ in range(approach._max_skill_steps):
+                step_result = approach.step(obs, total_reward, False, False, info)
+                obs, reward, terminated, truncated, info = system.env.step(step_result.action)
+                total_reward += float(reward)
+                step_count += 1
+                done = bool(step_result.terminate or terminated or truncated)
+                if step_result.terminate or terminated or truncated:
+                    success = step_result.terminate or terminated
+                    break
+            if done:
+                break
+
+    if not done:
+        for _ in range(1, config.max_steps):
+            step_result = approach.step(obs, total_reward, False, False, info)
+            obs, reward, terminated, truncated, info = system.env.step(step_result.action)
+            total_reward += float(reward)
+            step_count += 1
+            if step_result.terminate or terminated or truncated:
+                success = step_result.terminate or terminated
+                break
 
     if config.render and can_render:
         cast(Any, system.env).close()
@@ -373,7 +491,7 @@ def train_and_evaluate(
 
     for episode in range(config.num_episodes):
         print(f"\nEvaluation Episode {episode + 1}/{config.num_episodes}")
-        reward, length, success = run_evaluation_episode(
+        reward, length, success = run_evaluation_episode_with_caching(
             system,
             approach,
             policy_name,

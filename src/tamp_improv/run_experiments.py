@@ -624,7 +624,7 @@ if __name__ == "__main__":
         "--system",
         type=str,
         required=True,
-        choices=["obstacle2d", "obstacletower", "drawer", "cleanuptable"],
+        choices=["obstacle2d", "obstacletower", "cluttereddrawer", "cleanuptable"],
         help="System to use for experiments",
     )
     parser.add_argument(
@@ -635,7 +635,7 @@ if __name__ == "__main__":
         run_obstacle2d_experiment(episodes_per_scenario=args.episodes)
     elif args.system == "obstacletower":
         run_obstacle_tower_experiment(episodes_per_scenario=args.episodes)
-    elif args.system == "drawer":
+    elif args.system == "cluttereddrawer":
         run_cluttered_drawer_experiment(episodes_per_scenario=args.episodes)
     elif args.system == "cleanuptable":
         run_cleanup_table_experiment(episodes_per_scenario=args.episodes)
