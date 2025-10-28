@@ -143,16 +143,13 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self.planner_id = planner_id
         self._max_skill_steps = max_skill_steps
 
-        # Get domain
         self.domain = system.get_domain()
 
-        # Initialize planning state
         self._current_operator: GroundOperator | None = None
         self._current_skill: Skill | None = None
         self._goal: set[GroundAtom] = set()
         self._custom_goal: set[GroundAtom] = set()
 
-        # Graph-based planning state
         self.planning_graph: PlanningGraph | None = None
         self._current_path: list[PlanningGraphEdge] = []
         self._current_edge: PlanningGraphEdge | None = None
@@ -328,22 +325,17 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     return ApproachStepResult(action=self.policy.get_action(aug_obs))  # type: ignore[arg-type] # pylint: disable=line-too-long
                 return ApproachStepResult(action=self.policy.get_action(obs))
 
-            # Regular edge - use operator skill
             self._current_operator = self._current_edge.operator
-
             if not self._current_operator:
                 raise TaskThenMotionPlanningFailure("Edge has no operator")
 
-            # Get skill for the operator
             self._current_skill = self._get_skill(self._current_operator)
             self._current_skill.reset(self._current_operator)
 
-        # Check if current edge's target state is achieved
         if self._current_edge and set(self._current_edge.target.atoms) == atoms:
             self._current_edge = None
             return self.step(obs, reward, terminated, truncated, info)
 
-        # Execute current skill
         if not self._current_skill:
             raise TaskThenMotionPlanningFailure("No current skill")
 
@@ -388,27 +380,17 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         init_atoms: set[GroundAtom],
     ) -> PlanningGraph:
         """Create a tree-based planning graph by exploring possible action
-        sequences.
-
-        This builds a graph representing multiple possible plans rather
-        than just following a single task plan. This method is domain-
-        agnostic.
-        """
+        sequences."""
         graph = PlanningGraph()
         initial_node = graph.add_node(init_atoms)
         visited_states = {frozenset(init_atoms): initial_node}
         queue = deque([(initial_node, 0)])  # Queue for BFS: [(node, depth)]
         node_count = 0
         max_nodes = 1300
-        print(f"Building planning graph with max {max_nodes} nodes...")
 
-        # Breadth-first search to build the graph
         while queue and node_count < max_nodes:
             current_node, depth = queue.popleft()
             node_count += 1
-
-            print(f"\n--- Node {node_count-1} at depth {depth} ---")
-            print(f"Contains {len(current_node.atoms)} atoms: {current_node.atoms}")
 
             # Check if this is a goal state, stop search if so
             # NOTE: we use the same assumption as PDDL to find the goal nodes of the
@@ -416,28 +398,21 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             if self._goal and self._goal.issubset(current_node.atoms):
                 queue.clear()
                 break
-                # continue
 
-            # Find applicable ground operators using the domain's operators
             applicable_ops = self._find_applicable_operators(
                 set(current_node.atoms), objects
             )
 
-            # Apply each applicable operator to generate new states
             for op in applicable_ops:
-                # Apply operator effects to get next state
                 next_atoms = set(current_node.atoms)
                 next_atoms.difference_update(op.delete_effects)
                 next_atoms.update(op.add_effects)
 
-                # Check if we've seen this state before
                 next_atoms_frozen = frozenset(next_atoms)
                 if next_atoms_frozen in visited_states:
-                    # Create edge to existing node
                     next_node = visited_states[next_atoms_frozen]
                     graph.add_edge(current_node, next_node, op)
                 else:
-                    # Create new node and edge
                     next_node = graph.add_node(next_atoms)
                     visited_states[next_atoms_frozen] = next_node
                     graph.add_edge(current_node, next_node, op)
@@ -447,11 +422,10 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             f"Planning graph with {len(graph.nodes)} nodes and {len(graph.edges)} edges"
         )
 
-        # Print detailed graph structure
-        print("\nGraph Edges:")
-        for edge in graph.edges:
-            op_str = f"{edge.operator.name}" if edge.operator else "SHORTCUT"
-            print(f"  Node {edge.source.id} --[{op_str}]--> Node {edge.target.id}")
+        # print("\nGraph Edges:")
+        # for edge in graph.edges:
+        #     op_str = f"{edge.operator.name}" if edge.operator else "SHORTCUT"
+        #     print(f"  Node {edge.source.id} --[{op_str}]--> Node {edge.target.id}")
         return graph
 
     def _find_applicable_operators(
@@ -463,13 +437,11 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         domain_operators = self.domain.operators
 
         for lifted_op in domain_operators:
-            # Find valid groundings using parameter types
             valid_groundings = self._find_valid_groundings(lifted_op, objects)
 
             for grounding in valid_groundings:
                 ground_op = lifted_op.ground(grounding)
 
-                # Check if preconditions are satisfied
                 if ground_op.preconditions.issubset(current_atoms):
                     applicable_ops.append(ground_op)
 
@@ -478,26 +450,13 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
     def _find_valid_groundings(
         self, lifted_op: LiftedOperator, objects: set[Object]
     ) -> list[tuple[Object, ...]]:
-        """Find all valid groundings for a lifted operator.
-
-        Args:
-            lifted_op: The lifted operator to ground
-            objects: Available objects in the domain
-
-        Returns:
-            List of valid parameter tuples for grounding
-        """
+        """Find all valid groundings for a lifted operator."""
         # Group objects by type
         objects_by_type: dict[Any, list[Object]] = {}
         for obj in objects:
             if obj.type not in objects_by_type:
                 objects_by_type[obj.type] = []
             objects_by_type[obj.type].append(obj)
-
-        # Print the parameter requirements for debugging
-        param_types = []
-        for param in lifted_op.parameters:
-            param_types.append(f"{param.name} ({param.type.name})")
 
         # For each parameter, find objects of the right type
         param_objects = []
@@ -517,7 +476,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         using_goal_env, _ = self._using_goal_env(self.system.wrapped_env)
         for source_node in graph.nodes:
             for target_node in graph.nodes:
-                # Skip same node and existing edges
                 if source_node == target_node:
                     continue
                 if any(
@@ -550,7 +508,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     if not can_handle:
                         continue
 
-                # Configure context for policy
                 self.policy.configure_context(
                     PolicyContext(
                         goal_atoms=target_atoms,
@@ -562,9 +519,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     )
                 )
                 if self.policy.can_initiate():
-                    print(
-                        f"Trying to add shortcut: {source_node.id} to {target_node.id}"
-                    )
+                    # print(
+                    #     f"Trying to add shortcut: {source_node.id} to {target_node.id}"
+                    # )
                     graph.add_edge(source_node, target_node, None, is_shortcut=True)
 
     def _compute_eval_path(
@@ -611,11 +568,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             ]
         ] = [(0, next(counter), initial_node, empty_path, [], (obs, info))]
 
-        # Track best cost to reach each (node, path) state
         distances: dict[tuple[int, tuple[int, ...]], float] = {}
         distances[(initial_node.id, empty_path)] = 0
 
-        # Track best goal path found so far
         best_goal_cost = float("inf")
         best_goal_path: list[PlanningGraphEdge] = []
         best_goal_node: PlanningGraphNode | None = None
@@ -638,12 +593,10 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             if len(current_path) > max_path_length:
                 continue
 
-            # Skip if we've found a better path to this (node, path) state
             state_key = (current_node.id, current_path)
             if state_key in distances and current_cost > distances[state_key]:
                 continue
 
-            # Expand outgoing edges from current node
             for edge in self.planning_graph.node_to_outgoing_edges.get(
                 current_node, []
             ):
@@ -735,14 +688,12 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                         best_goal_cost = new_total_cost
                         best_goal_path = new_path_edges
                         best_goal_node = edge.target
-                        # Continue to explore other paths
                     else:
                         continue
 
                 if new_total_cost >= best_goal_cost:
                     continue
 
-                # Store cost for this specific path
                 edge.costs[(current_path, current_node.id)] = edge_cost
                 if edge.cost == float("inf") or edge_cost < edge.cost:
                     edge.cost = edge_cost
@@ -922,9 +873,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
             num_steps += 1
 
-            # Check if we've reached the goal
             if goal_atoms == atoms:
-                # Store the observed state for the target node
                 target_id = edge.target.id
                 if target_id not in self.observed_states:
                     self.observed_states[target_id] = []
@@ -971,11 +920,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         info: dict[str, Any],
         debug: bool = False,
     ) -> None:
-        """Compute edge costs considering the path taken to reach each node.
-
-        Explores all potential paths through the graph to find the
-        optimal cost for each edge based on the path history.
-        """
+        """Compute edge costs considering the path taken to reach each node."""
         assert self.planning_graph is not None
 
         if debug:
@@ -1002,8 +947,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             self.system.wrapped_env
         )
 
-        # BFS to explore all paths
-        queue = [(initial_node, empty_path)]  # (node, path)
+        queue = [(initial_node, empty_path)]
         explored_segments = set()
         while queue:
             node, path = queue.pop(0)
@@ -1017,7 +961,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
             path_state, path_info = path_states[(path, node, node)]
 
-            # Try each outgoing edge from this node
             for edge in self.planning_graph.node_to_outgoing_edges.get(node, []):
                 if (path, node, edge.target) in path_states:
                     continue

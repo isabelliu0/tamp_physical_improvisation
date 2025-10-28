@@ -505,28 +505,17 @@ class HierarchicalRLWrapper(gym.Env):
     def _find_valid_groundings(
         self, lifted_op: LiftedOperator, objects: set[Object]
     ) -> list[tuple[Object, ...]]:
-        """Find all valid groundings for a lifted operator.
-
-        Args:
-            lifted_op: The lifted operator to ground
-            objects: Available objects in the domain
-
-        Returns:
-            List of valid parameter tuples for grounding
-        """
-        # Group objects by type
+        """Find all valid groundings for a lifted operator."""
         objects_by_type: dict[Any, list[Object]] = {}
         for obj in objects:
             if obj.type not in objects_by_type:
                 objects_by_type[obj.type] = []
             objects_by_type[obj.type].append(obj)
 
-        # Print the parameter requirements for debugging
         param_types = []
         for param in lifted_op.parameters:
             param_types.append(f"{param.name} ({param.type.name})")
 
-        # For each parameter, find objects of the right type
         param_objects = []
         for param in lifted_op.parameters:
             if param.type in objects_by_type:
@@ -534,7 +523,6 @@ class HierarchicalRLWrapper(gym.Env):
             else:
                 return []
 
-        # Generate all possible groundings
         groundings = list(itertools.product(*param_objects))
 
         return groundings

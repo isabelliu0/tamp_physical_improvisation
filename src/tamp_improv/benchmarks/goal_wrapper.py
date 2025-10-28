@@ -17,13 +17,7 @@ ActType = TypeVar("ActType")
 
 
 class GoalConditionedWrapper(gym.Wrapper):
-    """Wrapper that converts an environment to a goal-conditioned format.
-
-    This wrapper:
-    1. Augments observations with goal states from the planning graph
-    2. Ensures goal node IDs are higher than source node IDs
-    3. Provides appropriate rewards for goal achievement
-    """
+    """Wrapper that converts an environment to a goal-conditioned format."""
 
     def __init__(
         self,
