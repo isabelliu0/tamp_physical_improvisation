@@ -108,25 +108,25 @@ def get_or_collect_training_data(
                     approach.trained_signatures = pickle.load(f)
                 print(f"Loaded {len(approach.trained_signatures)} trained signatures")
             # Verify config matches
-            if (
-                train_data.config.get("collect_episodes") == config.collect_episodes
-                and train_data.config.get("max_steps") == config.max_steps
-                and train_data.config.get("use_random_rollouts") == use_random_rollouts
-            ):
-                if (
-                    use_random_rollouts
-                    and train_data.config.get("num_rollouts_per_node")
-                    == num_rollouts_per_node
-                    and train_data.config.get("max_steps_per_rollout")
-                    == max_steps_per_rollout
-                    and train_data.config.get("shortcut_success_threshold")
-                    == shortcut_success_threshold
-                ):
-                    print(f"Loaded {len(train_data)} training scenarios")
-                    train_data.config.update(config.__dict__)
-                    return train_data
+            # if (
+            #     train_data.config.get("collect_episodes") == config.collect_episodes
+            #     and train_data.config.get("max_steps") == config.max_steps
+            #     and train_data.config.get("use_random_rollouts") == use_random_rollouts
+            # ):
+            #     if (
+            #         use_random_rollouts
+            #         and train_data.config.get("num_rollouts_per_node")
+            #         == num_rollouts_per_node
+            #         and train_data.config.get("max_steps_per_rollout")
+            #         == max_steps_per_rollout
+            #         and train_data.config.get("shortcut_success_threshold")
+            #         == shortcut_success_threshold
+            #     ):
+                print(f"Loaded {len(train_data)} training scenarios")
+                train_data.config.update(config.__dict__)
+                return train_data
 
-                print("Existing data has different config, collecting new data...")
+                # print("Existing data has different config, collecting new data...")
         except Exception as e:
             print(f"Error loading training data: {e}")
             print("Collecting new data instead...")
