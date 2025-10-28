@@ -23,7 +23,7 @@ rl_batch_size: 16
 n_epochs: 10
 gamma: 0.99
 ent_coef: 0.01
-deterministic: true
+deterministic: false
 
 training_data_dir: training_data/multi_rl
 save_dir: trained_policies/multi_rl
