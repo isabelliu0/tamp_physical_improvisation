@@ -26,7 +26,6 @@ from tamp_improv.approaches.improvisational.policies.rl import (
     RLPolicy,
     TrainingProgressCallback,
 )
-from tamp_improv.utils.gpu_parallel import GPUParallelTrainer
 
 ObsType = TypeVar("ObsType")
 ActType = TypeVar("ActType")
@@ -175,48 +174,25 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
 
             self._configure_env_recursively(policy_env, group_data)
 
-            # Store policy, env, and data for parallel training
             policies_to_train[policy_key] = (
                 self.policies[policy_key],
                 policy_env,
                 group_data,
             )
 
-        if (
-            len(policies_to_train) > 1
-            and torch.cuda.is_available()
-            and torch.cuda.device_count() > 1
-        ):
-            #TODO: save best checkpoints in parallel training as well
-            print(f"\nUsing parallel training with {torch.cuda.device_count()} GPUs")
-            trainer: GPUParallelTrainer = GPUParallelTrainer(use_cuda=True)
-            train_kwargs = {}
-            if save_dir:
-                train_kwargs["save_dir"] = save_dir
-            results = trainer.train_policies(
-                policies_to_train, train_single_policy, **train_kwargs
+        for policy_key, (
+            policy,
+            policy_env,
+            group_data,
+        ) in policies_to_train.items():
+            print(f"\nTraining policy for shortcut type: {policy_key}")
+            result = train_single_policy(
+                policy, policy_env, group_data, policy_key=policy_key, save_dir=save_dir
             )
-            saved_models = {}
-            for policy_key, result in results.items():
-                if isinstance(result, dict) and result.get("saved_path"):
-                    saved_models[policy_key] = result["saved_path"]
-            trainer.close()
-            self._saved_models = saved_models
-        else:
-            # Train sequentially
-            print("\nTraining policies sequentially")
-            for policy_key, (
-                policy,
-                policy_env,
-                group_data,
-            ) in policies_to_train.items():
-                print(f"\nTraining policy for shortcut type: {policy_key}")
-                result = train_single_policy(
-                    policy, policy_env, group_data, policy_key=policy_key, save_dir=save_dir
-                )
-                if isinstance(result, dict) and result.get("best_checkpoint"):
-                    print(f"Loading best checkpoint: {result['best_checkpoint']}")
-                    policy.load(result["best_checkpoint"])
+            if isinstance(result, dict) and result.get("best_checkpoint"):
+                best_checkpoint_path = result["best_checkpoint"]
+                if best_checkpoint_path:
+                    policy.load(best_checkpoint_path)
 
         print(f"\nCompleted training {len(self.policies)} specialized policies")
 
