@@ -9,7 +9,7 @@ from tamp_improv.approaches.improvisational.policies.sac_her import (
 )
 from tamp_improv.approaches.improvisational.training import (
     TrainingConfig,
-    train_and_evaluate_sac_her,
+    train_and_evaluate_rl_baseline,
 )
 from tamp_improv.benchmarks.obstacle2d import Obstacle2DTAMPSystem
 from tamp_improv.benchmarks.pybullet_cluttered_drawer import ClutteredDrawerTAMPSystem
@@ -52,11 +52,12 @@ def train_sac_her_obstacle2d(
     def policy_factory(seed: int) -> SACHERPolicy:
         return SACHERPolicy(seed=seed, config=sac_her_config)
 
-    metrics = train_and_evaluate_sac_her(
-        system,
-        policy_factory,
-        config,
+    metrics = train_and_evaluate_rl_baseline(
+        system, 
+        policy_factory, 
+        config, 
         policy_name="SAC_HER",
+        baseline_type="sac_her",
     )
 
     print("\n=== Results ===")
@@ -113,12 +114,13 @@ def train_sac_her_pybullet(
     def policy_factory(seed: int) -> SACHERPolicy:
         return SACHERPolicy(seed=seed, config=sac_her_config)
 
-    metrics = train_and_evaluate_sac_her(
-        system,
-        policy_factory,
-        config,
+    metrics = train_and_evaluate_rl_baseline(
+        system, 
+        policy_factory, 
+        config, 
         policy_name="SAC_HER",
-        max_atom_size=max_atom_size,
+        baseline_type="sac_her", 
+        max_atom_size=max_atom_size
     )
 
     print("\n=== Results ===")

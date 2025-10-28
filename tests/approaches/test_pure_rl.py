@@ -10,8 +10,7 @@ from tamp_improv.approaches.improvisational.policies.sac_her import (
 )
 from tamp_improv.approaches.improvisational.training import (
     TrainingConfig,
-    train_and_evaluate_pure_rl,
-    train_and_evaluate_sac_her,
+    train_and_evaluate_rl_baseline,
 )
 from tamp_improv.benchmarks.obstacle2d import Obstacle2DTAMPSystem
 from tamp_improv.benchmarks.pybullet_cluttered_drawer import ClutteredDrawerTAMPSystem
@@ -53,11 +52,12 @@ def test_pure_rl_obstacle2d():
     def policy_factory(seed: int) -> RLPolicy:
         return RLPolicy(seed=seed, config=rl_config)
 
-    metrics = train_and_evaluate_pure_rl(
-        system,
-        policy_factory,
-        config,
-        policy_name="PureRLPolicy",
+    metrics = train_and_evaluate_rl_baseline(
+        system, 
+        policy_factory, 
+        config, 
+        policy_name="PureRLPolicy", 
+        baseline_type="pure_rl",
     )
     print("\n=== Results ===")
     print(f"Success Rate: {metrics.success_rate:.2%}")
@@ -97,11 +97,12 @@ def test_sac_her_obstacle2d():
     def policy_factory(seed: int) -> SACHERPolicy:
         return SACHERPolicy(seed=seed, config=sac_her_config)
 
-    metrics = train_and_evaluate_sac_her(
-        system,
-        policy_factory,
-        config,
+    metrics = train_and_evaluate_rl_baseline(
+        system, 
+        policy_factory, 
+        config, 
         policy_name="SACHERPolicy",
+        baseline_type="sac_her",
     )
 
     print("\n=== Results ===")
@@ -151,13 +152,13 @@ def test_pure_rl_pybullet(system_cls):
     def policy_factory(seed: int) -> RLPolicy:
         return RLPolicy(seed=seed, config=rl_config)
 
-    metrics = train_and_evaluate_pure_rl(
-        system,
-        policy_factory,
-        config,
-        policy_name="PureRLPolicy",
+    metrics = train_and_evaluate_rl_baseline(
+        system, 
+        policy_factory, 
+        config, 
+        policy_name="PureRLPolicy", 
+        baseline_type="pure_rl"
     )
-
     print("\n=== Results ===")
     print(f"Success Rate: {metrics.success_rate:.2%}")
     print(f"Average Episode Length: {metrics.avg_episode_length:.2f}")
@@ -204,12 +205,13 @@ def test_sac_her_pybullet(system_cls, max_atom_size):
     def policy_factory(seed: int) -> SACHERPolicy:
         return SACHERPolicy(seed=seed, config=sac_her_config)
 
-    metrics = train_and_evaluate_sac_her(
-        system,
-        policy_factory,
-        config,
+    metrics = train_and_evaluate_rl_baseline(
+        system, 
+        policy_factory, 
+        config, 
         policy_name="SACHERPolicy",
-        max_atom_size=max_atom_size,
+        baseline_type="sac_her", 
+        max_atom_size=max_atom_size
     )
 
     print("\n=== Results ===")

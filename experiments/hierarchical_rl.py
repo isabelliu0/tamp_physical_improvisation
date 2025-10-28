@@ -6,7 +6,7 @@ from pathlib import Path
 from tamp_improv.approaches.improvisational.policies.rl import RLConfig, RLPolicy
 from tamp_improv.approaches.improvisational.training import (
     TrainingConfig,
-    train_and_evaluate_hierarchical_rl,
+    train_and_evaluate_rl_baseline,
 )
 from tamp_improv.benchmarks.obstacle2d import Obstacle2DTAMPSystem
 from tamp_improv.benchmarks.pybullet_cleanup_table import CleanupTableTAMPSystem
@@ -56,11 +56,12 @@ def train_hierarchical_rl_obstacle2d(
     def policy_factory(seed: int) -> RLPolicy:
         return RLPolicy(seed=seed, config=rl_config)
 
-    metrics = train_and_evaluate_hierarchical_rl(
-        system,
-        policy_factory,
-        config,
+    metrics = train_and_evaluate_rl_baseline(
+        system, 
+        policy_factory, 
+        config, 
         policy_name="HierarchicalRL",
+        baseline_type="hierarchical",
         single_step_skills=single_step_skills,
         max_skill_steps=max_skill_steps,
         skill_failure_penalty=-1.0,
@@ -127,11 +128,12 @@ def train_hierarchical_rl_pybullet(
     def policy_factory(seed: int) -> RLPolicy:
         return RLPolicy(seed=seed, config=rl_config)
 
-    metrics = train_and_evaluate_hierarchical_rl(
-        system,
-        policy_factory,
-        config,
+    metrics = train_and_evaluate_rl_baseline(
+        system, 
+        policy_factory, 
+        config, 
         policy_name="HierarchicalRL",
+        baseline_type="hierarchical",
         single_step_skills=single_step_skills,
         max_skill_steps=max_skill_steps,
         skill_failure_penalty=-1.0,
