@@ -468,13 +468,13 @@ class HierarchicalRLWrapper(gym.Env):
         """Get render mode from base environment."""
         return getattr(self.env, "render_mode", None)
 
-    def render(self):
+    def render(self) -> Any:
         """Render the environment."""
         if hasattr(self.env, "render"):
             return self.env.render()
         return None
 
-    def close(self):
+    def close(self) -> None:
         """Close the environment."""
         if hasattr(self.env, "close"):
-            self.env.close()
+            self.env.close()  # type: ignore[no-untyped-call]
