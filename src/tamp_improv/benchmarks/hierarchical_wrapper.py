@@ -173,9 +173,9 @@ class HierarchicalRLWrapper(gym.Env):
             skill_idx = int(np.argmax(skill_activations))
             obs: ObsType
             obs, reward, terminated, truncated, info = self._execute_skill(skill_idx)
-            info[
-                "action_type"
-            ] = f"skill_{self.ground_skill_operators[skill_idx].short_str}"
+            info["action_type"] = (
+                f"skill_{self.ground_skill_operators[skill_idx].short_str}"
+            )
             info["skill_activation"] = float(skill_activations[skill_idx])
             info["max_skill_activation"] = float(max_skill_activation)
         else:
