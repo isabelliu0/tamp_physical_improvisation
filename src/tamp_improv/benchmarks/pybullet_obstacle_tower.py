@@ -9,14 +9,14 @@ import gymnasium as gym
 import numpy as np
 from numpy.typing import NDArray
 from pybullet_blocks.envs.obstacle_tower_env import (
-    ObstacleTowerPyBulletBlocksEnv,
+    ObstacleTowerPyBulletObjectsEnv,
     ObstacleTowerSceneDescription,
 )
 from pybullet_blocks.planning_models.action import OPERATORS, SKILLS
 from pybullet_blocks.planning_models.perception import (
     PREDICATES,
     TYPES,
-    ObstacleTowerPyBulletBlocksPerceiver,
+    ObstacleTowerPyBulletObjectsPerceiver,
 )
 from relational_structs import PDDLDomain
 from task_then_motion_planning.structs import Skill
@@ -63,7 +63,7 @@ class BaseObstacleTowerTAMPSystem(
             num_obstacle_blocks=3,
             stack_blocks=True,
         )
-        return ObstacleTowerPyBulletBlocksEnv(
+        return ObstacleTowerPyBulletObjectsEnv(
             scene_description=scene_description,
             render_mode=self._render_mode,
             use_gui=False,
@@ -93,7 +93,7 @@ class BaseObstacleTowerTAMPSystem(
             num_obstacle_blocks=3,
             stack_blocks=True,
         )
-        sim = ObstacleTowerPyBulletBlocksEnv(
+        sim = ObstacleTowerPyBulletObjectsEnv(
             scene_description=scene_description,
             render_mode=render_mode,
             use_gui=False,
@@ -105,7 +105,7 @@ class BaseObstacleTowerTAMPSystem(
         skills: set[Skill[NDArray[np.float32], NDArray[np.float32]]] = cast(
             set[Skill[NDArray[np.float32], NDArray[np.float32]]], pybullet_skills
         )
-        perceiver = ObstacleTowerPyBulletBlocksPerceiver(sim)
+        perceiver = ObstacleTowerPyBulletObjectsPerceiver(sim)
         predicates = ObstacleTowerPredicates()
         system = cls(
             PlanningComponents(
@@ -162,7 +162,7 @@ class ObstacleTowerTAMPSystem(
             num_obstacle_blocks=3,
             stack_blocks=True,
         )
-        sim = ObstacleTowerPyBulletBlocksEnv(
+        sim = ObstacleTowerPyBulletObjectsEnv(
             scene_description=scene_description,
             render_mode=render_mode,
             use_gui=False,
@@ -174,7 +174,7 @@ class ObstacleTowerTAMPSystem(
         skills: set[Skill[NDArray[np.float32], NDArray[np.float32]]] = cast(
             set[Skill[NDArray[np.float32], NDArray[np.float32]]], pybullet_skills
         )
-        perceiver = ObstacleTowerPyBulletBlocksPerceiver(sim)
+        perceiver = ObstacleTowerPyBulletObjectsPerceiver(sim)
         predicates = ObstacleTowerPredicates()
         system = cls(
             PlanningComponents(

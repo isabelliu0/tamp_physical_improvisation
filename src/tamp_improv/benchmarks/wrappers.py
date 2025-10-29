@@ -14,10 +14,7 @@ ActType = TypeVar("ActType")
 
 
 class ImprovWrapper(gym.Env):
-    """General wrapper for training improvisational policies.
-
-    Handles goal atoms achievement during training.
-    """
+    """General wrapper for training improvisational policies."""
 
     def __init__(
         self,
@@ -46,11 +43,9 @@ class ImprovWrapper(gym.Env):
         self.steps = 0
         self.perceiver = perceiver
 
-        # Reward parameters
         self.step_penalty = step_penalty
         self.achievement_bonus = achievement_bonus
 
-        # Training state tracking
         self.training_states: list[ObsType] = []
         self.current_atoms_list: list[set[GroundAtom]] = []
         self.goal_atoms_list: list[set[GroundAtom]] = []
@@ -58,7 +53,6 @@ class ImprovWrapper(gym.Env):
         self.goal_atom_set: set[GroundAtom] = set()
         self.current_training_idx: int = 0
 
-        # Relevant objects for the environment
         self.relevant_objects = None
         self.render_mode = base_env.render_mode
 
@@ -67,7 +61,6 @@ class ImprovWrapper(gym.Env):
         training_data: TrainingData,
     ) -> None:
         """Configure environment for training phase."""
-        print(f"Configuring environment with {len(training_data)} training scenarios")
         self.training_states = training_data.states
 
         self.current_atoms_list = training_data.current_atoms
@@ -92,25 +85,18 @@ class ImprovWrapper(gym.Env):
         seed: int | None = None,
         options: dict[str, Any] | None = None,
     ) -> tuple[ObsType, dict[str, Any]]:
-        """Reset environment.
-
-        If training states are configured, cycles through them.
-        Otherwise uses default environment reset.
-        """
+        """Reset environment."""
         self.steps = 0
 
         if self.training_states:
-            # Get current training scenario and store current/goal atoms
             self.current_training_idx = self.current_training_idx % len(
                 self.training_states
             )
             current_state = self.training_states[self.current_training_idx]
 
-            # Set up current training data
             self.current_atom_set = self.current_atoms_list[self.current_training_idx]
             self.goal_atom_set = self.goal_atoms_list[self.current_training_idx]
 
-            # Reset with current state
             if hasattr(self.env, "reset_from_state"):
                 obs, info = self.env.reset_from_state(current_state, seed=seed)
             else:
@@ -118,7 +104,6 @@ class ImprovWrapper(gym.Env):
                     "The environment does not have a 'reset_from_state' method."
                 )
 
-            # Process observation if needed for the policy
             if self.relevant_objects is not None:
                 assert hasattr(self.env, "extract_relevant_object_features")  # type: ignore[unreachable]   # pylint: disable=line-too-long
                 obs = self.env.extract_relevant_object_features(
@@ -139,20 +124,16 @@ class ImprovWrapper(gym.Env):
         self.steps += 1
         current_atoms = self.perceiver.step(obs)
 
-        # Process observation if needed
         if self.relevant_objects is not None:
             assert hasattr(self.env, "extract_relevant_object_features")  # type: ignore[unreachable]   # pylint: disable=line-too-long
             obs = self.env.extract_relevant_object_features(obs, self.relevant_objects)
 
-        # Check achievement of goal atoms
         achieved = self.goal_atom_set == current_atoms
 
-        # Calculate reward
         reward = self.step_penalty
         if achieved:
             reward += self.achievement_bonus
 
-        # Termination conditions
         terminated = achieved
         truncated = truncated or self.steps >= self.max_episode_steps
 

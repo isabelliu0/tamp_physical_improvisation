@@ -10,14 +10,14 @@ import numpy as np
 from gymnasium.spaces import GraphInstance
 from numpy.typing import NDArray
 from pybullet_blocks.envs.obstacle_tower_env import (
-    GraphObstacleTowerPyBulletBlocksEnv,
+    GraphObstacleTowerPyBulletObjectsEnv,
     ObstacleTowerSceneDescription,
 )
 from pybullet_blocks.planning_models.action import OPERATORS, SKILLS
 from pybullet_blocks.planning_models.perception import (
     PREDICATES,
     TYPES,
-    GraphObstacleTowerPyBulletBlocksPerceiver,
+    GraphObstacleTowerPyBulletObjectsPerceiver,
 )
 from relational_structs import PDDLDomain, Predicate
 from task_then_motion_planning.structs import Skill
@@ -68,7 +68,7 @@ class BaseGraphObstacleTowerTAMPSystem(
             num_obstacle_blocks=self._num_obstacle_blocks,
             stack_blocks=True,
         )
-        return GraphObstacleTowerPyBulletBlocksEnv(
+        return GraphObstacleTowerPyBulletObjectsEnv(
             scene_description=scene_description,
             render_mode=self._render_mode,
             use_gui=False,
@@ -99,7 +99,7 @@ class BaseGraphObstacleTowerTAMPSystem(
             num_obstacle_blocks=num_obstacle_blocks,
             stack_blocks=True,
         )
-        sim = GraphObstacleTowerPyBulletBlocksEnv(
+        sim = GraphObstacleTowerPyBulletObjectsEnv(
             scene_description=scene_description,
             render_mode=render_mode,
             use_gui=False,
@@ -111,7 +111,7 @@ class BaseGraphObstacleTowerTAMPSystem(
         skills: set[Skill[GraphInstance, NDArray[np.float32]]] = cast(
             set[Skill[GraphInstance, NDArray[np.float32]]], pybullet_skills
         )
-        perceiver = GraphObstacleTowerPyBulletBlocksPerceiver(sim)
+        perceiver = GraphObstacleTowerPyBulletObjectsPerceiver(sim)
         predicates = GraphObstacleTowerPredicates()
         system = cls(
             PlanningComponents(
@@ -183,7 +183,7 @@ class GraphObstacleTowerTAMPSystem(
             num_obstacle_blocks=num_obstacle_blocks,
             stack_blocks=True,
         )
-        sim = GraphObstacleTowerPyBulletBlocksEnv(
+        sim = GraphObstacleTowerPyBulletObjectsEnv(
             scene_description=scene_description,
             render_mode=render_mode,
             use_gui=False,
@@ -195,7 +195,7 @@ class GraphObstacleTowerTAMPSystem(
         skills: set[Skill[GraphInstance, NDArray[np.float32]]] = cast(
             set[Skill[GraphInstance, NDArray[np.float32]]], pybullet_skills
         )
-        perceiver = GraphObstacleTowerPyBulletBlocksPerceiver(sim)
+        perceiver = GraphObstacleTowerPyBulletObjectsPerceiver(sim)
         predicates = GraphObstacleTowerPredicates()
         system = cls(
             PlanningComponents(

@@ -9,33 +9,40 @@ description = "TAMP physical improvisation."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-   "matplotlib",
-   "numpy",
-   "pandas",
-   "pandas-stubs",
-   "hydra-core",
-   "omegaconf",
-   "tomsutils@git+https://github.com/tomsilver/toms-utils.git",
-   "tomsgeoms2d@git+https://github.com/tomsilver/toms-geoms-2d",
-   "task-then-motion-planning@git+https://github.com/tomsilver/task-then-motion-planning.git",
-   "relational-structs@git+https://github.com/tomsilver/relational-structs.git",
-   "pybullet-blocks@git+https://github.com/tomsilver/pybullet-blocks.git",
-   "pybullet_helpers@git+https://github.com/tomsilver/pybullet-helpers.git",
-   "gymnasium>=1.0.0",
-   "moviepy",
-   "stable_baselines3==2.4.0",
-   "types-tabulate",
+    "numpy==1.26.4",
+    "pandas==2.2.3",
+    "scipy==1.14.0",
+    "matplotlib==3.9.2",
+    "pandas-stubs==2.2.2.240909",
+    "types-tabulate==0.9.0.20241207",
+    "hydra-core==1.3.2",
+    "omegaconf==2.3.0",
+    "gymnasium==1.0.0",
+    "stable_baselines3==2.4.0",
+    "pybullet==3.2.7",
+    "moviepy==1.0.3",
+    "objaverse==0.1.7",
+    "trimesh==4.7.1",
+    "matplotlib-inline==0.1.7",
+    "tqdm==4.66.5",
+    "tomsutils@git+https://github.com/tomsilver/toms-utils.git",
+    "tomsgeoms2d@git+https://github.com/tomsilver/toms-geoms-2d.git",
+    "task-then-motion-planning@git+https://github.com/tomsilver/task-then-motion-planning.git",
+    "relational-structs@git+https://github.com/tomsilver/relational-structs.git",
+    "pybullet-blocks@git+https://github.com/tomsilver/pybullet-blocks.git",
+    "pybullet_helpers@git+https://github.com/tomsilver/pybullet-helpers.git",
 ]
 
 [project.optional-dependencies]
 develop = [
-    "black",
-    "docformatter",
-    "isort",
-    "mypy",
-    "pylint>=2.14.5",
-    "pytest-pylint>=0.18.0",
-    "pytest>=7.2.2",
+    "black>=25.0.0",
+    "docformatter==1.7.5",
+    "isort>=5.13.2",
+    "mypy==1.11.2",
+    "pylint==3.3.1",
+    "pytest==8.3.3",
+    "pytest-pylint==0.21.0",
+    "ipdb==0.13.13",
 ]
 
 [tool.setuptools.packages.find]
@@ -65,5 +72,6 @@ exclude = ["venv/*", "scripts/*"]
 module = [
     "matplotlib.*",
     "networkx.*",
+    "objaverse.*",
 ]
 ignore_missing_imports = true

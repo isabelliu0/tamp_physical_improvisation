@@ -12,12 +12,10 @@ def run_episode(system, approach, max_steps):
     obs, info = system.reset()
     step_result = approach.reset(obs, info)
 
-    # Process first step
     obs, reward, terminated, truncated, info = system.env.step(step_result.action)
     if terminated or truncated:
         return 1
 
-    # Process remaining steps
     for step in range(1, max_steps):
         step_result = approach.step(obs, reward, terminated, truncated, info)
         obs, reward, terminated, truncated, info = system.env.step(step_result.action)

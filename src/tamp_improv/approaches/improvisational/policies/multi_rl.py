@@ -11,7 +11,6 @@ from typing import Any, TypeVar
 
 import gymnasium as gym
 import numpy as np
-import torch
 from gymnasium.spaces import Box
 from gymnasium.wrappers import RecordVideo
 from relational_structs import GroundAtom, Object, Predicate
@@ -26,7 +25,6 @@ from tamp_improv.approaches.improvisational.policies.rl import (
     RLPolicy,
     TrainingProgressCallback,
 )
-from tamp_improv.utils.gpu_parallel import GPUParallelTrainer
 
 ObsType = TypeVar("ObsType")
 ActType = TypeVar("ActType")
@@ -36,23 +34,24 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
     """Policy that uses multiple specialized RL policies for different
     shortcuts."""
 
-    def __init__(self, seed: int, config: RLConfig | None = None) -> None:
+    def __init__(
+        self,
+        seed: int,
+        config: RLConfig | None = None,
+        enable_generalization: bool = False,
+    ) -> None:
         """Initialize with a seed and optional config."""
         super().__init__(seed)
         self.env: gym.Env
         self.base_env: gym.Env
         self.config = config or RLConfig()
+        self.enable_generalization = enable_generalization
         self.policies: dict[str, RLPolicy] = {}
         self._active_policy_key: str | None = None
         self._current_context: PolicyContext | None = None
         self._policy_patterns: dict[str, dict[str, set[GroundAtom]]] = {}
         self._current_substitution: dict[Object, Object] | None = None
         self._saved_models: dict[str, str] = {}
-
-    @property
-    def requires_training(self) -> bool:
-        """Whether this policy requires training."""
-        return True
 
     def initialize(self, env: gym.Env) -> None:
         """Initialize the policy."""
@@ -115,17 +114,10 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
         print("\n=== Training Multi-Policy RL ===")
         print(f"Total training examples: {len(train_data.states)}")
 
-        # Group training data by shortcut signature
         grouped_data = self._group_training_data(train_data)
 
-        # Check if we're dealing with graph observations
         is_graph_based = hasattr(train_data.states[0], "nodes")
-        if is_graph_based:
-            print(
-                "Detected graph-based observations - will extract fixed-size vectors for each policy"  # pylint:disable=line-too-long
-            )
 
-        # Train a policy for each group
         policies_to_train = {}
         for policy_key, group_data in grouped_data.items():
             print(f"Training examples: {len(group_data.states)}")
@@ -133,7 +125,6 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
             if policy_key not in self.policies:
                 self.policies[policy_key] = RLPolicy(self._seed, self.config)
 
-            # For graph observations, process the training data to extract fixed vectors
             if is_graph_based:
                 pattern = self._policy_patterns[policy_key]
                 relevant_objects = set()
@@ -148,12 +139,12 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
                 else:
                     if hasattr(env, "set_relevant_objects"):
                         env.set_relevant_objects(relevant_objects)
-                base_env = self._get_base_env(env)
+                self.base_env = self._get_base_env(env)
 
                 # Wrap the environment to use the right observation space
-                assert hasattr(base_env, "extract_relevant_object_features")
+                assert hasattr(self.base_env, "extract_relevant_object_features")
                 sample_state = group_data.states[0]
-                sample_features = base_env.extract_relevant_object_features(
+                sample_features = self.base_env.extract_relevant_object_features(
                     sample_state, relevant_objects
                 )
                 custom_obs_space = Box(
@@ -169,61 +160,36 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
 
             self._configure_env_recursively(policy_env, group_data)
 
-            # Store policy, env, and data for parallel training
             policies_to_train[policy_key] = (
                 self.policies[policy_key],
                 policy_env,
                 group_data,
             )
 
-        if (
-            len(policies_to_train) > 1
-            and torch.cuda.is_available()
-            and torch.cuda.device_count() > 1
-        ):
-            print(f"\nUsing parallel training with {torch.cuda.device_count()} GPUs")
-            trainer: GPUParallelTrainer = GPUParallelTrainer(use_cuda=True)
-            train_kwargs = {}
-            if save_dir:
-                train_kwargs["save_dir"] = save_dir
-            results = trainer.train_policies(
-                policies_to_train, train_single_policy, **train_kwargs
+        for policy_key, (
+            policy,
+            policy_env,
+            group_data,
+        ) in policies_to_train.items():
+            print(f"\nTraining policy for shortcut type: {policy_key}")
+            result = train_single_policy(
+                policy, policy_env, group_data, policy_key=policy_key, save_dir=save_dir
             )
-            saved_models = {}
-            for policy_key, result in results.items():
-                if isinstance(result, dict) and result.get("saved_path"):
-                    saved_models[policy_key] = result["saved_path"]
-            trainer.close()
-            self._saved_models = saved_models
-        else:
-            # Train sequentially
-            print("\nTraining policies sequentially")
-            for policy_key, (
-                policy,
-                policy_env,
-                group_data,
-            ) in policies_to_train.items():
-                print(f"\nTraining policy for shortcut type: {policy_key}")
-                train_single_policy(
-                    policy, policy_env, group_data, policy_key=policy_key
-                )
+            if isinstance(result, dict) and result.get("best_checkpoint"):
+                best_checkpoint_path = result["best_checkpoint"]
+                if best_checkpoint_path:
+                    policy.load(best_checkpoint_path)
 
         print(f"\nCompleted training {len(self.policies)} specialized policies")
 
     def _get_policy_key(self, context: PolicyContext) -> str:
         """Create a unique key for a policy based on the context."""
-        # Get ground atoms as strings to preserve object information
         source_atoms_str = sorted([str(atom) for atom in context.current_atoms])
         target_atoms_str = sorted([str(atom) for atom in context.goal_atoms])
-
-        # Create hash of the source and target atoms
         source_hash = hashlib.md5("|".join(source_atoms_str).encode()).hexdigest()[:8]
         target_hash = hashlib.md5("|".join(target_atoms_str).encode()).hexdigest()[:8]
-
-        # Include source and target node IDs if available
         source_id = context.info.get("source_node_id", "")
         target_id = context.info.get("target_node_id", "")
-
         if source_id != "" and target_id != "":
             return f"n{source_id}-to-n{target_id}_{source_hash}_{target_hash}"
         return f"{source_hash}_{target_hash}"
@@ -235,7 +201,6 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
         added_atoms = target_atoms - source_atoms
         deleted_atoms = source_atoms - target_atoms
 
-        # Transform atoms to explicitly mark additions and deletions
         transformed_test_atoms = set()
         for atom in added_atoms:
             transformed_test_atoms.add(self._transform_atom(atom, "ADD"))
@@ -255,30 +220,35 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
             self._current_substitution = {obj: obj for obj in relevant_objects}
             return key
 
-        # Try structural matching
-        for policy_key, pattern_info in self._policy_patterns.items():
-            transformed_train_atoms = set()
-            if "transformed_atoms" in pattern_info:
-                transformed_train_atoms = pattern_info["transformed_atoms"]
-            else:
-                for atom in pattern_info["added_atoms"]:
-                    transformed_train_atoms.add(self._transform_atom(atom, "ADD"))
-                for atom in pattern_info["deleted_atoms"]:
-                    transformed_train_atoms.add(self._transform_atom(atom, "DEL"))
+        # Try structural matching if enabled
+        if self.enable_generalization:
+            for policy_key, pattern_info in self._policy_patterns.items():
+                transformed_train_atoms = set()
+                if "transformed_atoms" in pattern_info:
+                    transformed_train_atoms = pattern_info["transformed_atoms"]
+                else:
+                    for atom in pattern_info["added_atoms"]:
+                        transformed_train_atoms.add(self._transform_atom(atom, "ADD"))
+                    for atom in pattern_info["deleted_atoms"]:
+                        transformed_train_atoms.add(self._transform_atom(atom, "DEL"))
 
-            # Check predicate subsets with transformed predicates
-            train_predicates = {atom.predicate.name for atom in transformed_train_atoms}
-            test_predicates = {atom.predicate.name for atom in transformed_test_atoms}
-            if not train_predicates.issubset(test_predicates):
-                continue
+                # Check predicate subsets with transformed predicates
+                train_predicates = {
+                    atom.predicate.name for atom in transformed_train_atoms
+                }
+                test_predicates = {
+                    atom.predicate.name for atom in transformed_test_atoms
+                }
+                if not train_predicates.issubset(test_predicates):
+                    continue
 
-            # Find substitution
-            match_found, substitution = find_atom_substitution(
-                transformed_train_atoms, transformed_test_atoms, self.base_env
-            )
-            if match_found:
-                self._current_substitution = substitution
-                return policy_key
+                # Find substitution
+                match_found, substitution = find_atom_substitution(
+                    transformed_train_atoms, transformed_test_atoms, self.base_env
+                )
+                if match_found:
+                    self._current_substitution = substitution
+                    return policy_key
 
         return None
 
@@ -302,7 +272,6 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
             if i < len(shortcut_info):
                 info = shortcut_info[i]
 
-            # Create a context and get policy key
             context: PolicyContext[ObsType, ActType] = PolicyContext(
                 current_atoms=current_atoms, goal_atoms=goal_atoms, info=info
             )
@@ -324,7 +293,6 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
             grouped[policy_key]["current_atoms"].append(current_atoms)
             grouped[policy_key]["goal_atoms"].append(goal_atoms)
 
-        # Convert grouped data to TrainingData objects
         result = {}
         for key, group in grouped.items():
             result[key] = TrainingData(
@@ -380,22 +348,18 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
         path_obj.mkdir(parents=True, exist_ok=True)
         already_saved = self._saved_models
 
-        # Save each policy in its own subdirectory
         for key, policy in self.policies.items():
             if key in already_saved:
                 continue
-
             safe_key = "".join(c if c.isalnum() or c in "-_" else "_" for c in key)
             policy_path = os.path.join(path, f"policy_{safe_key}")
             policy.save(policy_path)
 
-        # Save pattern information
         for policy_key, pattern in self._policy_patterns.items():
             pattern_file = os.path.join(path, f"pattern_{policy_key}.pkl")
             with open(pattern_file, "wb") as f:
                 pickle.dump(pattern, f)
 
-        # Save a manifest of all policies
         manifest = {
             "policies": list(self.policies.keys()),
             "policy_count": len(self.policies),
@@ -408,7 +372,6 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
         with open(os.path.join(path, "manifest.json"), "r", encoding="utf-8") as f:
             manifest = json.load(f)
 
-        # Load pattern information if available
         self._policy_patterns = {}
         for policy_key in manifest["policies"]:
             pattern_file = os.path.join(path, f"pattern_{policy_key}.pkl")
@@ -416,15 +379,12 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
                 with open(pattern_file, "rb") as f:
                     self._policy_patterns[policy_key] = pickle.load(f)
 
-        # Load individual policies
         self.policies = {}
         for key in manifest["policies"]:
             safe_key = "".join(c if c.isalnum() or c in "-_" else "_" for c in key)
             policy_path = os.path.join(path, f"policy_{safe_key}")
-
             policy: RLPolicy = RLPolicy(self._seed, self.config)
             policy.load(policy_path)
-
             self.policies[key] = policy
 
         print(f"Loaded {len(self.policies)} specialized policies")
@@ -435,17 +395,23 @@ def train_single_policy(
     env: gym.Env,
     train_data: TrainingData,
     policy_key: str | None = None,
+    save_dir: str | None = None,
 ):
     """Train a single policy with a callback."""
+    checkpoint_dir = None
+    if save_dir:
+        checkpoint_dir = str(Path(save_dir) / "checkpoints")
     callback = TrainingProgressCallback(
         check_freq=train_data.config.get("training_record_interval", 100),
         early_stopping=True,
         early_stopping_patience=1,
         early_stopping_threshold=0.8,
         policy_key=policy_key,
+        save_checkpoints=True,
+        checkpoint_dir=checkpoint_dir,
     )
     policy.train(env, train_data, callback=callback)
-    return True
+    return {"success": True, "best_checkpoint": callback.best_checkpoint_path}
 
 
 def find_atom_substitution(
@@ -458,7 +424,7 @@ def find_atom_substitution(
     for atom in test_atoms:
         test_atoms_by_pred[atom.predicate.name].append(atom)
 
-    # Quick check - if there are enough atoms of each predicate type in test_atoms
+    # Quick check: if there are enough atoms of each predicate type in test_atoms
     train_pred_counts = Counter(atom.predicate.name for atom in train_atoms)
     for pred_name, count in train_pred_counts.items():
         if len(test_atoms_by_pred[pred_name]) < count:
@@ -475,7 +441,7 @@ def find_atom_substitution(
             if obj not in test_objs_by_type[obj.type]:
                 test_objs_by_type[obj.type].append(obj)
 
-    # Quick check - if there are enough test objects for each type
+    # Quick check: if there are enough test objects for each type
     for obj_type, objs in train_objs_by_type.items():
         if len(test_objs_by_type[obj_type]) < len(objs):
             return False, {}

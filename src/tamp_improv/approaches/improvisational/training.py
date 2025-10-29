@@ -1,17 +1,16 @@
-"""Training utilities for improvisational approaches."""
+"""Training utilities."""
 
-import inspect
 import pickle
 import time
 from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, TypeVar, cast
+from typing import Any, Callable, TypeVar, Union, cast
 
 import numpy as np
-import torch
 from gymnasium.wrappers import RecordVideo
 
+from tamp_improv.approaches.hierarchical_rl import HierarchicalRLApproach
 from tamp_improv.approaches.improvisational.base import ImprovisationalTAMPApproach
 from tamp_improv.approaches.improvisational.graph_training import (
     collect_goal_conditioned_training_data,
@@ -19,11 +18,14 @@ from tamp_improv.approaches.improvisational.graph_training import (
 )
 from tamp_improv.approaches.improvisational.policies.base import Policy, TrainingData
 from tamp_improv.approaches.improvisational.policies.multi_rl import MultiRLPolicy
-from tamp_improv.approaches.pure_rl import PureRLApproach
+from tamp_improv.approaches.pure_rl import PureRLApproach, SACHERApproach
 from tamp_improv.benchmarks.base import ImprovisationalTAMPSystem
+from tamp_improv.benchmarks.context_wrapper import ContextAwareWrapper
 from tamp_improv.benchmarks.goal_wrapper import GoalConditionedWrapper
+from tamp_improv.benchmarks.hierarchical_wrapper import HierarchicalRLWrapper
+from tamp_improv.benchmarks.sac_her_wrapper import SACHERWrapper
 from tamp_improv.benchmarks.wrappers import PureRLWrapper
-from tamp_improv.utils.gpu_utils import get_gpu_memory_info, set_torch_seed
+from tamp_improv.utils.gpu_utils import set_torch_seed
 
 ObsType = TypeVar("ObsType")
 ActType = TypeVar("ActType")
@@ -33,45 +35,33 @@ ActType = TypeVar("ActType")
 class TrainingConfig:
     """Configuration for training."""
 
-    # General settings
     seed: int = 42
     num_episodes: int = 50
     max_steps: int = 100
     max_training_steps_per_shortcut: int = 50
 
-    # Collection settings
     collect_episodes: int = 100
     episodes_per_scenario: int = 1
     force_collect: bool = False
 
-    # Save/Load settings
     save_dir: str = "trained_policies"
     training_data_dir: str = "training_data"
 
-    # Visualization settings
     render: bool = False
     record_training: bool = False
     training_record_interval: int = 50
+    fast_eval: bool = False
 
-    # Device settings
     device: str = "cuda"
     batch_size: int = 32
 
-    # Policy-specific settings
-    policy_config: dict[str, Any] | None = None
-
-    # Shortcut information
+    policy_config: Union[dict[str, Any], None] = None
     shortcut_info: list[dict[str, Any]] = field(default_factory=list)
-
-    # Context size for augmenting observations
     max_atom_size: int = 12
 
-    # Goal-conditioned training settings
     success_threshold: float = 0.01
     success_reward: float = 10.0
     step_penalty: float = -0.5
-
-    # Action scaling
     action_scale: float = 1.0
 
     def get_training_data_path(self, system_name: str) -> Path:
@@ -98,10 +88,9 @@ def get_or_collect_training_data(
     num_rollouts_per_node: int = 50,
     max_steps_per_rollout: int = 50,
     shortcut_success_threshold: int = 1,
-    rng: np.random.Generator | None = None,
+    rng: Union[np.random.Generator, None] = None,
 ) -> TrainingData:
     """Get existing or collect new training data."""
-    # Check if saved data exists
     data_path = config.get_training_data_path(system.name)
     signatures_path = data_path / "trained_signatures.pkl"
 
@@ -117,32 +106,17 @@ def get_or_collect_training_data(
                 print(f"Loaded {len(approach.trained_signatures)} trained signatures")
             # Verify config matches
             if (
-                train_data.config.get("seed") == config.seed
-                and train_data.config.get("collect_episodes") == config.collect_episodes
-                and train_data.config.get("max_steps") == config.max_steps
-                and train_data.config.get("using_context_wrapper", False)
-                == approach.use_context_wrapper
+                train_data.config.get("collect_episodes") == config.collect_episodes
                 and train_data.config.get("use_random_rollouts") == use_random_rollouts
             ):
-                if (
-                    use_random_rollouts
-                    and train_data.config.get("num_rollouts_per_node")
-                    == num_rollouts_per_node
-                    and train_data.config.get("max_steps_per_rollout")
-                    == max_steps_per_rollout
-                    and train_data.config.get("shortcut_success_threshold")
-                    == shortcut_success_threshold
-                ):
-                    print(f"Loaded {len(train_data)} training scenarios")
-                    train_data.config.update(config.__dict__)
-                    return train_data
-
-                print("Existing data has different config, collecting new data...")
+                print(f"Loaded {len(train_data)} training scenarios")
+                train_data.config.update(config.__dict__)
+                return train_data
+            print("Existing data has different config, collecting new data...")
         except Exception as e:
             print(f"Error loading training data: {e}")
             print("Collecting new data instead...")
 
-    # Collect new data
     train_data, _ = collect_graph_based_training_data(
         system,
         approach,
@@ -155,11 +129,8 @@ def get_or_collect_training_data(
         rng=rng,
     )
 
-    # Save the collected data
     print(f"\nSaving training data to {data_path}")
     train_data.save(data_path)
-
-    # Save trained signatures separately
     if approach.trained_signatures:
         print(f"Saving {len(approach.trained_signatures)} trained signatures")
         with open(signatures_path, "wb") as f:
@@ -170,16 +141,17 @@ def get_or_collect_training_data(
 
 def run_evaluation_episode(
     system: ImprovisationalTAMPSystem[ObsType, ActType],
-    approach: (
-        ImprovisationalTAMPApproach[ObsType, ActType] | PureRLApproach[ObsType, ActType]
-    ),
+    approach: Union[
+        ImprovisationalTAMPApproach[ObsType, ActType],
+        PureRLApproach[ObsType, ActType],
+        SACHERApproach[ObsType, ActType],
+        HierarchicalRLApproach[ObsType, ActType],
+    ],
     policy_name: str,
     config: TrainingConfig,
     episode_num: int = 0,
-    select_random_goal: bool = False,
 ) -> tuple[float, int, bool]:
     """Run single evaluation episode."""
-    # Set up rendering if available
     render_mode = getattr(system.env, "render_mode", None)
     can_render = render_mode is not None
     if config.render and can_render:
@@ -197,13 +169,7 @@ def run_evaluation_episode(
         )
 
     obs, info = system.reset()
-    if (
-        hasattr(approach, "reset")
-        and "select_random_goal" in inspect.signature(approach.reset).parameters
-    ):
-        step_result = approach.reset(obs, info, select_random_goal=select_random_goal)  # type: ignore[call-arg]  # pylint: disable=line-too-long
-    else:
-        step_result = approach.reset(obs, info)
+    step_result = approach.reset(obs, info)
 
     total_reward = 0.0
     step_count = 0
@@ -237,6 +203,114 @@ def run_evaluation_episode(
     return total_reward, step_count, success
 
 
+def run_evaluation_episode_with_caching(
+    system: ImprovisationalTAMPSystem[ObsType, ActType],
+    approach: ImprovisationalTAMPApproach[ObsType, ActType],
+    policy_name: str,
+    config: TrainingConfig,
+    episode_num: int = 0,
+) -> tuple[float, int, bool]:
+    """Run single evaluation episode."""
+    render_mode = getattr(system.env, "render_mode", None)
+    can_render = render_mode is not None
+    if config.render and can_render:
+        video_folder = Path(f"videos/{system.name}_{policy_name}_eval")
+        video_folder.mkdir(parents=True, exist_ok=True)
+        recording_env = deepcopy(system.env)
+        system.env = RecordVideo(
+            recording_env,
+            str(video_folder),
+            episode_trigger=lambda _: True,
+            name_prefix=f"episode_{episode_num}",
+            disable_logger=True,
+        )
+
+    obs, info = system.reset()
+    step_result = approach.reset(obs, info)
+
+    if config.fast_eval and not (config.render and can_render):
+        step_count = approach.best_eval_total_steps
+        success = bool(approach.best_eval_path)
+        return success, step_count, success
+
+    best_edges = approach.current_path
+    if not best_edges:
+        return 0.0, 0, False
+    prefix_ids_for_edge: list[tuple[int, ...]] = []
+    running_prefix: tuple[int, ...] = (0,)
+    for edge in best_edges:
+        prefix_ids_for_edge.append(running_prefix)
+        running_prefix = running_prefix + (edge.source.id,)
+
+    total_reward = 0.0
+    step_count = 0
+    done = False
+    success = True
+
+    # Execute first action from the reset
+    obs, reward, terminated, truncated, info = system.env.step(step_result.action)
+    total_reward += float(reward)
+    step_count += 1
+    if step_result.terminate or terminated or truncated:
+        success = step_result.terminate or terminated
+        if config.render and can_render:
+            cast(Any, system.env).close()
+            system.env = recording_env
+        return total_reward, step_count, success
+
+    # Execute segments: initial segment + all edges in the planned path
+    segments = [(0, best_edges[0].source.id, ())] + [
+        (edge.source.id, edge.target.id, prefix_ids_for_edge[i])
+        for i, edge in enumerate(best_edges)
+    ]
+    for key in segments:
+        if done:
+            break
+        actions = approach.edge_action_cache.get(key, None)
+        if actions is not None:
+            # Execute cached actions
+            for a in actions:
+                obs, reward, terminated, truncated, info = system.env.step(a)
+                total_reward += float(reward)
+                step_count += 1
+                done = bool(terminated or truncated)
+                if done:
+                    break
+        else:
+            # Execute using approach
+            for _ in range(approach.max_skill_steps):
+                step_result = approach.step(obs, total_reward, False, False, info)
+                obs, reward, terminated, truncated, info = system.env.step(
+                    step_result.action
+                )
+                total_reward += float(reward)
+                step_count += 1
+                done = bool(step_result.terminate or terminated or truncated)
+                if step_result.terminate or terminated or truncated:
+                    success = step_result.terminate or terminated
+                    break
+        if done:
+            break
+
+    if not done:
+        for _ in range(1, config.max_steps):
+            step_result = approach.step(obs, total_reward, False, False, info)
+            obs, reward, terminated, truncated, info = system.env.step(
+                step_result.action
+            )
+            total_reward += float(reward)
+            step_count += 1
+            if step_result.terminate or terminated or truncated:
+                success = step_result.terminate or terminated
+                break
+
+    if config.render and can_render:
+        cast(Any, system.env).close()
+        system.env = recording_env
+
+    return total_reward, step_count, success
+
+
 def train_and_evaluate(
     system: ImprovisationalTAMPSystem[ObsType, ActType],
     policy_factory: Callable[[int], Policy[ObsType, ActType]],
@@ -247,50 +321,25 @@ def train_and_evaluate(
     num_rollouts_per_node: int = 50,
     max_steps_per_rollout: int = 50,
     shortcut_success_threshold: int = 1,
-    select_random_goal: bool = False,
+    enable_generalization: bool = False,
 ) -> Metrics:
     """Train and evaluate a policy on a system."""
-    print(f"\nInitializing training for {system.name}...")
-
-    # Set all random seeds at the entry point
     seed = config.seed
     rng = np.random.default_rng(seed)
     set_torch_seed(seed)
-
-    # Print GPU information
-    print("GPU Status:")
-    if torch.cuda.is_available():
-        print(f"  CUDA available: {torch.cuda.is_available()}")
-        print(f"  CUDA device count: {torch.cuda.device_count()}")
-        print(f"  Current CUDA device: {torch.cuda.current_device()}")
-        print(f"  Device name: {torch.cuda.get_device_name()}")
-        memory_info = get_gpu_memory_info()
-        assert not isinstance(memory_info, str)
-        for gpu in memory_info:
-            print(f"  Device {gpu['device_index']} ({gpu['name']}):")
-            print(f"    Total memory: {gpu['total_memory']:.2f} GB")
-            print(f"    Allocated memory: {gpu['allocated_memory']:.2f} GB")
-            print(f"    Free memory: {gpu['free_memory']:.2f} GB")
-    else:
-        print("  CUDA not available, running on CPU")
-
     training_time = 0.0
     start_time = time.time()
-
-    # Create policy using factory
     policy = policy_factory(config.seed)
+    if isinstance(policy, MultiRLPolicy):
+        policy.enable_generalization = enable_generalization
 
-    # Create approach with properly initialized policy
     approach = ImprovisationalTAMPApproach(
         system,
         policy,
         seed=config.seed,
-        max_atom_size=config.max_atom_size,
-        use_context_wrapper=use_context_wrapper,
     )
 
-    # Load or collect training data for new policy
-    if policy.requires_training and "_Loaded" not in policy_name:
+    if "_Loaded" not in policy_name:
         train_data = get_or_collect_training_data(
             system,
             approach,
@@ -305,9 +354,17 @@ def train_and_evaluate(
         if train_data.states:
             print("\nTraining policy...")
 
-            # Set up rendering if available
             render_mode = getattr(system.wrapped_env, "render_mode", None)
             can_render = render_mode is not None
+
+            if use_context_wrapper:
+                context_env = ContextAwareWrapper(
+                    system.wrapped_env,
+                    system.perceiver,
+                    max_atom_size=config.max_atom_size,
+                    max_episode_steps=config.max_steps,
+                )
+                system.wrapped_env = context_env
 
             if hasattr(system.wrapped_env, "configure_training"):
                 system.wrapped_env.configure_training(train_data)
@@ -322,6 +379,7 @@ def train_and_evaluate(
                 )
 
             save_path = Path(config.save_dir) / f"{system.name}_{policy_name}"
+
             if isinstance(policy, MultiRLPolicy):
                 policy.train(system.wrapped_env, train_data, save_dir=str(save_path))
             else:
@@ -334,11 +392,6 @@ def train_and_evaluate(
             if config.record_training and can_render:
                 cast(Any, system.wrapped_env).close()
 
-    elif not policy.requires_training and "_Loaded" not in policy_name:
-        # For non-training policies like MPC, just initialize
-        policy.initialize(system.wrapped_env)
-
-    # For MultiRLPolicy, ensure models are properly loaded before evaluation
     if isinstance(policy, MultiRLPolicy) and hasattr(policy, "policies"):
         if not any(
             hasattr(p, "model") and p.model is not None
@@ -347,7 +400,6 @@ def train_and_evaluate(
             print(f"No loaded models detected, attempting to load from {save_path}")
             policy.load(str(save_path))
 
-    # Run evaluation episodes
     print(f"\nEvaluating policy on {system.name}...")
     rewards = []
     lengths = []
@@ -355,13 +407,12 @@ def train_and_evaluate(
 
     for episode in range(config.num_episodes):
         print(f"\nEvaluation Episode {episode + 1}/{config.num_episodes}")
-        reward, length, success = run_evaluation_episode(
+        reward, length, success = run_evaluation_episode_with_caching(
             system,
             approach,
             policy_name,
             config,
             episode_num=episode,
-            select_random_goal=select_random_goal,
         )
         rewards.append(reward)
         lengths.append(length)
@@ -393,26 +444,19 @@ def train_and_evaluate_goal_conditioned(
     shortcut_success_threshold: int = 1,
 ) -> Metrics:
     """Train and evaluate a goal-conditioned policy for shortcut learning."""
-    print(f"\nInitializing goal-conditioned training for {system.name}...")
-
-    # Set random seeds
     seed = config.seed
     rng = np.random.default_rng(seed)
     set_torch_seed(seed)
-
     training_time = 0.0
     start_time = time.time()
-
-    # Create policy and approach
     policy = policy_factory(config.seed)
+
     approach = ImprovisationalTAMPApproach(
         system,
         policy,
         seed=config.seed,
-        max_atom_size=config.max_atom_size,
     )
 
-    # Collect goal-conditioned training data
     train_data = collect_goal_conditioned_training_data(
         system,
         approach,
@@ -424,12 +468,9 @@ def train_and_evaluate_goal_conditioned(
         rng=rng,
     )
 
-    if policy.requires_training and "_Loaded" not in policy_name:
+    if "_Loaded" not in policy_name:
         if train_data.node_states:
-            print("\nPreparing goal-conditioned environment...")
-
-            # Create goal-conditioned environment
-            # Here we replace the ImprovWrapper with GoalConditionedWrapper
+            # Replace the ImprovWrapper with GoalConditionedWrapper
             goal_env = GoalConditionedWrapper(
                 env=system.env,  # access base env, not wrapped env
                 node_states=train_data.node_states,
@@ -443,8 +484,6 @@ def train_and_evaluate_goal_conditioned(
                 step_penalty=config.step_penalty,
                 max_episode_steps=config.max_steps,
             )
-
-            # Use this environment for training
             system.wrapped_env = goal_env
 
             print("\nTraining policy...")
@@ -452,7 +491,6 @@ def train_and_evaluate_goal_conditioned(
             if hasattr(system.wrapped_env, "configure_training"):
                 system.wrapped_env.configure_training(train_data)
 
-            # Record training if requested
             if config.record_training and hasattr(system.wrapped_env, "render_mode"):
                 video_folder = Path(f"videos/{system.name}_{policy_name}_train")
                 video_folder.mkdir(parents=True, exist_ok=True)
@@ -469,7 +507,6 @@ def train_and_evaluate_goal_conditioned(
             print(f"\nSaving policy to {save_path}")
             policy.save(str(save_path))
 
-    # Run evaluation
     print(f"\nEvaluating policy on {system.name}...")
     rewards = []
     lengths = []
@@ -502,14 +539,28 @@ def train_and_evaluate_goal_conditioned(
     )
 
 
-def train_and_evaluate_pure_rl(
+def train_and_evaluate_rl_baseline(
     system: ImprovisationalTAMPSystem[ObsType, ActType],
     policy_factory: Callable[[int], Policy[ObsType, ActType]],
     config: TrainingConfig,
     policy_name: str,
+    baseline_type: str = "pure_rl",
+    max_atom_size: int = 14,
+    single_step_skills: bool = True,
+    max_skill_steps: int = 50,
+    skill_failure_penalty: float = -1.0,
 ) -> Metrics:
-    """Train and evaluate a pure RL policy on a system."""
-    print(f"\nInitializing pure RL baseline training for {system.name}...")
+    """Train and evaluate a baseline RL policy on a system."""
+    if baseline_type not in ["pure_rl", "sac_her", "hierarchical"]:
+        raise ValueError("Unknown baseline_type.")
+
+    baseline_name = {
+        "pure_rl": "Pure RL",
+        "sac_her": "SAC+HER",
+        "hierarchical": "Hierarchical RL",
+    }[baseline_type]
+
+    print(f"\nInitializing {baseline_name} baseline training for {system.name}...")
     seed = config.seed
     set_torch_seed(seed)
 
@@ -518,46 +569,65 @@ def train_and_evaluate_pure_rl(
     obs, info = system.reset()
     _, _, goal_atoms = system.perceiver.reset(obs, info)
 
-    pure_rl_env = PureRLWrapper(
-        env=system.env,
-        perceiver=system.perceiver,
-        goal_atoms=goal_atoms,
-        max_episode_steps=config.max_steps,
-        step_penalty=config.step_penalty,
-        achievement_bonus=config.success_reward,
-        action_scale=config.action_scale,
-    )
-
-    render_mode = getattr(pure_rl_env, "_render_mode", None)
-    can_render = render_mode is not None
-    if config.record_training and can_render:
-        video_folder = Path(f"videos/{system.name}_{policy_name}_train")
-        video_folder.mkdir(parents=True, exist_ok=True)
-        pure_rl_env = RecordVideo(
-            pure_rl_env,  # type: ignore[assignment]
-            str(video_folder),
-            episode_trigger=lambda x: x % config.training_record_interval == 0,
-            name_prefix="training",
+    wrapped_env: Union[PureRLWrapper, SACHERWrapper, HierarchicalRLWrapper]
+    if baseline_type == "pure_rl":
+        wrapped_env = PureRLWrapper(
+            env=system.env,
+            perceiver=system.perceiver,
+            goal_atoms=goal_atoms,
+            max_episode_steps=config.max_steps,
+            step_penalty=config.step_penalty,
+            achievement_bonus=config.success_reward,
+            action_scale=config.action_scale,
+        )
+    elif baseline_type == "sac_her":
+        wrapped_env = SACHERWrapper(
+            env=system.env,
+            perceiver=system.perceiver,
+            goal_atoms=goal_atoms,
+            max_atom_size=max_atom_size,
+            max_episode_steps=config.max_steps,
+            step_penalty=config.step_penalty,
+            success_reward=config.success_reward,
+        )
+    else:
+        wrapped_env = HierarchicalRLWrapper(
+            tamp_system=system,
+            max_episode_steps=config.max_steps,
+            max_skill_steps=max_skill_steps,
+            step_penalty=config.step_penalty,
+            achievement_bonus=config.success_reward,
+            action_scale=config.action_scale,
+            skill_failure_penalty=skill_failure_penalty,
+            single_step_skills=single_step_skills,
         )
 
-    # Initialize policy
-    policy.initialize(pure_rl_env)
-
-    # Train policy if needed
     start_time = time.time()
-    if policy.requires_training:
-        print("\nTraining pure RL policy...")
-        policy.train(pure_rl_env, train_data=None)
+    print(f"\nTraining {baseline_name} policy...")
+    policy.train(wrapped_env, train_data=None)
 
-        save_path = Path(config.save_dir) / f"{system.name}_{policy_name}"
-        policy.save(str(save_path))
+    save_path = Path(config.save_dir) / f"{system.name}_{policy_name}"
+    policy.save(str(save_path))
 
     training_time = time.time() - start_time
 
-    approach = PureRLApproach(system, policy, seed)
+    approach: Union[
+        PureRLApproach[ObsType, ActType],
+        SACHERApproach[ObsType, ActType],
+        HierarchicalRLApproach[ObsType, ActType],
+    ]
+    if baseline_type == "pure_rl":
+        approach = PureRLApproach(system, policy, seed)
+    elif baseline_type == "sac_her":
+        system.wrapped_env = wrapped_env
+        approach = SACHERApproach(system, policy, seed)
+    else:
+        assert isinstance(
+            wrapped_env, HierarchicalRLWrapper
+        ), "Expected HierarchicalRLWrapper"
+        approach = HierarchicalRLApproach(system, policy, seed, wrapped_env)
 
-    # Run evaluation
-    print(f"\nEvaluating pure RL policy on {system.name}...")
+    print(f"\nEvaluating {baseline_name} policy on {system.name}...")
     rewards = []
     lengths = []
     successes = []

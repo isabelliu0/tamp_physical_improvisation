@@ -129,14 +129,11 @@ class PlanningGraph:
             tuple[tuple[PlanningGraphNode, tuple[int, ...]], PlanningGraphEdge] | None,
         ] = {}
 
-        # Initialize with empty path for initial node
         empty_path: tuple[int, ...] = tuple()
         start_state = (initial_node, empty_path)
         distances[start_state] = 0
         previous[start_state] = None
 
-        # Priority queue for Dijkstra's algorithm
-        # (use a counter to break ties and avoid comparing non-comparable objects)
         counter = itertools.count()
         queue: list[tuple[float, int, tuple[PlanningGraphNode, tuple[int, ...]]]] = [
             (0, next(counter), start_state)
@@ -148,7 +145,6 @@ class PlanningGraph:
         reached_goal_nodes = set()
         max_path_length = len(self.nodes) * 2
         while queue:
-            # Get state with smallest distance
             current_dist, _, current_state = heapq.heappop(queue)
             current_node, current_path = current_state
             if len(current_path) > max_path_length:
@@ -158,14 +154,12 @@ class PlanningGraph:
 
             if current_node in goal_nodes:
                 reached_goal_nodes.add(current_node)
-                # If we reached all goal nodes, we can stop
                 if len(reached_goal_nodes) == len(goal_nodes) and all(
                     best_node_costs.get(goal, float("inf")) <= current_dist
                     for goal in goal_nodes
                 ):
                     break
 
-            # Check all outgoing edges
             for edge in [e for e in self.edges if e.source == current_node]:
                 edge_cost = edge.get_cost(current_path)
                 if edge_cost == float("inf"):
@@ -178,7 +172,6 @@ class PlanningGraph:
                 if new_dist < best_node_costs.get(edge.target, float("inf")):
                     best_node_costs[edge.target] = new_dist
 
-                # If we found a better path, update
                 if new_state not in distances or new_dist < distances.get(
                     new_state, float("inf")
                 ):
@@ -186,7 +179,6 @@ class PlanningGraph:
                     previous[new_state] = (current_state, edge)
                     heapq.heappush(queue, (new_dist, next(counter), new_state))
 
-        # Find the best goal state from each goal node
         best_goal_states = {}
         for goal_node in goal_nodes:
             goal_states = [(n, p) for (n, p) in distances if n == goal_node]
@@ -214,7 +206,6 @@ class PlanningGraph:
             current_state = prev_state
         path.reverse()
 
-        # Print detailed path information
         total_cost = distances[best_goal_state]
         print(f"Shortest path's cost: {total_cost}")
         path_details = []

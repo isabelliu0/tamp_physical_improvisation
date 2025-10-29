@@ -202,12 +202,10 @@ class GraphObstacle2DEnv(gym.Env):
                     block_id = int(node[5])
                     block_positions[block_id] = node[1:3].copy()
 
-            # Ensure all required nodes were found
             assert robot_pos is not None, "Robot node not found"
             assert 1 in block_positions, "Block 1 not found"
             assert 2 in block_positions, "Block 2 not found"
 
-            # Build new state
             if 3 in block_positions and self.n_blocks > 2:
                 self.state = Obstacle2DState(
                     robot_position=robot_pos,
@@ -300,10 +298,8 @@ class GraphObstacle2DEnv(gym.Env):
         """Take environment step."""
         dx, dy, gripper_action = action
 
-        # Save previous state
         prev_state = self.state
 
-        # Update states
         new_robot_position = np.array(
             [
                 np.clip(self.robot_position[0] + dx, 0.0, 1.0),
@@ -365,7 +361,6 @@ class GraphObstacle2DEnv(gym.Env):
                     picking_up_block_idx = i
                     break
 
-        # Update state
         if self.n_blocks > 2:
             new_state = Obstacle2DState(
                 robot_position=new_robot_position,
@@ -397,11 +392,9 @@ class GraphObstacle2DEnv(gym.Env):
             info = self._get_info()
             return obs, -0.1, False, False, info
 
-        # Get observation
         obs = self._get_obs()
         info = self._get_info()
 
-        # Check if the goal is reached
         goal_reached = is_block_in_target_area(
             self.block_1_position[0],
             self.block_1_position[1],
@@ -498,7 +491,7 @@ class GraphObstacle2DEnv(gym.Env):
         horizontal_adjacent = np.isclose(
             np.abs(robot_position[0] - block_position[0]),
             (self._robot_width + self._block_width) / 2,
-            atol=2e-2,  # tolerance to make the task easier for RL agents
+            atol=2e-2,
         )
         return vertical_aligned and horizontal_adjacent
 
@@ -518,7 +511,6 @@ class GraphObstacle2DEnv(gym.Env):
             )
         )
 
-        # Draw the target area
         target_rect = Rectangle.from_center(
             self._target_area["x"],
             self._target_area["y"],
@@ -528,7 +520,6 @@ class GraphObstacle2DEnv(gym.Env):
         )
         target_rect.plot(ax, facecolor="green", edgecolor="red")
 
-        # Draw the robot.
         robot_rect = Rectangle.from_center(
             self.robot_position[0],
             self.robot_position[1],
@@ -538,7 +529,6 @@ class GraphObstacle2DEnv(gym.Env):
         )
         robot_rect.plot(ax, facecolor="silver", edgecolor="black")
 
-        # Draw the blocks.
         for i, block_position in enumerate(self.block_positions):
             block_rect = Rectangle.from_center(
                 block_position[0],
@@ -606,14 +596,12 @@ class Obstacle2DEnv(gym.Env):
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
 
-        # Set constants
         self._robot_width = 0.2
         self._robot_height = 0.2
         self._block_width = 0.2
         self._block_height = 0.2
         self._target_area = {"x": 0.5, "y": 0.0, "width": 0.2, "height": 0.2}
 
-        # Initialize state
         self.state = self._get_default_state()
 
     @property
@@ -744,10 +732,8 @@ class Obstacle2DEnv(gym.Env):
         """Take environment step."""
         dx, dy, gripper_action = action
 
-        # Save previous state
         prev_state = self.state
 
-        # Update robot position
         new_robot_position = np.array(
             [
                 np.clip(self.robot_position[0] + dx, 0.0, 1.0),
@@ -756,7 +742,6 @@ class Obstacle2DEnv(gym.Env):
             dtype=np.float32,
         )
 
-        # Update block positions and handle interactions
         new_block_1_position = self.block_1_position.copy()
         new_block_2_position = self.block_2_position.copy()
         new_gripper_status = float(gripper_action)
@@ -805,7 +790,6 @@ class Obstacle2DEnv(gym.Env):
                 new_block_2_position = new_robot_position.copy()
                 picking_up_block2 = True
 
-        # Update state
         self.state = Obstacle2DState(
             robot_position=new_robot_position,
             block_1_position=new_block_1_position,
@@ -822,11 +806,9 @@ class Obstacle2DEnv(gym.Env):
             info = self._get_info()
             return obs, -0.1, False, False, info
 
-        # Get observation
         obs = self._get_obs()
         info = self._get_info()
 
-        # Check if the robot has reached the goal
         goal_reached = is_block_in_target_area(
             self.block_1_position[0],
             self.block_1_position[1],
@@ -899,7 +881,7 @@ class Obstacle2DEnv(gym.Env):
         horizontal_adjacent = np.isclose(
             np.abs(robot_position[0] - block_position[0]),
             (self._robot_width + self._block_width) / 2,
-            atol=2e-2,  # tolerance to make the task easier for RL agents
+            atol=2e-2,
         )
         return vertical_aligned and horizontal_adjacent
 
@@ -919,7 +901,6 @@ class Obstacle2DEnv(gym.Env):
             )
         )
 
-        # Draw the target area
         target_rect = Rectangle.from_center(
             self._target_area["x"],
             self._target_area["y"],
@@ -929,7 +910,6 @@ class Obstacle2DEnv(gym.Env):
         )
         target_rect.plot(ax, facecolor="green", edgecolor="red")
 
-        # Draw the robot.
         robot_rect = Rectangle.from_center(
             self.robot_position[0],
             self.robot_position[1],
@@ -939,7 +919,6 @@ class Obstacle2DEnv(gym.Env):
         )
         robot_rect.plot(ax, facecolor="silver", edgecolor="black")
 
-        # Draw the blocks.
         for i, block_position in enumerate(
             [self.block_1_position, self.block_2_position]
         ):

@@ -4,7 +4,7 @@ import os
 import pickle
 import time
 from dataclasses import dataclass
-from typing import Any
+from typing import cast
 
 import gymnasium as gym
 import numpy as np
@@ -191,11 +191,6 @@ class GoalConditionedRLPolicy(Policy[ObsType, ActType]):
         self.valid_shortcuts: list[tuple[int, int]] = []
         self.node_atoms: dict[int, set[GroundAtom]] = {}
 
-    @property
-    def requires_training(self) -> bool:
-        """Whether this policy requires training data and training."""
-        return True
-
     def initialize(self, env):
         """Initialize policy with environment."""
 
@@ -206,14 +201,14 @@ class GoalConditionedRLPolicy(Policy[ObsType, ActType]):
     def configure_context(self, context: PolicyContext) -> None:
         """Configure policy with context information."""
 
-    def get_action(self, obs: dict[str, np.ndarray[Any, Any]]) -> np.ndarray[Any, Any]:  # type: ignore[override] # pylint: disable=line-too-long
+    def get_action(self, obs: ObsType) -> ActType:
         """Get action from policy."""
         assert self.model is not None
         assert isinstance(
             obs, dict
         ), "Observation must be a dictionary, consistent with HER"
         action, _ = self.model.predict(obs, deterministic=True)
-        return action
+        return cast(ActType, action)
 
     def train(
         self,
@@ -243,7 +238,10 @@ class GoalConditionedRLPolicy(Policy[ObsType, ActType]):
             replay_buffer_kwargs["atom_to_index"] = goal_env.atom_to_index
             replay_buffer_kwargs["atom_vectors"] = goal_env.atom_vectors
 
-        # Initialize model based on algorithm
+        # Set learning_starts to be greater than max episode length for HER
+        max_steps = train_data.config.get("max_steps", 50)
+        learning_starts = max_steps * 2
+
         if self.config.algorithm == "SAC":
             self.model = SAC(
                 "MultiInputPolicy",
@@ -253,6 +251,7 @@ class GoalConditionedRLPolicy(Policy[ObsType, ActType]):
                 learning_rate=self.config.learning_rate,
                 batch_size=self.config.batch_size,
                 buffer_size=self.config.buffer_size,
+                learning_starts=learning_starts,
                 device=self.device,
                 seed=self._seed,
                 verbose=1,
@@ -273,6 +272,7 @@ class GoalConditionedRLPolicy(Policy[ObsType, ActType]):
                 learning_rate=self.config.learning_rate,
                 batch_size=self.config.batch_size,
                 buffer_size=self.config.buffer_size,
+                learning_starts=learning_starts,
                 device=self.device,
                 seed=self._seed,
                 verbose=1,
@@ -282,7 +282,6 @@ class GoalConditionedRLPolicy(Policy[ObsType, ActType]):
 
         episodes_per_scenario = train_data.config.get("episodes_per_scenario", 1)
         max_steps = train_data.config.get("max_steps", 50)
-        # Note: total_timesteps to be tuned for complicated environments
         total_timesteps = len(self.valid_shortcuts) * episodes_per_scenario * max_steps
         print(f"Training for {total_timesteps} timesteps...")
 
@@ -297,16 +296,13 @@ class GoalConditionedRLPolicy(Policy[ObsType, ActType]):
         assert self.model is not None
         os.makedirs(path, exist_ok=True)
 
-        # Save the model
         self.model.save(f"{path}/model")
 
-        # Save observation space and action space for loading
         with open(f"{path}/model_observation_space.pkl", "wb") as f:
             pickle.dump(self.model.observation_space, f)
         with open(f"{path}/model_action_space.pkl", "wb") as f:
             pickle.dump(self.model.action_space, f)
 
-        # Save node states and shortcuts
         with open(f"{path}/node_states.pkl", "wb") as f:
             pickle.dump(self.node_states, f)
         with open(f"{path}/valid_shortcuts.pkl", "wb") as f:
@@ -355,7 +351,6 @@ class GoalConditionedRLPolicy(Policy[ObsType, ActType]):
 
         dummy_env = DummyEnv(observation_space, action_space)  # type: ignore[no-untyped-call]  # pylint: disable=line-too-long
 
-        # Load the model with the dummy environment
         if self.config.algorithm == "SAC":
             self.model = SAC.load(f"{path}/model", env=dummy_env, device=self.device)
         elif self.config.algorithm == "TD3":
@@ -363,7 +358,6 @@ class GoalConditionedRLPolicy(Policy[ObsType, ActType]):
         else:
             raise ValueError(f"Unsupported algorithm: {self.config.algorithm}")
 
-        # Load node states and shortcuts
         with open(f"{path}/node_states.pkl", "rb") as f:
             self.node_states = pickle.load(f)
         with open(f"{path}/valid_shortcuts.pkl", "rb") as f:

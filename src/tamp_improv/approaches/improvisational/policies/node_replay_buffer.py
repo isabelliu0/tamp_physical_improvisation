@@ -1,4 +1,4 @@
-"""Custom replay buffer for node-based goal sampling in TAMP."""
+"""Custom replay buffer for node-based goal sampling."""
 
 from typing import Any, Union
 
@@ -15,7 +15,7 @@ class NodeBasedHerBuffer(HerReplayBuffer):
 
     This buffer ensures that:
     1. Goals come from the collection of node states (G)
-    2. The node ID of the goal state is larger than the INITIAL source node ID (s_0)
+    2. The node ID of the goal state is larger than the initial source node ID (s_0)
     3. There's no direct non-shortcut edge between source and goal nodes
     """
 
@@ -43,7 +43,6 @@ class NodeBasedHerBuffer(HerReplayBuffer):
         self.n_sampled_goal = n_sampled_goal
         self.n_envs = kwargs.get("n_envs", 1)
 
-        # Map to quickly find valid target nodes for each source node
         self.valid_targets: dict[int, list[int]] = {}
         for source_id, target_id in valid_shortcuts:
             if source_id not in self.valid_targets:
@@ -64,10 +63,7 @@ class NodeBasedHerBuffer(HerReplayBuffer):
             },
         )
 
-        # Create array map between episode indices and source node IDs
         self.episode_source_ids = np.full((buffer_size,), -1, dtype=np.int32)
-
-        print(f"Initialized NodeBasedHerBuffer with {len(node_states)} node states")
 
     def add(
         self,
@@ -104,7 +100,6 @@ class NodeBasedHerBuffer(HerReplayBuffer):
         batch_ep_start = self.ep_start[batch_indices, env_indices]
         episode_indices = batch_ep_start // self.n_envs
 
-        # Initialize array to store sampled goals
         goals = np.zeros(
             (len(batch_indices),) + self.next_observations["achieved_goal"].shape[2:],
             dtype=self.next_observations["achieved_goal"].dtype,
@@ -125,9 +120,17 @@ class NodeBasedHerBuffer(HerReplayBuffer):
         ), "Invalid source node ID"
         if source_node_id in self.valid_targets and self.valid_targets[source_node_id]:
             goal_id = np.random.choice(self.valid_targets[source_node_id])
-            return (
-                np.array(self.atom_vectors[goal_id])
-                if self.using_atom_as_obs
-                else np.array(self.node_states[goal_id])
-            )
+            if self.using_atom_as_obs:
+                return np.array(self.atom_vectors[goal_id])
+            # node_states[goal_id] is a list of states, pick one randomly
+            goal_states = self.node_states[goal_id]
+            if isinstance(goal_states, list) and len(goal_states) > 0:
+                random_state = np.random.choice(len(goal_states))
+                selected_state = goal_states[random_state]
+                if hasattr(selected_state, "nodes"):
+                    return selected_state.nodes.flatten().astype(np.float32)
+                return np.array(selected_state, dtype=np.float32)
+            if hasattr(goal_states, "nodes"):
+                return goal_states.nodes.flatten().astype(np.float32)
+            return np.array(goal_states, dtype=np.float32)
         raise ValueError(f"No valid targets for source node {source_node_id}!")

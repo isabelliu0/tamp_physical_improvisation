@@ -207,7 +207,6 @@ class GraphObstacle2DPerceiver(Perceiver[GraphInstance]):
         robot_gripper = None
         block_positions = {}
 
-        # Extract positions from graph observation
         for node in obs.nodes:
             node_type = int(node[0])
             if node_type == 0:  # Robot
@@ -219,7 +218,6 @@ class GraphObstacle2DPerceiver(Perceiver[GraphInstance]):
         assert robot_pos is not None
         assert robot_gripper is not None
 
-        # Constants
         target_x = 0.5
         target_y = 0.0
         target_width = 0.2
@@ -227,11 +225,9 @@ class GraphObstacle2DPerceiver(Perceiver[GraphInstance]):
         block_width = 0.2
         block_height = 0.2
 
-        # Add target identification predicates
         atoms.add(self.predicates["IsTarget"]([self._target_area]))
         atoms.add(self.predicates["NotIsTarget"]([self._table]))
 
-        # Check gripper status
         held_block_id = -1
         if robot_gripper > 0.5:
             for i in range(self.n_blocks):

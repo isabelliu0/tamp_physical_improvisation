@@ -8,6 +8,7 @@ trained_policies/
 logs/
 training_data/
 results/
+outputs/
 plots/
 *.slurm
 *.out
