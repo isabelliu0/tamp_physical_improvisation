@@ -2,7 +2,7 @@ This directory contains training scripts for all our experiments, including our 
 
 | Approach | Uses Task Planning | Uses Abstractions | Training Method | Policy Type |
 |----------|-------------------|-------------------|-----------------|-------------|
-| Multi-RL | ✓ | ✓ | Multiple specialized policies | Shortcut-specific |
+| SLAP | ✓ | ✓ | Multiple specialized policies | Shortcut-specific |
 | Abstract Subgoals | ✓ | ✓ | Single context-conditioned policy | Goal-conditioned |
 | Abstract HER | ✓ | ✓ | Single policy with HER | Goal-conditioned |
 | Hierarchical RL | ✗ | Partial (skills) | Single skill-level policy | Hierarchical |

@@ -244,6 +244,10 @@ class GoalConditionedRLPolicy(Policy[ObsType, ActType]):
             replay_buffer_kwargs["atom_vectors"] = goal_env.atom_vectors
 
         # Initialize model based on algorithm
+        # Set learning_starts to be greater than max episode length for HER
+        max_steps = train_data.config.get("max_steps", 50)
+        learning_starts = max_steps * 2
+
         if self.config.algorithm == "SAC":
             self.model = SAC(
                 "MultiInputPolicy",
@@ -253,6 +257,7 @@ class GoalConditionedRLPolicy(Policy[ObsType, ActType]):
                 learning_rate=self.config.learning_rate,
                 batch_size=self.config.batch_size,
                 buffer_size=self.config.buffer_size,
+                learning_starts=learning_starts,
                 device=self.device,
                 seed=self._seed,
                 verbose=1,
@@ -273,6 +278,7 @@ class GoalConditionedRLPolicy(Policy[ObsType, ActType]):
                 learning_rate=self.config.learning_rate,
                 batch_size=self.config.batch_size,
                 buffer_size=self.config.buffer_size,
+                learning_starts=learning_starts,
                 device=self.device,
                 seed=self._seed,
                 verbose=1,

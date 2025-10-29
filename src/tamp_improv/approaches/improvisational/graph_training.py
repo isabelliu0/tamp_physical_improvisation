@@ -1,4 +1,4 @@
-"""Graph-based training data collection for improvisational TAMP."""
+"""Graph-based training data collection."""
 
 from collections import defaultdict, deque
 from dataclasses import dataclass
@@ -455,7 +455,7 @@ def identify_promising_shortcuts_with_rollouts(
         )
 
         # # DEBUG:
-        # if source_node_id != 7:
+        # if source_node_id != 1:
         #     continue
 
         # Calculate rollouts per state to maintain roughly the same total
@@ -488,7 +488,7 @@ def identify_promising_shortcuts_with_rollouts(
                             continue
 
                         # # DEBUG:
-                        # if target_node.id not in [132, 136]:
+                        # if target_node.id != 79:
                         #     continue
 
                         has_direct_edge = False

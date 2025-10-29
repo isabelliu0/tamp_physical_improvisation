@@ -111,7 +111,7 @@ def train_abstract_her_pybullet(
         render=render,
         record_training=False,
         training_record_interval=100,
-        training_data_dir="training_data/graph_training_data",
+        training_data_dir="training_data/abstract_her",
         save_dir=save_dir,
         max_atom_size=max_atom_size,
         success_threshold=0.01,

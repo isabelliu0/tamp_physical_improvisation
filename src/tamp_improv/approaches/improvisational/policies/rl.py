@@ -9,6 +9,7 @@ import gymnasium as gym
 import numpy as np
 import torch
 from numpy.typing import NDArray
+from relational_structs import GroundAtom
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
 from torch import Tensor
@@ -17,6 +18,7 @@ from tamp_improv.approaches.improvisational.policies.base import (
     ActType,
     ObsType,
     Policy,
+    PolicyContext,
     TrainingData,
 )
 from tamp_improv.utils.gpu_utils import DeviceContext
@@ -188,6 +190,10 @@ class RLPolicy(Policy[ObsType, ActType]):
 
         self.model: PPO | None = None
 
+        self.trained_shortcuts: set[tuple[frozenset, frozenset]] = set()
+        self._current_atoms: set[GroundAtom] | None = None
+        self._goal_atoms: set[GroundAtom] | None = None
+
     @property
     def requires_training(self) -> bool:
         """Whether this policy requires training data and training."""
@@ -213,7 +219,19 @@ class RLPolicy(Policy[ObsType, ActType]):
     def can_initiate(self):
         """Check whether the policy can be executed given the current
         context."""
-        return self.model is not None
+        if self.model is None:
+            return False
+        if not self.trained_shortcuts:
+            return True
+        if self._current_atoms is None or self._goal_atoms is None:
+            return False
+        current_sig = (frozenset(self._current_atoms), frozenset(self._goal_atoms))
+        return current_sig in self.trained_shortcuts
+
+    def configure_context(self, context: PolicyContext[ObsType, ActType]) -> None:
+        """Configure policy with context information."""
+        self._current_atoms = context.current_atoms
+        self._goal_atoms = context.goal_atoms
 
     def train(
         self,
@@ -289,6 +307,12 @@ class RLPolicy(Policy[ObsType, ActType]):
 
         # Train the model
         self.model.learn(total_timesteps=total_timesteps, callback=callback)
+
+        # Record which shortcuts this policy was trained on
+        for current_atoms, goal_atoms in zip(train_data.current_atoms, train_data.goal_atoms):
+            sig = (frozenset(current_atoms), frozenset(goal_atoms))
+            self.trained_shortcuts.add(sig)
+        print(f"Policy trained on {len(self.trained_shortcuts)} unique shortcuts")
 
         if self.device_ctx.device.type == "cuda":
             print(

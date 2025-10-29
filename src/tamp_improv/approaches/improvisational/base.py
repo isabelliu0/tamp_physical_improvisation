@@ -165,8 +165,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
         self.rng = np.random.default_rng(seed)
 
-        policy.initialize(system.wrapped_env)
-
     def reset(
         self,
         obs: ObsType,
@@ -1010,21 +1008,21 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 # if (node.id, edge.target.id) not in envisioned_plan:
                 #     continue
 
-                # # DEBUG: Envisioned plan for clear and place env (3 blocks)
-                # envisioned_plan = [
-                #     (0, 2),
-                #     (2, 5),
-                #     (5, 8),
-                #     (8, 15),
-                #     (15, 26),
-                #     (26, 52),
-                #     (52, 79),
-                #     (79, 132),
-                #     (0, 1),
-                #     (1, 79),
-                # ]  # pylint: disable=line-too-long
-                # if (node.id, edge.target.id) not in envisioned_plan:
-                #     continue
+                # DEBUG: Envisioned plan for clear and place env (3 blocks)
+                envisioned_plan = [
+                    (0, 2),
+                    (2, 5),
+                    (5, 8),
+                    (8, 15),
+                    (15, 26),
+                    (26, 52),
+                    (52, 79),
+                    (79, 132),
+                    (0, 1),
+                    (1, 79),
+                ]  # pylint: disable=line-too-long
+                if (node.id, edge.target.id) not in envisioned_plan:
+                    continue
 
                 # # DEBUG: Envisioned plan for clean up table env
                 # envisioned_plan = [
