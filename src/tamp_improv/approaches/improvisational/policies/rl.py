@@ -194,11 +194,6 @@ class RLPolicy(Policy[ObsType, ActType]):
         self._current_atoms: set[GroundAtom] | None = None
         self._goal_atoms: set[GroundAtom] | None = None
 
-    @property
-    def requires_training(self) -> bool:
-        """Whether this policy requires training data and training."""
-        return True
-
     def initialize(self, env: gym.Env) -> None:
         """Initialize policy with environment."""
         if self.model is None:

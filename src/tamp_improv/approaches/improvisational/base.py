@@ -169,7 +169,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self,
         obs: ObsType,
         info: dict[str, Any],
-        select_random_goal: bool = False,
     ) -> ApproachStepResult[ActType]:
         """Reset approach with initial observation."""
         objects, atoms, goal = self.system.perceiver.reset(obs, info)
@@ -178,19 +177,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self._edge_action_cache.clear()
 
         self.planning_graph = self._create_planning_graph(objects, atoms)
-
-        if select_random_goal:
-            initial_node = self.planning_graph.node_map[frozenset(atoms)]
-            higher_nodes = [
-                n for n in self.planning_graph.nodes if n.id > initial_node.id
-            ]
-            random_index = self.rng.integers(0, len(higher_nodes))
-            goal_node = higher_nodes[random_index]
-            goal = set(goal_node.atoms)
-            print(
-                f"Selected random goal from node {goal_node.id} with atoms: {goal_node.atoms}"  # pylint: disable=line-too-long
-            )
-            self._custom_goal = goal
 
         # Store initial state in observed states
         initial_node = self.planning_graph.node_map[frozenset(atoms)]
@@ -489,7 +475,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 if not target_atoms:
                     continue
 
-                # Check if this is similar to a trained shortcut
                 if self.trained_signatures and not using_goal_env:
                     current_sig = ShortcutSignature.from_context(
                         source_atoms, target_atoms
@@ -499,7 +484,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
                     for trained_sig in self.trained_signatures:
                         similarity = current_sig.similarity(trained_sig)
-                        if similarity > 0.99:  # Threshold to be tuned
+                        if similarity > 0.99:
                             can_handle = True
                             best_similarity = max(best_similarity, similarity)
 

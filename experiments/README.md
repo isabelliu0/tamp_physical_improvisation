@@ -8,3 +8,4 @@ This directory contains training scripts for all our experiments, including our 
 | Hierarchical RL | ✗ | Partial (skills) | Single skill-level policy | Hierarchical |
 | Pure RL (PPO) | ✗ | ✗ | Single policy | Monolithic |
 | SAC+HER | ✗ | ✗ | Single policy with HER | Monolithic |
+| Pure Planning | ✓ | ✓ | No learning | Classical TAMP |

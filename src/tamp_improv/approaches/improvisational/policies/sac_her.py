@@ -46,11 +46,6 @@ class SACHERPolicy(Policy[ObsType, ActType]):
             self.device = self.config.device
         self.model: SAC | None = None
 
-    @property
-    def requires_training(self) -> bool:
-        """Whether this policy requires training data and training."""
-        return True
-
     def initialize(self, env: gym.Env) -> None:
         """Initialize policy with environment."""
 

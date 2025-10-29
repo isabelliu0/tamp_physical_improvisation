@@ -169,11 +169,6 @@ class Policy(Generic[ObsType, ActType], ABC):
         """Initialize policy with environment."""
         self._seed = seed
 
-    @property
-    @abstractmethod
-    def requires_training(self) -> bool:
-        """Whether this policy requires training data and training."""
-
     @abstractmethod
     def initialize(self, env: gym.Env) -> None:
         """Initialize policy with environment."""

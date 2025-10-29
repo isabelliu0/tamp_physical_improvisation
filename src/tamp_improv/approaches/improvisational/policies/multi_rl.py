@@ -53,11 +53,6 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
         self._current_substitution: dict[Object, Object] | None = None
         self._saved_models: dict[str, str] = {}
 
-    @property
-    def requires_training(self) -> bool:
-        """Whether this policy requires training."""
-        return True
-
     def initialize(self, env: gym.Env) -> None:
         """Initialize the policy."""
         self.env = env

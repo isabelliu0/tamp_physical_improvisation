@@ -1,6 +1,5 @@
 """Training utilities."""
 
-import inspect
 import pickle
 import time
 from copy import deepcopy
@@ -151,7 +150,6 @@ def run_evaluation_episode(
     policy_name: str,
     config: TrainingConfig,
     episode_num: int = 0,
-    select_random_goal: bool = False,
 ) -> tuple[float, int, bool]:
     """Run single evaluation episode."""
     render_mode = getattr(system.env, "render_mode", None)
@@ -171,13 +169,7 @@ def run_evaluation_episode(
         )
 
     obs, info = system.reset()
-    if (
-        hasattr(approach, "reset")
-        and "select_random_goal" in inspect.signature(approach.reset).parameters
-    ):
-        step_result = approach.reset(obs, info, select_random_goal=select_random_goal)  # type: ignore[call-arg]  # pylint: disable=line-too-long
-    else:
-        step_result = approach.reset(obs, info)
+    step_result = approach.reset(obs, info)
 
     total_reward = 0.0
     step_count = 0
@@ -217,7 +209,6 @@ def run_evaluation_episode_with_caching(
     policy_name: str,
     config: TrainingConfig,
     episode_num: int = 0,
-    select_random_goal: bool = False,
 ) -> tuple[float, int, bool]:
     """Run single evaluation episode."""
     render_mode = getattr(system.env, "render_mode", None)
@@ -236,13 +227,7 @@ def run_evaluation_episode_with_caching(
         )
 
     obs, info = system.reset()
-    if (
-        hasattr(approach, "reset")
-        and "select_random_goal" in inspect.signature(approach.reset).parameters
-    ):
-        step_result = approach.reset(obs, info, select_random_goal=select_random_goal)  # type: ignore[call-arg]  # pylint: disable=line-too-long
-    else:
-        step_result = approach.reset(obs, info)
+    step_result = approach.reset(obs, info)
     
     if config.fast_eval and not (config.render and can_render):
         step_count = approach.best_eval_total_steps
@@ -349,7 +334,6 @@ def train_and_evaluate(
     num_rollouts_per_node: int = 50,
     max_steps_per_rollout: int = 50,
     shortcut_success_threshold: int = 1,
-    select_random_goal: bool = False,
     enable_generalization: bool = False,
 ) -> Metrics:
     """Train and evaluate a policy on a system."""
@@ -387,7 +371,7 @@ def train_and_evaluate(
         seed=config.seed,
     )
 
-    if policy.requires_training and "_Loaded" not in policy_name:
+    if "_Loaded" not in policy_name:
         train_data = get_or_collect_training_data(
             system,
             approach,
@@ -440,9 +424,6 @@ def train_and_evaluate(
             if config.record_training and can_render:
                 cast(Any, system.wrapped_env).close()
 
-    elif not policy.requires_training and "_Loaded" not in policy_name:
-        policy.initialize(system.wrapped_env)
-
     if isinstance(policy, MultiRLPolicy) and hasattr(policy, "policies"):
         if not any(
             hasattr(p, "model") and p.model is not None
@@ -464,7 +445,6 @@ def train_and_evaluate(
             policy_name,
             config,
             episode_num=episode,
-            select_random_goal=select_random_goal,
         )
         rewards.append(reward)
         lengths.append(length)
@@ -523,7 +503,7 @@ def train_and_evaluate_goal_conditioned(
         rng=rng,
     )
 
-    if policy.requires_training and "_Loaded" not in policy_name:
+    if "_Loaded" not in policy_name:
         if train_data.node_states:
             # Replace the ImprovWrapper with GoalConditionedWrapper
             goal_env = GoalConditionedWrapper(
@@ -659,12 +639,11 @@ def train_and_evaluate_rl_baseline(
         )
 
     start_time = time.time()
-    if policy.requires_training:
-        print(f"\nTraining {baseline_name} policy...")
-        policy.train(wrapped_env, train_data=None)
+    print(f"\nTraining {baseline_name} policy...")
+    policy.train(wrapped_env, train_data=None)
 
-        save_path = Path(config.save_dir) / f"{system.name}_{policy_name}"
-        policy.save(str(save_path))
+    save_path = Path(config.save_dir) / f"{system.name}_{policy_name}"
+    policy.save(str(save_path))
 
     training_time = time.time() - start_time
 

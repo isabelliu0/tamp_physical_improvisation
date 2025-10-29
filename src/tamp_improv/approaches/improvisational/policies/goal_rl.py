@@ -191,11 +191,6 @@ class GoalConditionedRLPolicy(Policy[ObsType, ActType]):
         self.valid_shortcuts: list[tuple[int, int]] = []
         self.node_atoms: dict[int, set[GroundAtom]] = {}
 
-    @property
-    def requires_training(self) -> bool:
-        """Whether this policy requires training data and training."""
-        return True
-
     def initialize(self, env):
         """Initialize policy with environment."""
 
