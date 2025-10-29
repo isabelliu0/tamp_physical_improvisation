@@ -1,5 +1,7 @@
 """Pure planning baselines for PyBullet environments."""
 
+import argparse
+
 from task_then_motion_planning.planning import TaskThenMotionPlanner
 
 from tamp_improv.benchmarks.pybullet_cleanup_table import (
@@ -47,13 +49,13 @@ def run_obstacle_tower_planning(
         if done:
             print(f"\nGoal reached in {step + 1} steps!")
             print(f"Final reward: {reward}")
-            if reward > 0:
+            if float(reward) > 0:
                 print("SUCCESS: Task completed successfully!")
             break
     else:
         print(f"\nFAILED: Goal not reached within {max_steps} steps")
 
-    system.env.close()
+    system.env.close()  # type: ignore[no-untyped-call]
 
 
 def run_cluttered_drawer_planning(
@@ -89,13 +91,13 @@ def run_cluttered_drawer_planning(
         if done:
             print(f"\nGoal reached in {step + 1} steps!")
             print(f"Final reward: {reward}")
-            if reward > 0:
+            if float(reward) > 0:
                 print("SUCCESS: Task completed successfully!")
             break
     else:
         print(f"\nFAILED: Goal not reached within {max_steps} steps")
 
-    system.env.close()
+    system.env.close()  # type: ignore[no-untyped-call]
 
 
 def run_cleanup_table_planning(
@@ -105,7 +107,8 @@ def run_cleanup_table_planning(
     max_replans: int = 5,
     max_steps_per_plan: int = 500,
 ) -> None:
-    """Run pure planning baseline on CleanupTable environment with replanning."""
+    """Run pure planning baseline on CleanupTable environment with
+    replanning."""
     print("\n" + "=" * 80)
     print("Running Pure Planning on CleanupTable Environment (with replanning)")
     print("=" * 80)
@@ -151,22 +154,21 @@ def run_cleanup_table_planning(
                     f"(attempt {replan_attempt + 1})"
                 )
                 print(f"Final reward: {reward}")
-                if reward > 0:
+                if float(reward) > 0:
                     print("SUCCESS: Task completed successfully!")
-                system.env.close()
+                system.env.close()  # type: ignore[no-untyped-call]
                 return
 
             if total_steps >= max_steps:
-                system.env.close()
+                system.env.close()  # type: ignore[no-untyped-call]
                 return
 
     print(f"\nFAILED: Goal not reached after {max_replans} planning attempts")
-    system.env.close()
+    system.env.close()  # type: ignore[no-untyped-call]
 
 
-def main():
-    import argparse
-
+def main() -> None:
+    """Main function to run pure planning baselines."""
     parser = argparse.ArgumentParser(
         description="Run pure planning baselines on PyBullet environments"
     )
@@ -223,4 +225,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main()  # type: ignore[no-untyped-call]

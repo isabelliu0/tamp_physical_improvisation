@@ -1,7 +1,8 @@
 """Training script for SAC+HER baseline."""
 
-import torch
 from pathlib import Path
+
+import torch
 
 from tamp_improv.approaches.improvisational.policies.sac_her import (
     SACHERConfig,
@@ -12,11 +13,11 @@ from tamp_improv.approaches.improvisational.training import (
     train_and_evaluate_rl_baseline,
 )
 from tamp_improv.benchmarks.obstacle2d import Obstacle2DTAMPSystem
+from tamp_improv.benchmarks.pybullet_cleanup_table import CleanupTableTAMPSystem
 from tamp_improv.benchmarks.pybullet_cluttered_drawer import ClutteredDrawerTAMPSystem
 from tamp_improv.benchmarks.pybullet_obstacle_tower_graph import (
     GraphObstacleTowerTAMPSystem,
 )
-from tamp_improv.benchmarks.pybullet_cleanup_table import CleanupTableTAMPSystem
 
 
 def train_sac_her_obstacle2d(
@@ -53,9 +54,9 @@ def train_sac_her_obstacle2d(
         return SACHERPolicy(seed=seed, config=sac_her_config)
 
     metrics = train_and_evaluate_rl_baseline(
-        system, 
-        policy_factory, 
-        config, 
+        system,
+        policy_factory,
+        config,
         policy_name="SAC_HER",
         baseline_type="sac_her",
     )
@@ -67,8 +68,8 @@ def train_sac_her_obstacle2d(
 
     results_file = Path(save_dir) / "Obstacle2DTAMPSystem_SAC_HER" / "results.txt"
     results_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(results_file, "w") as f:
-        f.write(f"Environment: Obstacle2D\n")
+    with open(results_file, "w", encoding="utf-8") as f:
+        f.write("Environment: Obstacle2D\n")
         f.write(f"seed: {seed}\n")
         f.write(f"success_rate: {metrics.success_rate:.4f}\n")
         f.write(f"avg_episode_length: {metrics.avg_episode_length:.2f}\n")
@@ -115,12 +116,12 @@ def train_sac_her_pybullet(
         return SACHERPolicy(seed=seed, config=sac_her_config)
 
     metrics = train_and_evaluate_rl_baseline(
-        system, 
-        policy_factory, 
-        config, 
+        system,
+        policy_factory,
+        config,
         policy_name="SAC_HER",
-        baseline_type="sac_her", 
-        max_atom_size=max_atom_size
+        baseline_type="sac_her",
+        max_atom_size=max_atom_size,
     )
 
     print("\n=== Results ===")
@@ -130,7 +131,7 @@ def train_sac_her_pybullet(
 
     results_file = Path(save_dir) / f"{system_cls.__name__}_SAC_HER" / "results.txt"
     results_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(results_file, "w") as f:
+    with open(results_file, "w", encoding="utf-8") as f:
         f.write(f"Environment: {system_cls.__name__}\n")
         f.write(f"seed: {seed}\n")
         f.write(f"success_rate: {metrics.success_rate:.4f}\n")

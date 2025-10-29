@@ -8,9 +8,9 @@ from pathlib import Path
 from typing import Any, Callable, TypeVar, Union, cast
 
 import numpy as np
-import torch
 from gymnasium.wrappers import RecordVideo
 
+from tamp_improv.approaches.hierarchical_rl import HierarchicalRLApproach
 from tamp_improv.approaches.improvisational.base import ImprovisationalTAMPApproach
 from tamp_improv.approaches.improvisational.graph_training import (
     collect_goal_conditioned_training_data,
@@ -19,14 +19,13 @@ from tamp_improv.approaches.improvisational.graph_training import (
 from tamp_improv.approaches.improvisational.policies.base import Policy, TrainingData
 from tamp_improv.approaches.improvisational.policies.multi_rl import MultiRLPolicy
 from tamp_improv.approaches.pure_rl import PureRLApproach, SACHERApproach
-from tamp_improv.approaches.hierarchical_rl import HierarchicalRLApproach
 from tamp_improv.benchmarks.base import ImprovisationalTAMPSystem
 from tamp_improv.benchmarks.context_wrapper import ContextAwareWrapper
 from tamp_improv.benchmarks.goal_wrapper import GoalConditionedWrapper
 from tamp_improv.benchmarks.hierarchical_wrapper import HierarchicalRLWrapper
 from tamp_improv.benchmarks.sac_her_wrapper import SACHERWrapper
 from tamp_improv.benchmarks.wrappers import PureRLWrapper
-from tamp_improv.utils.gpu_utils import get_gpu_memory_info, set_torch_seed
+from tamp_improv.utils.gpu_utils import set_torch_seed
 
 ObsType = TypeVar("ObsType")
 ActType = TypeVar("ActType")
@@ -143,8 +142,10 @@ def get_or_collect_training_data(
 def run_evaluation_episode(
     system: ImprovisationalTAMPSystem[ObsType, ActType],
     approach: Union[
-        ImprovisationalTAMPApproach[ObsType, ActType], PureRLApproach[ObsType, ActType], SACHERApproach[ObsType, ActType],
-        HierarchicalRLApproach[ObsType, ActType]
+        ImprovisationalTAMPApproach[ObsType, ActType],
+        PureRLApproach[ObsType, ActType],
+        SACHERApproach[ObsType, ActType],
+        HierarchicalRLApproach[ObsType, ActType],
     ],
     policy_name: str,
     config: TrainingConfig,
@@ -226,13 +227,13 @@ def run_evaluation_episode_with_caching(
 
     obs, info = system.reset()
     step_result = approach.reset(obs, info)
-    
+
     if config.fast_eval and not (config.render and can_render):
         step_count = approach.best_eval_total_steps
         success = bool(approach.best_eval_path)
         return success, step_count, success
 
-    best_edges = approach._current_path
+    best_edges = approach.current_path
     if not best_edges:
         return 0.0, 0, False
     prefix_ids_for_edge: list[tuple[int, ...]] = []
@@ -265,7 +266,7 @@ def run_evaluation_episode_with_caching(
     for key in segments:
         if done:
             break
-        actions = approach._edge_action_cache.get(key, None)
+        actions = approach.edge_action_cache.get(key, None)
         if actions is not None:
             # Execute cached actions
             for a in actions:
@@ -277,9 +278,11 @@ def run_evaluation_episode_with_caching(
                     break
         else:
             # Execute using approach
-            for _ in range(approach._max_skill_steps):
+            for _ in range(approach.max_skill_steps):
                 step_result = approach.step(obs, total_reward, False, False, info)
-                obs, reward, terminated, truncated, info = system.env.step(step_result.action)
+                obs, reward, terminated, truncated, info = system.env.step(
+                    step_result.action
+                )
                 total_reward += float(reward)
                 step_count += 1
                 done = bool(step_result.terminate or terminated or truncated)
@@ -292,7 +295,9 @@ def run_evaluation_episode_with_caching(
     if not done:
         for _ in range(1, config.max_steps):
             step_result = approach.step(obs, total_reward, False, False, info)
-            obs, reward, terminated, truncated, info = system.env.step(step_result.action)
+            obs, reward, terminated, truncated, info = system.env.step(
+                step_result.action
+            )
             total_reward += float(reward)
             step_count += 1
             if step_result.terminate or terminated or truncated:
@@ -547,7 +552,7 @@ def train_and_evaluate_rl_baseline(
 ) -> Metrics:
     """Train and evaluate a baseline RL policy on a system."""
     if baseline_type not in ["pure_rl", "sac_her", "hierarchical"]:
-        raise ValueError(f"Unknown baseline_type: {baseline_type}. Must be 'pure_rl', 'sac_her', or 'hierarchical'")
+        raise ValueError("Unknown baseline_type.")
 
     baseline_name = {
         "pure_rl": "Pure RL",
@@ -564,6 +569,7 @@ def train_and_evaluate_rl_baseline(
     obs, info = system.reset()
     _, _, goal_atoms = system.perceiver.reset(obs, info)
 
+    wrapped_env: Union[PureRLWrapper, SACHERWrapper, HierarchicalRLWrapper]
     if baseline_type == "pure_rl":
         wrapped_env = PureRLWrapper(
             env=system.env,
@@ -605,12 +611,20 @@ def train_and_evaluate_rl_baseline(
 
     training_time = time.time() - start_time
 
+    approach: Union[
+        PureRLApproach[ObsType, ActType],
+        SACHERApproach[ObsType, ActType],
+        HierarchicalRLApproach[ObsType, ActType],
+    ]
     if baseline_type == "pure_rl":
         approach = PureRLApproach(system, policy, seed)
     elif baseline_type == "sac_her":
         system.wrapped_env = wrapped_env
         approach = SACHERApproach(system, policy, seed)
     else:
+        assert isinstance(
+            wrapped_env, HierarchicalRLWrapper
+        ), "Expected HierarchicalRLWrapper"
         approach = HierarchicalRLApproach(system, policy, seed, wrapped_env)
 
     print(f"\nEvaluating {baseline_name} policy on {system.name}...")

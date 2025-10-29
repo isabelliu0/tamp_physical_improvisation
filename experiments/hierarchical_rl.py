@@ -1,7 +1,8 @@
 """Training script for Hierarchical RL baseline."""
 
-import torch
 from pathlib import Path
+
+import torch
 
 from tamp_improv.approaches.improvisational.policies.rl import RLConfig, RLPolicy
 from tamp_improv.approaches.improvisational.training import (
@@ -56,9 +57,9 @@ def train_hierarchical_rl_obstacle2d(
         return RLPolicy(seed=seed, config=rl_config)
 
     metrics = train_and_evaluate_rl_baseline(
-        system, 
-        policy_factory, 
-        config, 
+        system,
+        policy_factory,
+        config,
         policy_name="HierarchicalRL",
         baseline_type="hierarchical",
         single_step_skills=single_step_skills,
@@ -71,10 +72,12 @@ def train_hierarchical_rl_obstacle2d(
     print(f"Average Episode Length: {metrics.avg_episode_length:.2f}")
     print(f"Average Reward: {metrics.avg_reward:.2f}")
 
-    results_file = Path(save_dir) / "Obstacle2DTAMPSystem_HierarchicalRL" / "results.txt"
+    results_file = (
+        Path(save_dir) / "Obstacle2DTAMPSystem_HierarchicalRL" / "results.txt"
+    )
     results_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(results_file, "w") as f:
-        f.write(f"Environment: Obstacle2D\n")
+    with open(results_file, "w", encoding="utf-8") as f:
+        f.write("Environment: Obstacle2D\n")
         f.write(f"seed: {seed}\n")
         f.write(f"single_step_skills: {single_step_skills}\n")
         f.write(f"success_rate: {metrics.success_rate:.4f}\n")
@@ -126,9 +129,9 @@ def train_hierarchical_rl_pybullet(
         return RLPolicy(seed=seed, config=rl_config)
 
     metrics = train_and_evaluate_rl_baseline(
-        system, 
-        policy_factory, 
-        config, 
+        system,
+        policy_factory,
+        config,
         policy_name="HierarchicalRL",
         baseline_type="hierarchical",
         single_step_skills=single_step_skills,
@@ -141,9 +144,11 @@ def train_hierarchical_rl_pybullet(
     print(f"Average Episode Length: {metrics.avg_episode_length:.2f}")
     print(f"Average Reward: {metrics.avg_reward:.2f}")
 
-    results_file = Path(save_dir) / f"{system_cls.__name__}_HierarchicalRL" / "results.txt"
+    results_file = (
+        Path(save_dir) / f"{system_cls.__name__}_HierarchicalRL" / "results.txt"
+    )
     results_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(results_file, "w") as f:
+    with open(results_file, "w", encoding="utf-8") as f:
         f.write(f"Environment: {system_cls.__name__}\n")
         f.write(f"seed: {seed}\n")
         f.write(f"single_step_skills: {single_step_skills}\n")
@@ -187,7 +192,6 @@ if __name__ == "__main__":
             render=args.render,
             save_dir=args.save_dir,
             single_step_skills=args.single_step_skills,
-            max_skill_steps=20,
         )
     elif args.env == "obstacle_tower":
         train_hierarchical_rl_pybullet(
@@ -197,7 +201,6 @@ if __name__ == "__main__":
             save_dir=args.save_dir,
             action_scale=0.015,
             single_step_skills=args.single_step_skills,
-            max_skill_steps=200,
         )
     elif args.env == "cluttered_drawer":
         train_hierarchical_rl_pybullet(
@@ -207,7 +210,6 @@ if __name__ == "__main__":
             save_dir=args.save_dir,
             action_scale=0.005,
             single_step_skills=args.single_step_skills,
-            max_skill_steps=200,
         )
     elif args.env == "cleanup_table":
         train_hierarchical_rl_pybullet(
@@ -217,5 +219,4 @@ if __name__ == "__main__":
             save_dir=args.save_dir,
             action_scale=0.005,
             single_step_skills=args.single_step_skills,
-            max_skill_steps=200,
         )

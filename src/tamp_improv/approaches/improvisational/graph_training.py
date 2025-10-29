@@ -508,6 +508,7 @@ def identify_promising_shortcuts_with_rollouts(
     print(f"\nFound {len(promising_candidates)} promising shortcut candidates")
     return promising_candidates
 
+
 def select_random_shortcuts(
     candidates: list[ShortcutCandidate],
     max_shortcuts: int,

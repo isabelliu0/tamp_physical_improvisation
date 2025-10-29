@@ -131,7 +131,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         super().__init__(system, seed)
         self.policy = policy
         self.planner_id = planner_id
-        self._max_skill_steps = max_skill_steps
+        self.max_skill_steps = max_skill_steps
 
         self.domain = system.get_domain()
 
@@ -140,14 +140,14 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self._goal: set[GroundAtom] = set()
 
         self.planning_graph: PlanningGraph | None = None
-        self._current_path: list[PlanningGraphEdge] = []
+        self.current_path: list[PlanningGraphEdge] = []
         self._current_edge: PlanningGraphEdge | None = None
         self._goal_atoms: set[GroundAtom] = set()
         self.policy_active = False
         self.observed_states: dict[int, list[ObsType]] = {}
         self.best_eval_path: list[PlanningGraphEdge] = []
         self.best_eval_total_steps: int = 0
-        self._edge_action_cache: dict[tuple[int, int, tuple[int, ...]], list[Any]] = {}
+        self.edge_action_cache: dict[tuple[int, int, tuple[int, ...]], list[Any]] = {}
 
         self.trained_signatures: list[ShortcutSignature] = []
 
@@ -167,7 +167,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         objects, atoms, goal = self.system.perceiver.reset(obs, info)
         self._goal = goal
         self.observed_states = {}
-        self._edge_action_cache.clear()
+        self.edge_action_cache.clear()
 
         self.planning_graph = self._create_planning_graph(objects, atoms)
 
@@ -178,15 +178,15 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         # Compute edge costs and find shortest path
         if not self.training_mode:
             self._try_add_shortcuts(self.planning_graph)
-            self._current_path = self._compute_eval_path(obs, info, goal)
+            self.current_path = self._compute_eval_path(obs, info, goal)
         else:
             self._compute_planning_graph_edge_costs(obs, info)
-            self._current_path = self.planning_graph.find_shortest_path(atoms, goal)
-        
-        self.best_eval_path = list(self._current_path)
-        self.best_eval_total_steps = int(sum(
-            (e.cost if e.cost != float("inf") else 0) for e in self.best_eval_path
-        ))
+            self.current_path = self.planning_graph.find_shortest_path(atoms, goal)
+
+        self.best_eval_path = list(self.current_path)
+        self.best_eval_total_steps = int(
+            sum((e.cost if e.cost != float("inf") else 0) for e in self.best_eval_path)
+        )
 
         self._current_operator = None
         self._current_skill = None
@@ -250,8 +250,8 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             return ApproachStepResult(action=self.policy.get_action(obs))
 
         assert self.planning_graph is not None
-        if not self._current_edge and self._current_path:
-            self._current_edge = self._current_path.pop(0)
+        if not self._current_edge and self.current_path:
+            self._current_edge = self.current_path.pop(0)
 
             if self._current_edge.is_shortcut:
                 self.policy_active = True
@@ -573,7 +573,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 )
 
                 if not success:
-                    print(f"    Edge {current_node.id} -> {edge.target.id} execution failed.")
+                    print(
+                        f"    Edge {current_node.id} -> {edge.target.id} execution failed."  # pylint: disable=line-too-long
+                    )
                     continue
 
                 new_total_cost = current_cost + edge_cost
@@ -631,7 +633,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             ]
             if shortcut_edges:
                 shortcut_str = ", ".join(shortcut_edges)
-                print(f"Optimal path found with cost {best_goal_cost}: {node_str} (with shortcut(s) {shortcut_str})")
+                print(
+                    f"Optimal path found with cost {best_goal_cost}: {node_str} (with shortcut(s) {shortcut_str})"  # pylint: disable=line-too-long
+                )
             else:
                 print(f"Optimal path found with cost {best_goal_cost}: {node_str}")
             return best_goal_path
@@ -702,7 +706,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         num_steps = 0
         curr_raw_obs = start_state
         curr_aug_obs = aug_obs
-        for _ in range(self._max_skill_steps):
+        for _ in range(self.max_skill_steps):
             act = skill.get_action(curr_aug_obs)
             if act is None:
                 print("No action returned by skill")
@@ -762,7 +766,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     self.observed_states[target_id].append(curr_raw_obs)
 
                 key = (edge.source.id, edge.target.id, current_path)
-                self._edge_action_cache[key] = actions.copy()
+                self.edge_action_cache[key] = actions.copy()
 
                 return num_steps, curr_raw_obs, info, True
 

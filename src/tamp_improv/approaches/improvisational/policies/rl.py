@@ -1,9 +1,8 @@
 """RL-based policy implementation."""
 
 from dataclasses import dataclass
-from typing import cast
 from pathlib import Path
-import shutil
+from typing import cast
 
 import gymnasium as gym
 import numpy as np
@@ -143,10 +142,14 @@ class TrainingProgressCallback(BaseCallback):
                 print("Training stopped early due to plateau in performance.")
         else:
             print("No episodes completed during training.")
-        
+
         if self.save_checkpoints and self.checkpoints:
-            best_episode, best_success_rate, best_path = max(self.checkpoints, key=lambda x: x[1])
-            print(f"\nBest checkpoint: Episode {best_episode} (success rate: {best_success_rate:.2%})")
+            best_episode, best_success_rate, best_path = max(
+                self.checkpoints, key=lambda x: x[1]
+            )
+            print(
+                f"\nBest checkpoint: Episode {best_episode} (success rate: {best_success_rate:.2%})"  # pylint: disable=line-too-long
+            )
             self.best_checkpoint_path = best_path
             for _, _, path in self.checkpoints:
                 if path != best_path:
@@ -300,7 +303,9 @@ class RLPolicy(Policy[ObsType, ActType]):
 
         self.model.learn(total_timesteps=total_timesteps, callback=callback)
 
-        for current_atoms, goal_atoms in zip(train_data.current_atoms, train_data.goal_atoms):
+        for current_atoms, goal_atoms in zip(
+            train_data.current_atoms, train_data.goal_atoms
+        ):
             sig = (frozenset(current_atoms), frozenset(goal_atoms))
             self.trained_shortcuts.add(sig)
         print(f"Policy trained on {len(self.trained_shortcuts)} unique shortcuts")
@@ -330,7 +335,9 @@ class RLPolicy(Policy[ObsType, ActType]):
             obs_numpy = self.device_ctx.numpy(obs_cpu)
 
         with torch.no_grad():
-            action, _ = self.model.predict(obs_numpy, deterministic=self.config.deterministic)
+            action, _ = self.model.predict(
+                obs_numpy, deterministic=self.config.deterministic
+            )
 
         # Convert back to original type
         if isinstance(obs, (int, float)):

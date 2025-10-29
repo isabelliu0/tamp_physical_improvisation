@@ -67,9 +67,10 @@ class HierarchicalRLWrapper(gym.Env):
 
         self.observation_space = self.env.observation_space
 
-        self.ground_skill_operators, self.skill_to_index = (
-            self.get_ground_operator_skills()
-        )
+        (
+            self.ground_skill_operators,
+            self.skill_to_index,
+        ) = self.get_ground_operator_skills()
         self.skill_names = [op.short_str for op in self.ground_skill_operators]
 
         self._setup_action_space()
@@ -172,9 +173,9 @@ class HierarchicalRLWrapper(gym.Env):
             skill_idx = int(np.argmax(skill_activations))
             obs: ObsType
             obs, reward, terminated, truncated, info = self._execute_skill(skill_idx)
-            info["action_type"] = (
-                f"skill_{self.ground_skill_operators[skill_idx].short_str}"
-            )
+            info[
+                "action_type"
+            ] = f"skill_{self.ground_skill_operators[skill_idx].short_str}"
             info["skill_activation"] = float(skill_activations[skill_idx])
             info["max_skill_activation"] = float(max_skill_activation)
         else:
@@ -230,7 +231,6 @@ class HierarchicalRLWrapper(gym.Env):
         ground_operator = self.ground_skill_operators[skill_idx]
 
         if self.current_skill is None or self.current_skill_operator != ground_operator:
-
             assert self.current_obs is not None
             current_atoms = self.perceiver.step(self.current_obs)
             applicable = ground_operator.preconditions.issubset(current_atoms)

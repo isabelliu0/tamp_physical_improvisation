@@ -1,10 +1,12 @@
 """Training script for Multi-RL method using Hydra."""
 
+from pathlib import Path
+from typing import Any, Type
+
 import hydra
 import torch
 from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig, OmegaConf
-from pathlib import Path
 
 from tamp_improv.approaches.improvisational.policies.multi_rl import MultiRLPolicy
 from tamp_improv.approaches.improvisational.policies.rl import RLConfig
@@ -12,6 +14,7 @@ from tamp_improv.approaches.improvisational.training import (
     TrainingConfig,
     train_and_evaluate,
 )
+from tamp_improv.benchmarks.base import ImprovisationalTAMPSystem
 from tamp_improv.benchmarks.obstacle2d_graph import GraphObstacle2DTAMPSystem
 from tamp_improv.benchmarks.pybullet_cleanup_table import CleanupTableTAMPSystem
 from tamp_improv.benchmarks.pybullet_cluttered_drawer import ClutteredDrawerTAMPSystem
@@ -19,7 +22,7 @@ from tamp_improv.benchmarks.pybullet_obstacle_tower_graph import (
     GraphObstacleTowerTAMPSystem,
 )
 
-SYSTEM_CLASSES = {
+SYSTEM_CLASSES: dict[str, Type[ImprovisationalTAMPSystem[Any, Any]]] = {
     "GraphObstacle2DTAMPSystem": GraphObstacle2DTAMPSystem,
     "GraphObstacleTowerTAMPSystem": GraphObstacleTowerTAMPSystem,
     "ClutteredDrawerTAMPSystem": ClutteredDrawerTAMPSystem,
@@ -44,7 +47,7 @@ def main(cfg: DictConfig) -> float:
     }
     if hasattr(cfg, "num_obstacle_blocks"):
         system_kwargs["num_obstacle_blocks"] = cfg.num_obstacle_blocks
-    system = system_cls.create_default(**system_kwargs)
+    system = system_cls.create_default(**system_kwargs)  # type: ignore[attr-defined]
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     rl_config = RLConfig(
@@ -99,7 +102,7 @@ def main(cfg: DictConfig) -> float:
 
     output_dir = Path(HydraConfig.get().runtime.output_dir)
     results_file = output_dir / "results.txt"
-    with open(results_file, "w") as f:
+    with open(results_file, "w", encoding="utf-8") as f:
         f.write(f"env_name: {cfg.env_name}\n")
         f.write(f"seed: {cfg.seed}\n")
         f.write(f"success_rate: {metrics.success_rate}\n")
@@ -110,4 +113,4 @@ def main(cfg: DictConfig) -> float:
 
 
 if __name__ == "__main__":
-    main()
+    main()  # pylint: disable=no-value-for-parameter
