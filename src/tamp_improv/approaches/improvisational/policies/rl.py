@@ -269,7 +269,6 @@ class RLPolicy(Policy[ObsType, ActType]):
         # Call base class train to initialize and configure env
         super().train(env, train_data)
 
-        # Initialize and train PPO
         self.model = PPO(
             "MlpPolicy",
             env,
@@ -289,7 +288,6 @@ class RLPolicy(Policy[ObsType, ActType]):
                 check_freq=train_data.config.get("training_record_interval", 100)
             )
 
-        # Calculate total timesteps to ensure we see each scenario multiple times
         episodes_per_scenario = train_data.config.get("episodes_per_scenario", 2)
         max_steps = train_data.config.get("max_training_steps_per_shortcut", 100)
         total_timesteps = len(train_data.states) * episodes_per_scenario * max_steps
@@ -300,19 +298,12 @@ class RLPolicy(Policy[ObsType, ActType]):
         print(f"Total scenarios: {len(train_data.states)}")
         print(f"Total training timesteps: {total_timesteps}")
 
-        # Train the model
         self.model.learn(total_timesteps=total_timesteps, callback=callback)
 
-        # Record which shortcuts this policy was trained on
         for current_atoms, goal_atoms in zip(train_data.current_atoms, train_data.goal_atoms):
             sig = (frozenset(current_atoms), frozenset(goal_atoms))
             self.trained_shortcuts.add(sig)
         print(f"Policy trained on {len(self.trained_shortcuts)} unique shortcuts")
-
-        if self.device_ctx.device.type == "cuda":
-            print(
-                f"  CUDA memory after training: {torch.cuda.memory_allocated(self.device_ctx.device) / 1e9:.2f} GB"  # pylint: disable=line-too-long
-            )
 
     def get_action(self, obs: ObsType) -> ActType:
         """Get action from policy."""
@@ -363,8 +354,6 @@ class FlattenGraphObsWrapper(gym.ObservationWrapper):
     def __init__(self, env: gym.Env) -> None:
         super().__init__(env)
         if hasattr(env.observation_space, "node_space"):
-            # Graph space - determine max possible size
-            # Sample a few observations to get the maximum size
             max_size = 0
             for _ in range(10):
                 sample_obs = env.observation_space.sample()

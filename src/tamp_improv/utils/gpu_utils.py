@@ -76,10 +76,10 @@ def get_gpu_memory_info() -> Union[str, list[dict[str, Any]]]:
     memory_info = []
     for i in range(torch.cuda.device_count()):
         device = torch.device(f"cuda:{i}")
-        allocated = torch.cuda.memory_allocated(device) / 1e9  # GB
-        reserved = torch.cuda.memory_reserved(device) / 1e9  # GB
+        allocated = torch.cuda.memory_allocated(device) / 1e9
+        reserved = torch.cuda.memory_reserved(device) / 1e9
         properties = torch.cuda.get_device_properties(i)
-        total = properties.total_memory / 1e9  # GB
+        total = properties.total_memory / 1e9
         name = properties.name
 
         memory_info.append(

@@ -238,7 +238,6 @@ class GoalConditionedRLPolicy(Policy[ObsType, ActType]):
             replay_buffer_kwargs["atom_to_index"] = goal_env.atom_to_index
             replay_buffer_kwargs["atom_vectors"] = goal_env.atom_vectors
 
-        # Initialize model based on algorithm
         # Set learning_starts to be greater than max episode length for HER
         max_steps = train_data.config.get("max_steps", 50)
         learning_starts = max_steps * 2
@@ -352,7 +351,6 @@ class GoalConditionedRLPolicy(Policy[ObsType, ActType]):
 
         dummy_env = DummyEnv(observation_space, action_space)  # type: ignore[no-untyped-call]  # pylint: disable=line-too-long
 
-        # Load the model with the dummy environment
         if self.config.algorithm == "SAC":
             self.model = SAC.load(f"{path}/model", env=dummy_env, device=self.device)
         elif self.config.algorithm == "TD3":
@@ -360,7 +358,6 @@ class GoalConditionedRLPolicy(Policy[ObsType, ActType]):
         else:
             raise ValueError(f"Unsupported algorithm: {self.config.algorithm}")
 
-        # Load node states and shortcuts
         with open(f"{path}/node_states.pkl", "rb") as f:
             self.node_states = pickle.load(f)
         with open(f"{path}/valid_shortcuts.pkl", "rb") as f:

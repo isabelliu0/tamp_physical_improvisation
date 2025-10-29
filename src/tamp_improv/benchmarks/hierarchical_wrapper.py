@@ -44,20 +44,7 @@ class HierarchicalRLWrapper(gym.Env):
         skill_failure_penalty: float = -1.0,
         single_step_skills: bool = True,
     ) -> None:
-        """Initialize hierarchical wrapper.
-
-        Args:
-            tamp_system: The TAMP system containing environment and skills
-            max_episode_steps: Maximum steps per episode
-            max_skill_steps: Maximum steps to execute a skill
-            step_penalty: Penalty per step
-            achievement_bonus: Bonus for achieving goal
-            action_scale: Scale factor for low-level actions
-            skill_failure_penalty: Penalty for skill execution failure
-            single_step_skills: If True (default), skills execute only one step per call
-            (maybe more robust for video recording and RL, as the states are more
-            continuous).
-        """
+        """Initialize hierarchical wrapper."""
         self.tamp_system = tamp_system
         self.env = tamp_system.env
         self.perceiver = tamp_system.perceiver
@@ -69,40 +56,29 @@ class HierarchicalRLWrapper(gym.Env):
         self.skill_failure_penalty = skill_failure_penalty
         self.single_step_skills = single_step_skills
 
-        # Environment state
         self.steps = 0
         self.current_obs: Union[ObsType, None] = None
         self.goal_atoms: set[GroundAtom] = set()
         self.current_atoms: set[GroundAtom] = set()
 
-        # Skill execution state for single-step mode
         self.current_skill: Union[Skill, None] = None
         self.current_skill_operator: Union[GroundOperator, None] = None
         self.skill_steps_taken: int = 0
 
-        # Set up observation space (same as base environment)
         self.observation_space = self.env.observation_space
 
-        # Skill mapping
         self.ground_skill_operators, self.skill_to_index = (
             self.get_ground_operator_skills()
         )
         self.skill_names = [op.short_str for op in self.ground_skill_operators]
-        # Set up augmented action space
-        self._setup_action_space()
 
-        print(
-            f"Initialized HierarchicalRLWrapper with {len(self.ground_skill_operators)} skills: {self.ground_skill_operators}"  # pylint: disable=line-too-long
-        )
+        self._setup_action_space()
 
     def get_ground_operator_skills(
         self,
     ) -> tuple[list[GroundOperator], dict[GroundOperator, int]]:
         """Get skills from the TAMP system."""
         operators = self.tamp_system.components.operators
-        # We need to construct the action space during initialization time, so
-        # assume the objects in an environment can be provided before
-        # env.reset() is called.
         objects = self.tamp_system.components.perceiver.get_objects()  # type: ignore[attr-defined]  # pylint: disable=line-too-long
         ground_skill_operators = []
         skill_op_to_index = {}
@@ -116,12 +92,10 @@ class HierarchicalRLWrapper(gym.Env):
                     skill_op_to_index[ground_skill_operator] = (
                         len(ground_skill_operators) - 1
                     )
-
         return ground_skill_operators, skill_op_to_index
 
     def _setup_action_space(self) -> None:
         """Set up the augmented action space."""
-        # Original action space (scaled)
         if isinstance(self.env.action_space, Box):
             low_level_dim = (
                 self.env.action_space.shape[0]
@@ -133,19 +107,12 @@ class HierarchicalRLWrapper(gym.Env):
         else:
             raise ValueError("Base environment must have Box action space")
 
-        # Skill activation dimensions (continuous [0, 1] for each skill)
         num_skills = len(self.ground_skill_operators)
         skill_low = np.zeros(num_skills, dtype=np.float32)
         skill_high = np.ones(num_skills, dtype=np.float32)
-
-        # Combined action space: [low_level_actions..., skill_0, skill_1, ...]
-        # Each skill_i ∈ [0, 1]; if max(skills) > 0.5, use highest skill,
-        # else use low-level
         action_low = np.concatenate([low_level_low, skill_low])
         action_high = np.concatenate([low_level_high, skill_high])
-
         self.action_space = Box(low=action_low, high=action_high, dtype=np.float32)
-
         print(
             f"Action space: {low_level_dim}D low-level + {num_skills}D skill activations [0,1]"  # pylint: disable=line-too-long
         )
@@ -159,16 +126,13 @@ class HierarchicalRLWrapper(gym.Env):
         """Reset environment."""
         self.steps = 0
 
-        # Reset TAMP system
         obs, info = self.tamp_system.reset(seed=seed)
         self.current_obs = obs
 
-        # Reset skill execution state
         self.current_skill = None
         self.current_skill_operator = None
         self.skill_steps_taken = 0
 
-        # Get goal atoms
         _, current_atoms, goal_atoms = self.perceiver.reset(obs, info)
         self.current_atoms = current_atoms
         self.goal_atoms = goal_atoms
@@ -195,7 +159,6 @@ class HierarchicalRLWrapper(gym.Env):
         if self.current_obs is None:
             raise RuntimeError("Environment not reset")
 
-        # Parse action
         base_action_dim = (
             self.env.action_space.shape[0]
             if self.env.action_space.shape is not None
@@ -204,11 +167,8 @@ class HierarchicalRLWrapper(gym.Env):
         low_level_action = action[:base_action_dim]
         skill_activations = action[base_action_dim:]
 
-        # Determine action type based on skill activations
         max_skill_activation = np.max(skill_activations)
-
         if max_skill_activation > 0.5:
-            # Use skill with highest activation
             skill_idx = int(np.argmax(skill_activations))
             obs: ObsType
             obs, reward, terminated, truncated, info = self._execute_skill(skill_idx)
@@ -218,7 +178,6 @@ class HierarchicalRLWrapper(gym.Env):
             info["skill_activation"] = float(skill_activations[skill_idx])
             info["max_skill_activation"] = float(max_skill_activation)
         else:
-            # Use low-level action
             obs, reward, terminated, truncated, info = self._execute_low_level_action(
                 low_level_action
             )
@@ -227,7 +186,6 @@ class HierarchicalRLWrapper(gym.Env):
 
         self.current_obs = obs  # type: ignore
 
-        # Check goal achievement
         self.current_atoms = self.perceiver.step(obs)  # type: ignore
         goal_achieved = self.goal_atoms.issubset(self.current_atoms)
 
@@ -235,7 +193,6 @@ class HierarchicalRLWrapper(gym.Env):
             reward += self.achievement_bonus
             terminated = True
 
-        # Check episode limits
         truncated = truncated or self.steps >= self.max_episode_steps
 
         info.update(
@@ -255,10 +212,7 @@ class HierarchicalRLWrapper(gym.Env):
         """Execute a low-level action."""
         obs, env_reward, terminated, truncated, info = self.env.step(action)
         self.steps += 1
-
-        # Apply step penalty
         reward = float(env_reward) + self.step_penalty
-
         return obs, reward, terminated, truncated, info
 
     def _execute_skill(
@@ -275,17 +229,14 @@ class HierarchicalRLWrapper(gym.Env):
         """Execute one step of a skill for better video recording."""
         ground_operator = self.ground_skill_operators[skill_idx]
 
-        # If starting a new skill or different skill
         if self.current_skill is None or self.current_skill_operator != ground_operator:
 
-            # Check preconditions for new skill
             assert self.current_obs is not None
             current_atoms = self.perceiver.step(self.current_obs)
             applicable = ground_operator.preconditions.issubset(current_atoms)
 
             if not applicable:
                 self.steps += 1
-                # Type assertion to fix mypy issue
                 current_obs_typed: ObsType = self.current_obs  # type: ignore
                 return (
                     current_obs_typed,
@@ -299,13 +250,11 @@ class HierarchicalRLWrapper(gym.Env):
                     },
                 )
 
-            # Initialize new skill
             self.current_skill = self._get_skill(ground_operator)
             self.current_skill.reset(ground_operator)
             self.current_skill_operator = ground_operator
             self.skill_steps_taken = 0
 
-        # Execute one step of the current skill
         try:
             skill_action = self.current_skill.get_action(self.current_obs)
             obs, env_reward, terminated, truncated, _ = self.env.step(skill_action)
@@ -315,13 +264,11 @@ class HierarchicalRLWrapper(gym.Env):
             self.skill_steps_taken += 1
             skill_reward = float(env_reward) + self.step_penalty
 
-            # Check if skill completed successfully
             new_atoms = self.perceiver.step(obs)
             add_ok = ground_operator.add_effects.issubset(new_atoms)
             delete_ok = ground_operator.delete_effects.isdisjoint(new_atoms)
 
             if add_ok and delete_ok:
-                # Skill completed successfully
                 skill_steps = self.skill_steps_taken
                 self._reset_skill_state()
                 return (
@@ -337,7 +284,6 @@ class HierarchicalRLWrapper(gym.Env):
                     },
                 )
 
-            # Check if skill timed out
             if self.skill_steps_taken >= self.max_skill_steps:
                 skill_steps = self.skill_steps_taken
                 self._reset_skill_state()
@@ -355,7 +301,6 @@ class HierarchicalRLWrapper(gym.Env):
                     },
                 )
 
-            # Skill still in progress
             return (
                 obs,
                 skill_reward,
@@ -371,11 +316,9 @@ class HierarchicalRLWrapper(gym.Env):
             )
 
         except Exception as e:
-            # Handle skill execution failure
             self.steps += 1
             skill_steps = self.skill_steps_taken
             self._reset_skill_state()
-            # Type assertion to fix mypy issue
             current_obs_typed: ObsType = self.current_obs  # type: ignore
             return (
                 current_obs_typed,
@@ -403,7 +346,6 @@ class HierarchicalRLWrapper(gym.Env):
 
         if not applicable:
             self.steps += 1
-            # Type assertion to fix mypy issue
             current_obs_typed: ObsType = self.current_obs  # type: ignore
             return (
                 current_obs_typed,
@@ -417,7 +359,6 @@ class HierarchicalRLWrapper(gym.Env):
                 },
             )
 
-        # Execute skill
         skill_steps = 0
         skill_reward = 0.0
         obs: ObsType = self.current_obs  # type: ignore
@@ -426,17 +367,14 @@ class HierarchicalRLWrapper(gym.Env):
 
         while skill_steps < self.max_skill_steps:
             try:
-                # Get skill action
                 skill_action = skill.get_action(obs)
 
-                # Execute action in environment
                 obs, env_reward, terminated, truncated, _ = self.env.step(skill_action)
                 self.steps += 1
                 self.current_obs = obs  # type: ignore
                 skill_reward += float(env_reward) + self.step_penalty
                 skill_steps += 1
 
-                # Check if skill completed successfully
                 new_atoms = self.perceiver.step(obs)  # type: ignore
 
                 add_ok = ground_operator.add_effects.issubset(new_atoms)
@@ -455,7 +393,6 @@ class HierarchicalRLWrapper(gym.Env):
                         },
                     )
 
-                # Check if environment terminated
                 if terminated or truncated:
                     break
 
@@ -475,7 +412,6 @@ class HierarchicalRLWrapper(gym.Env):
                     },
                 )
 
-        # Skill did not complete within time limit
         return (
             obs,
             skill_reward + self.skill_failure_penalty,

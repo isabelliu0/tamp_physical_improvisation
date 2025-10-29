@@ -1,4 +1,4 @@
-"""Tests for multi_rl policy atom substitution."""
+"""Tests atom substitution."""
 
 from relational_structs import Object, Predicate, Type
 

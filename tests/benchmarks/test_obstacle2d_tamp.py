@@ -13,17 +13,14 @@ from tamp_improv.benchmarks.obstacle2d_graph import BaseGraphObstacle2DTAMPSyste
 )
 def test_obstacle2d_tamp_system(system_cls):
     """Test Obstacle2D environment with TAMP planner."""
-    # Create TAMP system
     tamp_system = system_cls.create_default(render_mode="rgb_array", seed=42)
 
-    # Create environment with time limit
     env = TimeLimit(tamp_system.env, max_episode_steps=50)
 
     # # Uncomment to generate videos.
     # from gymnasium.wrappers import RecordVideo
     # env = RecordVideo(env, "videos/obstacle2d-planning-test")
 
-    # Create planner using environment's components
     planner = TaskThenMotionPlanner(
         types=tamp_system.types,
         predicates=tamp_system.predicates,

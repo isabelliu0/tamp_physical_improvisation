@@ -74,7 +74,7 @@ class SACHERPolicy(Policy[ObsType, ActType]):
             "goal_selection_strategy": self.config.goal_selection_strategy,
         }
         max_episode_steps = getattr(env, "max_steps", 500)
-        learning_starts = max_episode_steps * 2  # Wait for at least 2 complete episodes
+        learning_starts = max_episode_steps * 2
         self.model = SAC(
             (
                 "MultiInputPolicy"
@@ -102,8 +102,6 @@ class SACHERPolicy(Policy[ObsType, ActType]):
         assert self.model is not None
         os.makedirs(path, exist_ok=True)
         self.model.save(f"{path}/model")
-
-        # Save observation and action spaces
         with open(f"{path}/model_observation_space.pkl", "wb") as f:
             pickle.dump(self.model.observation_space, f)
         with open(f"{path}/model_action_space.pkl", "wb") as f:
@@ -111,7 +109,6 @@ class SACHERPolicy(Policy[ObsType, ActType]):
 
     def load(self, path: str) -> None:
         """Load policy."""
-        # Create dummy environment for loading
         obs_space_path = f"{path}/model_observation_space.pkl"
         action_space_path = f"{path}/model_action_space.pkl"
 

@@ -129,7 +129,6 @@ class SACHERWrapper(gym.Wrapper):
         _indices=None,
     ) -> np.ndarray:
         """Compute reward for HER."""
-        # For multi-hot atom vectors, check if all desired atoms are achieved
         if achieved_goal.ndim == 1:
             achieved_goal = achieved_goal.reshape(1, -1)
         if desired_goal.ndim == 1:

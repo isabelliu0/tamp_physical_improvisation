@@ -1,4 +1,4 @@
-"""Custom replay buffer for node-based goal sampling in TAMP."""
+"""Custom replay buffer for node-based goal sampling."""
 
 from typing import Any, Union
 
@@ -43,7 +43,6 @@ class NodeBasedHerBuffer(HerReplayBuffer):
         self.n_sampled_goal = n_sampled_goal
         self.n_envs = kwargs.get("n_envs", 1)
 
-        # Map to quickly find valid target nodes for each source node
         self.valid_targets: dict[int, list[int]] = {}
         for source_id, target_id in valid_shortcuts:
             if source_id not in self.valid_targets:
@@ -64,10 +63,7 @@ class NodeBasedHerBuffer(HerReplayBuffer):
             },
         )
 
-        # Create array map between episode indices and source node IDs
         self.episode_source_ids = np.full((buffer_size,), -1, dtype=np.int32)
-
-        print(f"Initialized NodeBasedHerBuffer with {len(node_states)} node states")
 
     def add(
         self,
@@ -104,7 +100,6 @@ class NodeBasedHerBuffer(HerReplayBuffer):
         batch_ep_start = self.ep_start[batch_indices, env_indices]
         episode_indices = batch_ep_start // self.n_envs
 
-        # Initialize array to store sampled goals
         goals = np.zeros(
             (len(batch_indices),) + self.next_observations["achieved_goal"].shape[2:],
             dtype=self.next_observations["achieved_goal"].dtype,
@@ -132,11 +127,9 @@ class NodeBasedHerBuffer(HerReplayBuffer):
             if isinstance(goal_states, list) and len(goal_states) > 0:
                 random_state = np.random.choice(len(goal_states))
                 selected_state = goal_states[random_state]
-                # Ensure it's a numpy array and flatten if needed
                 if hasattr(selected_state, "nodes"):
                     return selected_state.nodes.flatten().astype(np.float32)
                 return np.array(selected_state, dtype=np.float32)
-            # Single state, not a list
             if hasattr(goal_states, "nodes"):
                 return goal_states.nodes.flatten().astype(np.float32)
             return np.array(goal_states, dtype=np.float32)

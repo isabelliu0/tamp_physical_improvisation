@@ -302,7 +302,6 @@ class Obstacle2DPerceiver(Perceiver[NDArray[np.float32]]):
     def _get_atoms(self, obs: NDArray[np.float32]) -> set[GroundAtom]:
         atoms = set()
 
-        # Get positions from observation
         robot_x, robot_y = obs[0:2]
         block_1_x, block_1_y = obs[4:6]
         block_2_x, block_2_y = obs[6:8]
@@ -310,11 +309,9 @@ class Obstacle2DPerceiver(Perceiver[NDArray[np.float32]]):
         gripper_status = obs[10]
         target_x, target_y, target_width, target_height = obs[11:15]
 
-        # Add target identification predicates
         atoms.add(self.predicates["IsTarget"]([self._target_area]))
         atoms.add(self.predicates["NotIsTarget"]([self._table]))
 
-        # Check gripper status
         block1_held = False
         block2_held = False
         if gripper_status > 0.5:
@@ -333,7 +330,6 @@ class Obstacle2DPerceiver(Perceiver[NDArray[np.float32]]):
         else:
             atoms.add(self.predicates["GripperEmpty"]([self._robot]))
 
-        # Check block 1 target area status
         if is_block_in_target_area(
             block_1_x,
             block_1_y,
@@ -356,7 +352,6 @@ class Obstacle2DPerceiver(Perceiver[NDArray[np.float32]]):
         elif not block1_held:
             atoms.add(self.predicates["On"]([self._block_1, self._table]))
 
-        # Check block 2 target area status
         if is_block_in_target_area(
             block_2_x,
             block_2_y,

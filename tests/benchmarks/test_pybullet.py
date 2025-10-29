@@ -9,14 +9,12 @@ from tamp_improv.benchmarks.pybullet_obstacle_tower_graph import (
 
 def test_pybullet():
     """Test base TAMP functionality of pybullet environment."""
-    # Create system
     system = GraphObstacleTowerTAMPSystem.create_default(
         seed=124, render_mode="rgb_array", num_obstacle_blocks=3
     )
     # from gymnasium.wrappers import RecordVideo
     # system.env = RecordVideo(system.env, "videos/obstacle-tower-ttmp-test")
 
-    # Create planner
     planner = TaskThenMotionPlanner(
         system.types,
         system.predicates,
@@ -26,7 +24,6 @@ def test_pybullet():
         planner_id="pyperplan",
     )
 
-    # Run episode
     obs, info = system.env.reset(seed=124)
     planner.reset(obs, info)
 

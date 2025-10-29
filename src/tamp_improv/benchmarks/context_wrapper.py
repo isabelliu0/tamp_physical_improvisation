@@ -30,26 +30,22 @@ class ContextAwareWrapper(gym.Wrapper):
         self.step_penalty = step_penalty
         self.steps = 0
 
-        # Training data
         self.training_states: list[ObsType] = []
         self.current_atoms_list: list[set[GroundAtom]] = []
         self.goal_atoms_list: list[set[GroundAtom]] = []
         self.current_episode_idx = 0
 
-        # Context tracking
         self.current_goal_atoms: set[GroundAtom] = set()
         self.atom_to_index: dict[str, int] = {}
         self._next_index = 0
 
         self.num_context_features = max_atom_size
-        # Calculate observation space (base + context)
         if hasattr(env.observation_space, "node_space"):
             sample_obs = env.observation_space.sample()
             base_size = sample_obs.nodes.flatten().shape[0]
         else:
             assert env.observation_space.shape is not None
             base_size = env.observation_space.shape[0]
-
         total_size = base_size + max_atom_size
         self.observation_space = gym.spaces.Box(
             low=-np.inf, high=np.inf, shape=(total_size,), dtype=np.float32
@@ -62,19 +58,16 @@ class ContextAwareWrapper(gym.Wrapper):
         self.current_atoms_list = train_data.current_atoms
         self.goal_atoms_list = train_data.goal_atoms
 
-        # Build atom-to-index mapping
         if "atom_to_index" in train_data.config and train_data.config["atom_to_index"]:
             self.atom_to_index = train_data.config["atom_to_index"]
             self._next_index = (
                 max(self.atom_to_index.values()) + 1 if self.atom_to_index else 0
             )
         else:
-            # Create mapping from training data
             unique_atoms = set()
             for atoms_set in self.current_atoms_list + self.goal_atoms_list:
                 for atom in atoms_set:
                     unique_atoms.add(str(atom))
-
             for atom_str in sorted(unique_atoms):
                 self._get_atom_index(atom_str)
 

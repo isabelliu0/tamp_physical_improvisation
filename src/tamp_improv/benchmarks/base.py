@@ -54,12 +54,7 @@ class BaseTAMPSystem(Generic[ObsType, ActType], ABC):
         seed: int | None = None,
         render_mode: str | None = None,
     ) -> None:
-        """Initialize TAMP system.
-
-        Args:
-            planning_components: The agent's planning model/components
-            seed: Random seed for environment
-        """
+        """Initialize TAMP system."""
         self.name = name
         self.components = planning_components
         self.env = self._create_env()

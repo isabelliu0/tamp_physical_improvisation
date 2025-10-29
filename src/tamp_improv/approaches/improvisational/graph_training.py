@@ -60,7 +60,7 @@ def collect_states_for_all_nodes(
             print(f"No path found to node {target_node.id}, skipping")
             continue
 
-        for attempt in range(max_attempts):
+        for _ in range(max_attempts):
             obs, info = system.reset()
             _ = system.perceiver.reset(obs, info)
 
@@ -92,14 +92,11 @@ def collect_states_for_all_nodes(
                     action = skill.get_action(obs)
                     obs, _, term, trunc, info = system.env.step(action)
                     atoms = system.perceiver.step(obs)
-
                     if set(edge.target.atoms) == atoms:
                         break
-
                     if term or trunc:
                         success = False
                         break
-
                     if step == max_steps - 1:
                         success = False
 
@@ -134,7 +131,6 @@ def collect_node_states_for_shortcuts(
             )
             if not target_node:
                 continue
-
             has_direct_edge = False
             for edge in planning_graph.node_to_outgoing_edges.get(source_node, []):
                 if edge.target == target_node and not edge.is_shortcut:
@@ -142,7 +138,6 @@ def collect_node_states_for_shortcuts(
                     break
             if has_direct_edge:
                 continue
-
             # Only include shortcuts where states are available
             if source_id in node_states and target_id in node_states:
                 valid_shortcuts.append((source_id, target_id))
@@ -161,23 +156,17 @@ def find_path_to_node(
     queue: deque[tuple[PlanningGraphNode, list[PlanningGraphEdge]]]
     queue = deque([(start_node, [])])
     visited = {start_node}
-
     while queue:
         current, path = queue.popleft()
-
         if current == target_node:
             return path
-
         for edge in planning_graph.node_to_outgoing_edges.get(current, []):
             if edge.is_shortcut:
                 continue
-
             next_node = edge.target
-
             if next_node not in visited:
                 visited.add(next_node)
                 queue.append((next_node, path + [edge]))
-
     return []
 
 
@@ -185,7 +174,7 @@ def collect_graph_based_training_data(
     system: ImprovisationalTAMPSystem,
     approach: ImprovisationalTAMPApproach,
     config: dict[str, Any],
-    max_shortcuts_per_graph: int = 100,
+    max_shortcuts_per_graph: int = 150,
     use_random_rollouts: bool = False,
     num_rollouts_per_node: int = 50,
     max_steps_per_rollout: int = 50,
@@ -194,14 +183,11 @@ def collect_graph_based_training_data(
     rng: np.random.Generator | None = None,
 ) -> tuple[TrainingData, dict[int, list[ObsType]]]:
     """Collect training data by exploring the planning graph."""
-    print("\n=== Collecting Training Data by Exploring Planning Graphs ===")
     approach.training_mode = True
-
     training_states = []
     current_atoms_list = []
     goal_atoms_list = []
     shortcut_info = []
-
     collect_episodes = config.get("collect_episodes", 10)
     seed = config.get("seed", 42)
     rng = np.random.default_rng(seed)
@@ -211,7 +197,6 @@ def collect_graph_based_training_data(
         episode_seed = sample_seed_from_rng(rng)
         obs, info = system.reset()
         _ = approach.reset(obs, info)
-
         assert (
             hasattr(approach, "planning_graph") and approach.planning_graph is not None
         )
@@ -234,7 +219,6 @@ def collect_graph_based_training_data(
                 k: [v] for k, v in observed_states.items()
             }  # multi-state format
 
-        print(f"\nIdentifying shortcuts using {len(observed_states)} observed states")
         if use_random_rollouts:
             shortcut_candidates = identify_promising_shortcuts_with_rollouts(
                 system,
@@ -266,7 +250,6 @@ def collect_graph_based_training_data(
                     training_states.append(source_state)
                     current_atoms_list.append(candidate.source_atoms)
                     goal_atoms_list.append(candidate.target_atoms)
-
                     # Store shortcut info (duplicate if needed)
                     shortcut_info.append(
                         {
@@ -276,16 +259,12 @@ def collect_graph_based_training_data(
                             "target_atoms_count": len(candidate.target_atoms),
                         }
                     )
-
                 signature = ShortcutSignature.from_context(
                     candidate.source_atoms,
                     candidate.target_atoms,
                 )
                 if signature not in approach.trained_signatures:
                     approach.trained_signatures.append(signature)
-                    print(
-                        f"Recorded shortcut signature with predicates: {signature.source_predicates} -> {signature.target_predicates}"  # pylint: disable=line-too-long
-                    )
             else:
                 print(f"Warning: No states found for source node {source_id}")
 
@@ -324,7 +303,6 @@ def collect_goal_conditioned_training_data(
     node_states: dict[int, Any] = {}
     valid_shortcuts: list[tuple[int, int]] = []
     node_atoms: dict[int, set[GroundAtom]] = {}
-
     train_data, node_states = collect_graph_based_training_data(
         system,
         approach,
@@ -346,8 +324,6 @@ def collect_goal_conditioned_training_data(
     for node in planning_graph.nodes:
         if node.id in node_states:
             node_atoms[node.id] = set(node.atoms)
-
-    # Create goal-conditioned training data
     goal_train_data = GoalConditionedTrainingData(
         states=train_data.states,
         current_atoms=train_data.current_atoms,
@@ -373,7 +349,6 @@ def identify_shortcut_candidates(
     shortcut_candidates = []
 
     for source_node in nodes:
-        # Skip nodes we don't have an observed state for
         if source_node.id not in observed_states:
             continue
 
@@ -453,21 +428,7 @@ def identify_promising_shortcuts_with_rollouts(
         print(
             f"\nPerforming {rollouts_per_state} rollouts for each of {len(source_states)} state(s) from node {source_node_id}"  # pylint: disable=line-too-long
         )
-
-        # # DEBUG:
-        # if source_node_id != 1:
-        #     continue
-
-        # Calculate rollouts per state to maintain roughly the same total
-        rollouts_per_state = max(1, num_rollouts_per_node // len(source_states))
-        print(
-            f"\nPerforming {rollouts_per_state} rollouts for each of {len(source_states)} state(s) from node {source_node_id}"  # pylint: disable=line-too-long
-        )
-
-        # Track other nodes reached from this source node
-        reached_nodes: defaultdict[int, int] = defaultdict(
-            int
-        )  # target_node_id -> count
+        reached_nodes: defaultdict[int, int] = defaultdict(int)
 
         for _, source_state in enumerate(source_states):
             for rollout_idx in range(rollouts_per_state):
@@ -486,10 +447,6 @@ def identify_promising_shortcuts_with_rollouts(
                     for target_node in planning_graph.nodes:
                         if target_node.id <= source_node_id:
                             continue
-
-                        # # DEBUG:
-                        # if target_node.id != 79:
-                        #     continue
 
                         has_direct_edge = False
                         for edge in planning_graph.node_to_outgoing_edges.get(

@@ -114,17 +114,10 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
         print("\n=== Training Multi-Policy RL ===")
         print(f"Total training examples: {len(train_data.states)}")
 
-        # Group training data by shortcut signature
         grouped_data = self._group_training_data(train_data)
 
-        # Check if we're dealing with graph observations
         is_graph_based = hasattr(train_data.states[0], "nodes")
-        if is_graph_based:
-            print(
-                "Detected graph-based observations - will extract fixed-size vectors for each policy"  # pylint:disable=line-too-long
-            )
 
-        # Train a policy for each group
         policies_to_train = {}
         for policy_key, group_data in grouped_data.items():
             print(f"Training examples: {len(group_data.states)}")
@@ -132,7 +125,6 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
             if policy_key not in self.policies:
                 self.policies[policy_key] = RLPolicy(self._seed, self.config)
 
-            # For graph observations, process the training data to extract fixed vectors
             if is_graph_based:
                 pattern = self._policy_patterns[policy_key]
                 relevant_objects = set()
@@ -192,18 +184,12 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
 
     def _get_policy_key(self, context: PolicyContext) -> str:
         """Create a unique key for a policy based on the context."""
-        # Get ground atoms as strings to preserve object information
         source_atoms_str = sorted([str(atom) for atom in context.current_atoms])
         target_atoms_str = sorted([str(atom) for atom in context.goal_atoms])
-
-        # Create hash of the source and target atoms
         source_hash = hashlib.md5("|".join(source_atoms_str).encode()).hexdigest()[:8]
         target_hash = hashlib.md5("|".join(target_atoms_str).encode()).hexdigest()[:8]
-
-        # Include source and target node IDs if available
         source_id = context.info.get("source_node_id", "")
         target_id = context.info.get("target_node_id", "")
-
         if source_id != "" and target_id != "":
             return f"n{source_id}-to-n{target_id}_{source_hash}_{target_hash}"
         return f"{source_hash}_{target_hash}"
@@ -215,7 +201,6 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
         added_atoms = target_atoms - source_atoms
         deleted_atoms = source_atoms - target_atoms
 
-        # Transform atoms to explicitly mark additions and deletions
         transformed_test_atoms = set()
         for atom in added_atoms:
             transformed_test_atoms.add(self._transform_atom(atom, "ADD"))
@@ -287,7 +272,6 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
             if i < len(shortcut_info):
                 info = shortcut_info[i]
 
-            # Create a context and get policy key
             context: PolicyContext[ObsType, ActType] = PolicyContext(
                 current_atoms=current_atoms, goal_atoms=goal_atoms, info=info
             )
@@ -309,7 +293,6 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
             grouped[policy_key]["current_atoms"].append(current_atoms)
             grouped[policy_key]["goal_atoms"].append(goal_atoms)
 
-        # Convert grouped data to TrainingData objects
         result = {}
         for key, group in grouped.items():
             result[key] = TrainingData(
@@ -365,22 +348,18 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
         path_obj.mkdir(parents=True, exist_ok=True)
         already_saved = self._saved_models
 
-        # Save each policy in its own subdirectory
         for key, policy in self.policies.items():
             if key in already_saved:
                 continue
-
             safe_key = "".join(c if c.isalnum() or c in "-_" else "_" for c in key)
             policy_path = os.path.join(path, f"policy_{safe_key}")
             policy.save(policy_path)
 
-        # Save pattern information
         for policy_key, pattern in self._policy_patterns.items():
             pattern_file = os.path.join(path, f"pattern_{policy_key}.pkl")
             with open(pattern_file, "wb") as f:
                 pickle.dump(pattern, f)
 
-        # Save a manifest of all policies
         manifest = {
             "policies": list(self.policies.keys()),
             "policy_count": len(self.policies),
@@ -393,7 +372,6 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
         with open(os.path.join(path, "manifest.json"), "r", encoding="utf-8") as f:
             manifest = json.load(f)
 
-        # Load pattern information if available
         self._policy_patterns = {}
         for policy_key in manifest["policies"]:
             pattern_file = os.path.join(path, f"pattern_{policy_key}.pkl")
@@ -401,15 +379,12 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
                 with open(pattern_file, "rb") as f:
                     self._policy_patterns[policy_key] = pickle.load(f)
 
-        # Load individual policies
         self.policies = {}
         for key in manifest["policies"]:
             safe_key = "".join(c if c.isalnum() or c in "-_" else "_" for c in key)
             policy_path = os.path.join(path, f"policy_{safe_key}")
-
             policy: RLPolicy = RLPolicy(self._seed, self.config)
             policy.load(policy_path)
-
             self.policies[key] = policy
 
         print(f"Loaded {len(self.policies)} specialized policies")
@@ -449,7 +424,7 @@ def find_atom_substitution(
     for atom in test_atoms:
         test_atoms_by_pred[atom.predicate.name].append(atom)
 
-    # Quick check - if there are enough atoms of each predicate type in test_atoms
+    # Quick check: if there are enough atoms of each predicate type in test_atoms
     train_pred_counts = Counter(atom.predicate.name for atom in train_atoms)
     for pred_name, count in train_pred_counts.items():
         if len(test_atoms_by_pred[pred_name]) < count:
@@ -466,7 +441,7 @@ def find_atom_substitution(
             if obj not in test_objs_by_type[obj.type]:
                 test_objs_by_type[obj.type].append(obj)
 
-    # Quick check - if there are enough test objects for each type
+    # Quick check: if there are enough test objects for each type
     for obj_type, objs in train_objs_by_type.items():
         if len(test_objs_by_type[obj_type]) < len(objs):
             return False, {}

@@ -1,4 +1,4 @@
-"""Base policy interface for improvisational approaches."""
+"""Base policy interface."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ ActType = TypeVar("ActType")
 class TrainingData:
     """Container for policy training data."""
 
-    states: list[Any]  # List of states where intervention needed
+    states: list[Any]
     current_atoms: list[set[GroundAtom]]
     goal_atoms: list[set[GroundAtom]]
     config: dict[str, Any]
@@ -31,13 +31,10 @@ class TrainingData:
     def save(self, path: Path) -> None:
         """Save training data to disk."""
         path.mkdir(parents=True, exist_ok=True)
-
-        # Save states
         states_path = path / "states.pkl"
         with open(states_path, "wb") as f:
             pickle.dump(self.states, f)
 
-        # Save current atoms and goal atoms as pickle
         data_paths = {
             "current_atoms": self.current_atoms,
             "goal_atoms": self.goal_atoms,
@@ -47,11 +44,9 @@ class TrainingData:
             with open(file_path, "wb") as f:
                 pickle.dump(obj, f)
 
-        # Save config as JSON
         serializable_config = dict(self.config)
 
         if "atom_to_index" in serializable_config:
-            # Convert keys to strings if they aren't already
             atom_to_index = {
                 str(k): v for k, v in serializable_config["atom_to_index"].items()
             }
@@ -64,12 +59,10 @@ class TrainingData:
     @classmethod
     def load(cls, path: Path) -> TrainingData:
         """Load training data from disk."""
-        # Load states
         states_path = path / "states.pkl"
         with open(states_path, "rb") as f:
             states = pickle.load(f)
 
-        # Load current atoms and goal atoms
         data = {}
         data_names = [
             "current_atoms",
@@ -84,7 +77,6 @@ class TrainingData:
                 print(f"Warning: {file_path} not found, using empty list.")
                 data[name] = []
 
-        # Load config
         config_path = path / "config.json"
         with open(config_path, "r", encoding="utf-8") as f:
             config = json.load(f)

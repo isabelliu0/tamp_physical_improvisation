@@ -54,12 +54,10 @@ class GoalConditionedWrapper(gym.Wrapper):
             self.atom_to_index: dict[str, int] = {}
             self._next_index = 0
 
-            # Create multi-hot vectors for all node atoms
             self.atom_vectors: dict[int, np.ndarray] = {}
             for node_id, atoms in self.node_atoms.items():
                 self.atom_vectors[node_id] = self.create_atom_vector(atoms)
 
-            # Observation space with atom vectors
             base_obs_space = env.observation_space
             if hasattr(base_obs_space, "node_space"):
                 sample_obs = base_obs_space.sample()
@@ -80,10 +78,8 @@ class GoalConditionedWrapper(gym.Wrapper):
             )
 
         else:
-            # Original observation space with raw state goals
             base_obs_space = env.observation_space
             if hasattr(env.observation_space, "node_space"):
-                # Use the first available state to determine size
                 assert len(node_states) > 0, "Node states must not be empty"
                 first_node_id = next(iter(node_states.keys()))
                 first_state = (
@@ -106,7 +102,6 @@ class GoalConditionedWrapper(gym.Wrapper):
                 }
             )
 
-        # Current episode information
         self.current_node_id: int | None = None
         self.goal_node_id: int | None = None
         self.goal_state: ObsType | None = None
@@ -123,9 +118,6 @@ class GoalConditionedWrapper(gym.Wrapper):
         self.node_states = train_data.node_states
         self.valid_shortcuts = train_data.valid_shortcuts
         self.node_atoms = train_data.node_atoms or {}
-        print(
-            f"Updated {len(self.node_states)} node states, {len(self.valid_shortcuts)} valid shortcuts, and {len(self.node_atoms)}  node atoms from training data"  # pylint: disable=line-too-long
-        )
         self.max_episode_steps = train_data.config.get(
             "max_steps", self.max_episode_steps
         )
@@ -134,7 +126,6 @@ class GoalConditionedWrapper(gym.Wrapper):
         """Flatten graph observation for stable-baselines3."""
         if hasattr(obs, "nodes"):
             flattened = obs.nodes.flatten()
-            # Get expected size from observation space
             assert isinstance(self.observation_space, spaces.Dict)
             assert self.observation_space["observation"].shape is not None
             expected_size = self.observation_space["observation"].shape[0]
@@ -162,7 +153,6 @@ class GoalConditionedWrapper(gym.Wrapper):
         random_idx = np.random.randint(0, len(available_states))
         current_state = available_states[random_idx]
 
-        # Reset with current state
         if hasattr(self.env, "reset_from_state"):
             original_obs, info = self.env.reset_from_state(current_state, seed=seed)
         else:

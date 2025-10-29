@@ -5,13 +5,11 @@ from __future__ import annotations
 import copy
 import heapq
 import itertools
-import os
 from collections import deque
 from dataclasses import dataclass
 from typing import Any
 
 import gymnasium as gym
-import imageio.v2 as iio
 import numpy as np
 from relational_structs import (
     GroundAtom,
@@ -38,6 +36,7 @@ from tamp_improv.approaches.improvisational.graph import (
     PlanningGraphNode,
 )
 from tamp_improv.approaches.improvisational.policies.base import Policy, PolicyContext
+from tamp_improv.approaches.improvisational.policies.multi_rl import MultiRLPolicy
 from tamp_improv.benchmarks.context_wrapper import ContextAwareWrapper
 from tamp_improv.benchmarks.goal_wrapper import GoalConditionedWrapper
 
@@ -58,38 +57,30 @@ class ShortcutSignature:
         """Create signature from context."""
         source_preds = {atom.predicate.name for atom in source_atoms}
         target_preds = {atom.predicate.name for atom in target_atoms}
-
         source_types = set()
         for atom in source_atoms:
             for obj in atom.objects:
                 source_types.add(obj.type.name)
-
         target_types = set()
         for atom in target_atoms:
             for obj in atom.objects:
                 target_types.add(obj.type.name)
-
         return cls(source_preds, target_preds, source_types, target_types)
 
     def similarity(self, other: ShortcutSignature) -> float:
         """Calculate similarity score between signatures."""
-        # Predicate similarity (Jaccard)
         source_pred_sim = len(self.source_predicates & other.source_predicates) / max(
             len(self.source_predicates | other.source_predicates), 1
         )
         target_pred_sim = len(self.target_predicates & other.target_predicates) / max(
             len(self.target_predicates | other.target_predicates), 1
         )
-
-        # Object type similarity (Jaccard)
         source_type_sim = len(self.source_types & other.source_types) / max(
             len(self.source_types | other.source_types), 1
         )
         target_type_sim = len(self.target_types & other.target_types) / max(
             len(self.target_types | other.target_types), 1
         )
-
-        # Overall similarity - weighted average
         return (
             0.3 * source_pred_sim
             + 0.3 * target_pred_sim
@@ -110,7 +101,6 @@ class ShortcutSignature:
 
     def __hash__(self) -> int:
         """Hash function for ShortcutSignature."""
-        # Convert sets to frozensets for hashing
         return hash(
             (
                 frozenset(self.source_predicates),
@@ -148,7 +138,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self._current_operator: GroundOperator | None = None
         self._current_skill: Skill | None = None
         self._goal: set[GroundAtom] = set()
-        self._custom_goal: set[GroundAtom] = set()
 
         self.planning_graph: PlanningGraph | None = None
         self._current_path: list[PlanningGraphEdge] = []
@@ -160,10 +149,14 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self.best_eval_total_steps: int = 0
         self._edge_action_cache: dict[tuple[int, int, tuple[int, ...]], list[Any]] = {}
 
-        # Shortcut signatures for similarity matching
         self.trained_signatures: list[ShortcutSignature] = []
 
         self.rng = np.random.default_rng(seed)
+
+        # Only initialize MultiRLPolicy here (needs base_env set up early)
+        # Other policies will be initialized during training after wrappers are applied
+        if isinstance(policy, MultiRLPolicy):
+            policy.initialize(system.wrapped_env)
 
     def reset(
         self,
@@ -178,7 +171,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
 
         self.planning_graph = self._create_planning_graph(objects, atoms)
 
-        # Store initial state in observed states
         initial_node = self.planning_graph.node_map[frozenset(atoms)]
         self.observed_states[initial_node.id] = []
         self.observed_states[initial_node.id].append(obs)
@@ -221,13 +213,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         target_vec = None
         current_vec = None
 
-        # Check if the custom goal (if any) has been achieved
-        if self._custom_goal and self._custom_goal.issubset(atoms):
-            print("Custom goal achieved!")
-            # Return a no-op action to indicate success
-            zero_action = np.zeros_like(self.system.wrapped_env.action_space.sample())
-            return ApproachStepResult(action=zero_action, terminate=True)
-
         # Check if policy achieved its goal
         if self.policy_active and self.planning_graph:
             current_node = self._current_edge.source if self._current_edge else None
@@ -264,7 +249,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 return ApproachStepResult(action=self.policy.get_action(aug_obs))  # type: ignore[arg-type] # pylint: disable=line-too-long
             return ApproachStepResult(action=self.policy.get_action(obs))
 
-        # Get next edge if needed
         assert self.planning_graph is not None
         if not self._current_edge and self._current_path:
             self._current_edge = self._current_path.pop(0)
@@ -272,11 +256,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             if self._current_edge.is_shortcut:
                 self.policy_active = True
 
-                # Get goal nodes for the target node
                 target_node = self._current_edge.target
                 self._goal_atoms = set(target_node.atoms)
 
-                # Configure policy and context wrapper
                 self.policy.configure_context(
                     PolicyContext(
                         goal_atoms=self._goal_atoms,
@@ -435,14 +417,12 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self, lifted_op: LiftedOperator, objects: set[Object]
     ) -> list[tuple[Object, ...]]:
         """Find all valid groundings for a lifted operator."""
-        # Group objects by type
         objects_by_type: dict[Any, list[Object]] = {}
         for obj in objects:
             if obj.type not in objects_by_type:
                 objects_by_type[obj.type] = []
             objects_by_type[obj.type].append(obj)
 
-        # For each parameter, find objects of the right type
         param_objects = []
         for param in lifted_op.parameters:
             if param.type in objects_by_type:
@@ -450,7 +430,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             else:
                 return []
 
-        # Generate all possible groundings
         groundings = list(itertools.product(*param_objects))
 
         return groundings
@@ -512,14 +491,9 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         obs: ObsType,
         info: dict[str, Any],
         goal: set[GroundAtom],
-        debug: bool = False,
     ) -> list[PlanningGraphEdge]:
         """Efficiently compute shortest path during evaluation."""
         assert self.planning_graph is not None
-
-        if debug:
-            edge_videos_dir = "videos/edge_computation_videos"
-            os.makedirs(edge_videos_dir, exist_ok=True)
 
         _, init_atoms, _ = self.system.perceiver.reset(obs, info)
         initial_node = self.planning_graph.node_map[frozenset(init_atoms)]
@@ -586,62 +560,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 if edge.target.id <= current_node.id:
                     continue
 
-                # # E->D->T
-                # envisioned_plan = [
-                #     (0, 1),
-                #     (1, 6),
-                #     (6, 10),
-                #     (10, 15),
-                #     (15, 35),
-                #     (35, 50),
-                #     (50, 58),
-                #     (58, 88),
-                #     (88, 111),
-                #     (1, 10),
-                #     (15, 50),
-                #     # (0, 4),
-                #     # (4, 8),
-                #     # (8, 12),
-                #     # (12, 28),
-                #     # (28, 45),
-                #     # (45, 55),
-                #     # (55, 83),
-                #     # (83, 88),
-                #     # (88, 111),
-                #     # (4, 12),
-                #     # (28, 55),
-                #     # (4, 50),
-                # ]  # pylint: disable=line-too-long
-                # if (current_node.id, edge.target.id) not in envisioned_plan:
-                #     continue
-
-                # # DEBUG: Envisioned plan for clean up table env
-                # envisioned_plan = [
-                #     (0, 4),
-                #     (4, 8),
-                #     (8, 12),
-                #     (12, 16),
-                #     (16, 29),
-                #     (29, 42),
-                #     (42, 54),
-                #     (54, 59),
-                #     (59, 72),
-                #     (72, 91),
-                #     (91, 103),
-                #     (103, 112),
-                #     (112, 121),
-                #     (121, 132),
-                #     (132, 136),
-                #     (136, 139),
-                #     (0, 3),
-                #     (3, 7),
-                #     (7, 11),
-                #     (7, 132),
-                #     (7, 136),
-                # ]
-                # if (current_node.id, edge.target.id) not in envisioned_plan:
-                #     continue
-
                 edge_cost, end_state, end_info, success = self._execute_edge(
                     edge,
                     path_state,
@@ -651,7 +569,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     goal_env,
                     using_context_env,
                     context_env,
-                    debug,
                     current_path,
                 )
 
@@ -732,31 +649,10 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         goal_env: GoalConditionedWrapper | None,
         using_context_env: bool,
         context_env: ContextAwareWrapper | None,
-        debug: bool = False,
         current_path: tuple[int, ...] = tuple(),
     ) -> tuple[float, ObsType, dict[str, Any], bool]:
         """Execute a single edge and return the cost and end state."""
         raw_env.reset_from_state(start_state)  # type: ignore
-
-        frames: list[Any] = []
-        video_filename = ""
-        if debug:
-            edge_type = "shortcut" if edge.is_shortcut else "regular"
-            path_str = (
-                "-".join(str(node_id) for node_id in current_path)
-                if current_path
-                else "start"
-            )
-            video_filename = f"videos/edge_computation_videos/edge_{edge.source.id}_to_{edge.target.id}_{edge_type}_via_{path_str}.mp4"  # pylint: disable=line-too-long
-
-        if debug and hasattr(raw_env, "render") and not self.training_mode:
-            try:
-                frames.append(raw_env.render())
-            except Exception as e:
-                print(f"Error rendering initial frame: {e}")
-
-        output_dir = "videos/debug_frames"
-        os.makedirs(output_dir, exist_ok=True)
 
         _, init_atoms, _ = self.system.perceiver.reset(start_state, start_info)
         goal_atoms = set(edge.target.atoms)
@@ -806,12 +702,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         num_steps = 0
         curr_raw_obs = start_state
         curr_aug_obs = aug_obs
-        frame_counter = 0
-        # frame = raw_env.render()
-        # iio.imwrite(
-        #     f"{output_dir}/frame_{frame_counter:06d}.png", frame
-        # )
-
         for _ in range(self._max_skill_steps):
             act = skill.get_action(curr_aug_obs)
             if act is None:
@@ -821,14 +711,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
             next_raw_obs, _, _, _, info = raw_env.step(act)
             curr_raw_obs = next_raw_obs
             atoms = self.system.perceiver.step(curr_raw_obs)
-            frame_counter += 1
-            # frame = raw_env.render()
-            # iio.imwrite(
-            #     f"{output_dir}/frame_{frame_counter:06d}.png", frame
-            # )
-
-            if debug and hasattr(raw_env, "render") and not self.training_mode:
-                frames.append(raw_env.render())
 
             if edge.is_shortcut:
                 if using_goal_env and goal_env is not None:
@@ -882,17 +764,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 key = (edge.source.id, edge.target.id, current_path)
                 self._edge_action_cache[key] = actions.copy()
 
-                if debug and frames:
-                    iio.mimsave(
-                        video_filename.replace(".mp4", "_success.mp4"),
-                        frames,
-                        fps=5,
-                    )
-
                 return num_steps, curr_raw_obs, info, True
-
-        if debug and frames:
-            iio.mimsave(video_filename, frames, fps=5)
 
         # Skill timed out
         return float("inf"), start_state, start_info, False
@@ -901,22 +773,13 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
         self,
         obs: ObsType,
         info: dict[str, Any],
-        debug: bool = False,
     ) -> None:
         """Compute edge costs considering the path taken to reach each node."""
         assert self.planning_graph is not None
 
-        if debug:
-            edge_videos_dir = "videos/edge_computation_videos"
-            os.makedirs(edge_videos_dir, exist_ok=True)
-
-        output_dir = "videos/debug_frames"
-        os.makedirs(output_dir, exist_ok=True)
-
         _, init_atoms, _ = self.system.perceiver.reset(obs, info)
         initial_node = self.planning_graph.node_map[frozenset(init_atoms)]
 
-        # Map from (path, source_node, target_node) to observation and info
         path_states: dict[
             tuple[tuple[int, ...], PlanningGraphNode, PlanningGraphNode],
             tuple[ObsType, dict],
@@ -950,109 +813,7 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 if edge.target.id <= node.id:
                     continue
 
-                # # DEBUG: Envisioned plan for cluttered drawer env
-                # # B->C->T
-                # envisioned_plan = [
-                #     (0, 1),
-                #     (1, 6),
-                #     (6, 10),
-                #     (10, 15),
-                #     (15, 35),
-                #     (35, 50),
-                #     (50, 58),
-                #     (58, 88),
-                #     (88, 111),
-                #     (1, 10),
-                #     (15, 50),
-                # ]  # pylint: disable=line-too-long
-                # # E->D->T
-                # envisioned_plan = [
-                #     (0, 1),
-                #     (1, 6),
-                #     (6, 10),
-                #     (10, 15),
-                #     (15, 35),
-                #     (35, 50),
-                #     (50, 58),
-                #     (58, 88),
-                #     (1, 10),
-                #     (15, 50),
-                #     (0, 4),
-                #     (4, 8),
-                #     (8, 12),
-                #     (12, 28),
-                #     (28, 45),
-                #     (45, 55),
-                #     (55, 83),
-                #     (83, 88),
-                #     (88, 111),
-                #     (4, 12),
-                #     (28, 55),
-                #     (4, 50),
-                # ]  # pylint: disable=line-too-long
-                # if (node.id, edge.target.id) not in envisioned_plan:
-                #     continue
-
-                # DEBUG: Envisioned plan for clear and place env (3 blocks)
-                envisioned_plan = [
-                    (0, 2),
-                    (2, 5),
-                    (5, 8),
-                    (8, 15),
-                    (15, 26),
-                    (26, 52),
-                    (52, 79),
-                    (79, 132),
-                    (0, 1),
-                    (1, 79),
-                ]  # pylint: disable=line-too-long
-                if (node.id, edge.target.id) not in envisioned_plan:
-                    continue
-
-                # # DEBUG: Envisioned plan for clean up table env
-                # envisioned_plan = [
-                #     (0, 4),
-                #     (4, 8),
-                #     (8, 12),
-                #     (12, 16),
-                #     (16, 29),
-                #     (29, 42),
-                #     (42, 54),
-                #     (54, 59),
-                #     (59, 72),
-                #     (72, 91),
-                #     (91, 103),
-                #     (103, 112),
-                #     (112, 121),
-                #     (121, 132),
-                #     (132, 136),
-                #     (136, 139),
-                #     (0, 3),
-                #     (3, 7),
-                #     (7, 11),
-                #     (7, 132),
-                #     (7, 136),
-                # ]
-                # if (node.id, edge.target.id) not in envisioned_plan:
-                #     continue
-
-                frames: list[Any] = []
-                video_filename = ""
-                if debug:
-                    edge_type = "shortcut" if edge.is_shortcut else "regular"
-                    path_str = (
-                        "-".join(str(node_id) for node_id in path) if path else "start"
-                    )
-                    video_filename = f"{edge_videos_dir}/edge_{node.id}_to_{edge.target.id}_{edge_type}_via_{path_str}.mp4"  # pylint: disable=line-too-long
-
                 raw_env.reset_from_state(path_state)  # type: ignore
-
-                if debug and hasattr(raw_env, "render") and not self.training_mode:
-                    try:
-                        frames.append(raw_env.render())
-                    except Exception as e:
-                        print(f"Error rendering initial frame: {e}")
-
                 _ = self.system.perceiver.reset(path_state, path_info)
 
                 edge_cost, end_state, _, success = self._execute_edge(
@@ -1064,20 +825,15 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     goal_env,
                     using_context_env,
                     context_env,
-                    debug,
                     path,
                 )
 
                 if not success:
-                    # Edge expansion failed.
-                    if debug and frames:
-                        iio.mimsave(video_filename, frames, fps=5)
                     print(
                         f"Edge expansion failed: {edge.source.id} -> {edge.target.id}"
                     )
                     continue
 
-                # Store cost for this specific path
                 edge.costs[(path, node.id)] = edge_cost
                 if edge.cost == float("inf") or edge_cost < edge.cost:
                     edge.cost = edge_cost
@@ -1089,7 +845,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                     f"Added edge {edge.source.id} -> {edge.target.id} cost: {edge_cost} via {path_str}. Is shortcut? {edge.is_shortcut}"  # pylint: disable=line-too-long
                 )
 
-                # Update path to include current node for next traversal
                 new_path = path + (node.id,)
                 path_states[(new_path, edge.target, edge.target)] = (end_state, info)
                 queue.append((edge.target, new_path))
@@ -1110,7 +865,6 @@ class ImprovisationalTAMPApproach(BaseApproach[ObsType, ActType]):
                 "Could not find base environment with reset_from_state method"
             )
         base_env = current_env
-
         if hasattr(base_env, "clone"):
             planning_env = base_env.clone()
             return planning_env

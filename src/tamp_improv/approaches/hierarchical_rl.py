@@ -30,7 +30,6 @@ class HierarchicalRLApproach(BaseApproach[ObsType, ActType]):
 
     def reset(self, obs: ObsType, info: dict[str, Any]) -> ApproachStepResult[ActType]:
         """Reset approach with initial observation."""
-        # Reset the hierarchical environment with the same observation
         wrapped_obs: ObsType
         wrapped_obs, wrapped_info = self.hierarchical_env.reset(seed=self._seed)
         return self.step(wrapped_obs, 0.0, False, False, wrapped_info)

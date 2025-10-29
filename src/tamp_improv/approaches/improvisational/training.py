@@ -118,7 +118,6 @@ def get_or_collect_training_data(
             print(f"Error loading training data: {e}")
             print("Collecting new data instead...")
 
-    # Collect new data
     train_data, _ = collect_graph_based_training_data(
         system,
         approach,
@@ -216,7 +215,6 @@ def run_evaluation_episode_with_caching(
     if config.render and can_render:
         video_folder = Path(f"videos/{system.name}_{policy_name}_eval")
         video_folder.mkdir(parents=True, exist_ok=True)
-
         recording_env = deepcopy(system.env)
         system.env = RecordVideo(
             recording_env,
@@ -259,32 +257,17 @@ def run_evaluation_episode_with_caching(
             system.env = recording_env
         return total_reward, step_count, success
 
-    key = (0, best_edges[0].source.id, ())
-    actions = approach._edge_action_cache.get(key, None)
-    if actions is not None:
-        for a in actions:
-            obs, reward, terminated, truncated, info = system.env.step(a)
-            total_reward += float(reward)
-            step_count += 1
-            done = bool(terminated or truncated)
-            if done:
-                break
-    else:
-        for _ in range(approach._max_skill_steps):
-            step_result = approach.step(obs, total_reward, False, False, info)
-            obs, reward, terminated, truncated, info = system.env.step(step_result.action)
-            total_reward += float(reward)
-            step_count += 1
-            done = bool(step_result.terminate or terminated or truncated)
-            if step_result.terminate or terminated or truncated:
-                success = step_result.terminate or terminated
-                break
-    for i, edge in enumerate(best_edges):
+    # Execute segments: initial segment + all edges in the planned path
+    segments = [(0, best_edges[0].source.id, ())] + [
+        (edge.source.id, edge.target.id, prefix_ids_for_edge[i])
+        for i, edge in enumerate(best_edges)
+    ]
+    for key in segments:
         if done:
             break
-        key = (edge.source.id, edge.target.id, prefix_ids_for_edge[i])
         actions = approach._edge_action_cache.get(key, None)
         if actions is not None:
+            # Execute cached actions
             for a in actions:
                 obs, reward, terminated, truncated, info = system.env.step(a)
                 total_reward += float(reward)
@@ -292,9 +275,8 @@ def run_evaluation_episode_with_caching(
                 done = bool(terminated or truncated)
                 if done:
                     break
-            if done:
-                break
         else:
+            # Execute using approach
             for _ in range(approach._max_skill_steps):
                 step_result = approach.step(obs, total_reward, False, False, info)
                 obs, reward, terminated, truncated, info = system.env.step(step_result.action)
@@ -304,8 +286,8 @@ def run_evaluation_episode_with_caching(
                 if step_result.terminate or terminated or truncated:
                     success = step_result.terminate or terminated
                     break
-            if done:
-                break
+        if done:
+            break
 
     if not done:
         for _ in range(1, config.max_steps):
@@ -337,30 +319,11 @@ def train_and_evaluate(
     enable_generalization: bool = False,
 ) -> Metrics:
     """Train and evaluate a policy on a system."""
-    print(f"\nInitializing training for {system.name}...")
-
     seed = config.seed
     rng = np.random.default_rng(seed)
     set_torch_seed(seed)
-    print("GPU Status:")
-    if torch.cuda.is_available():
-        print(f"  CUDA available: {torch.cuda.is_available()}")
-        print(f"  CUDA device count: {torch.cuda.device_count()}")
-        print(f"  Current CUDA device: {torch.cuda.current_device()}")
-        print(f"  Device name: {torch.cuda.get_device_name()}")
-        memory_info = get_gpu_memory_info()
-        assert not isinstance(memory_info, str)
-        for gpu in memory_info:
-            print(f"  Device {gpu['device_index']} ({gpu['name']}):")
-            print(f"    Total memory: {gpu['total_memory']:.2f} GB")
-            print(f"    Allocated memory: {gpu['allocated_memory']:.2f} GB")
-            print(f"    Free memory: {gpu['free_memory']:.2f} GB")
-    else:
-        print("  CUDA not available, running on CPU")
-
     training_time = 0.0
     start_time = time.time()
-
     policy = policy_factory(config.seed)
     if isinstance(policy, MultiRLPolicy):
         policy.enable_generalization = enable_generalization
@@ -476,16 +439,13 @@ def train_and_evaluate_goal_conditioned(
     shortcut_success_threshold: int = 1,
 ) -> Metrics:
     """Train and evaluate a goal-conditioned policy for shortcut learning."""
-    print(f"\nInitializing goal-conditioned training for {system.name}...")
-
     seed = config.seed
     rng = np.random.default_rng(seed)
     set_torch_seed(seed)
-
     training_time = 0.0
     start_time = time.time()
-
     policy = policy_factory(config.seed)
+
     approach = ImprovisationalTAMPApproach(
         system,
         policy,
@@ -519,8 +479,6 @@ def train_and_evaluate_goal_conditioned(
                 step_penalty=config.step_penalty,
                 max_episode_steps=config.max_steps,
             )
-
-            # Use this environment for training
             system.wrapped_env = goal_env
 
             print("\nTraining policy...")

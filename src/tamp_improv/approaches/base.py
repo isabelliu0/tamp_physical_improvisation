@@ -25,12 +25,7 @@ class BaseApproach(Generic[ObsType, ActType], ABC):
     def __init__(
         self, system: ImprovisationalTAMPSystem[ObsType, ActType], seed: int
     ) -> None:
-        """Initialize approach.
-
-        Args:
-            system: The TAMP system to use
-            seed: Random seed
-        """
+        """Initialize approach."""
         self.system = system
         self._seed = seed
         self._training_mode = False

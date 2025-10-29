@@ -21,7 +21,6 @@ def train_hierarchical_rl_obstacle2d(
     render: bool = False,
     save_dir: str = "trained_policies/hierarchical_rl",
     single_step_skills: bool = False,
-    max_skill_steps: int = 20,
 ):
     """Train Hierarchical RL baseline on Obstacle2D."""
     print("\n=== Training Hierarchical RL on Obstacle2D ===")
@@ -63,7 +62,7 @@ def train_hierarchical_rl_obstacle2d(
         policy_name="HierarchicalRL",
         baseline_type="hierarchical",
         single_step_skills=single_step_skills,
-        max_skill_steps=max_skill_steps,
+        max_skill_steps=20,
         skill_failure_penalty=-1.0,
     )
 
@@ -78,7 +77,6 @@ def train_hierarchical_rl_obstacle2d(
         f.write(f"Environment: Obstacle2D\n")
         f.write(f"seed: {seed}\n")
         f.write(f"single_step_skills: {single_step_skills}\n")
-        f.write(f"max_skill_steps: {max_skill_steps}\n")
         f.write(f"success_rate: {metrics.success_rate:.4f}\n")
         f.write(f"avg_episode_length: {metrics.avg_episode_length:.2f}\n")
         f.write(f"avg_reward: {metrics.avg_reward:.2f}\n")
@@ -93,7 +91,6 @@ def train_hierarchical_rl_pybullet(
     save_dir: str = "trained_policies/hierarchical_rl",
     action_scale: float = 0.015,
     single_step_skills: bool = False,
-    max_skill_steps: int = 200,
 ):
     """Train Hierarchical RL baseline on PyBullet environments."""
     print(f"\n=== Training Hierarchical RL on {system_cls.__name__} ===")
@@ -135,7 +132,7 @@ def train_hierarchical_rl_pybullet(
         policy_name="HierarchicalRL",
         baseline_type="hierarchical",
         single_step_skills=single_step_skills,
-        max_skill_steps=max_skill_steps,
+        max_skill_steps=200,
         skill_failure_penalty=-1.0,
     )
 
@@ -150,7 +147,6 @@ def train_hierarchical_rl_pybullet(
         f.write(f"Environment: {system_cls.__name__}\n")
         f.write(f"seed: {seed}\n")
         f.write(f"single_step_skills: {single_step_skills}\n")
-        f.write(f"max_skill_steps: {max_skill_steps}\n")
         f.write(f"success_rate: {metrics.success_rate:.4f}\n")
         f.write(f"avg_episode_length: {metrics.avg_episode_length:.2f}\n")
         f.write(f"avg_reward: {metrics.avg_reward:.2f}\n")
