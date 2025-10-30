@@ -116,8 +116,7 @@ class GraphPutDownSkill(BaseObstacle2DSkill):
         if surface_obj.name == "target_area":
             target_x, target_y = 0.5, 0.0
         else:
-            # Put on table (right of target area)
-            target_x, target_y = 0.7, 0.0
+            target_x, target_y = 0.0, 0.0
 
         # Check if block is already on the target surface
         if np.isclose(robot_pos[0], target_x, atol=1e-3) and np.isclose(

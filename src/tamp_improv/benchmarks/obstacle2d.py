@@ -200,8 +200,7 @@ class PutDownSkill(BaseObstacle2DSkill):
         if surface_obj.name == "target_area":
             target_x, target_y = obs[11:13]
         else:
-            # Put on table (right of target area)
-            target_x = 0.7
+            target_x = 0.0
             target_y = 0.0
 
         # Check if block is already on the target surface

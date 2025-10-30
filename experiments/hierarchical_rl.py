@@ -70,7 +70,6 @@ def train_hierarchical_rl_obstacle2d(
     print("\n=== Results ===")
     print(f"Success Rate: {metrics.success_rate:.2%}")
     print(f"Average Episode Length: {metrics.avg_episode_length:.2f}")
-    print(f"Average Reward: {metrics.avg_reward:.2f}")
 
     results_file = (
         Path(save_dir) / "Obstacle2DTAMPSystem_HierarchicalRL" / "results.txt"
@@ -82,7 +81,6 @@ def train_hierarchical_rl_obstacle2d(
         f.write(f"single_step_skills: {single_step_skills}\n")
         f.write(f"success_rate: {metrics.success_rate:.4f}\n")
         f.write(f"avg_episode_length: {metrics.avg_episode_length:.2f}\n")
-        f.write(f"avg_reward: {metrics.avg_reward:.2f}\n")
 
     return metrics
 
@@ -142,7 +140,6 @@ def train_hierarchical_rl_pybullet(
     print("\n=== Results ===")
     print(f"Success Rate: {metrics.success_rate:.2%}")
     print(f"Average Episode Length: {metrics.avg_episode_length:.2f}")
-    print(f"Average Reward: {metrics.avg_reward:.2f}")
 
     results_file = (
         Path(save_dir) / f"{system_cls.__name__}_HierarchicalRL" / "results.txt"
@@ -154,7 +151,6 @@ def train_hierarchical_rl_pybullet(
         f.write(f"single_step_skills: {single_step_skills}\n")
         f.write(f"success_rate: {metrics.success_rate:.4f}\n")
         f.write(f"avg_episode_length: {metrics.avg_episode_length:.2f}\n")
-        f.write(f"avg_reward: {metrics.avg_reward:.2f}\n")
 
     return metrics
 
