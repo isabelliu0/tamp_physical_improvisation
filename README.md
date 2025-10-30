@@ -23,12 +23,12 @@ Watch SLAP in action across different PyBullet manipulation domains:
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/your-org/slap.git
-cd slap
+git clone https://github.com/isabelliu0/SLAP.git
+cd SLAP
 
 # 2. Create and activate a conda environment (recommended)
-conda create --name myenv python=3.11
-conda activate myenv
+conda create --name slap_env python=3.11
+conda activate slap_env
 
 # 3. Install SLAP
 pip install -e ".[develop]"
@@ -54,15 +54,11 @@ We provide minimal sets of pre-trained SLAP shortcut policies to reproduce the r
 
 ### Download Checkpoints
 
-```bash
-wget https://slap-checkpoints.s3.amazonaws.com/slap_policies_v1.tar.gz
-tar -xzf slap_policies_v1.tar.gz -C trained_policies/
-```
+You can browse and download pre-trained policies directly below:
 
-Or download individual environment checkpoints:
-- **Obstacle Tower**: [Download](https://slap-checkpoints.s3.amazonaws.com/obstacle_tower_slap.tar.gz)
-- **Cluttered Drawer**: [Download](https://slap-checkpoints.s3.amazonaws.com/cluttered_drawer_slap.tar.gz)
-- **Cleanup Table**: [Download](https://slap-checkpoints.s3.amazonaws.com/cleanup_table_slap.tar.gz)
+* **Obstacle Tower**: [Browse & Download](http://slap-data.s3-website.us-east-2.amazonaws.com/#trained_policies/multi_rl/GraphObstacleTowerTAMPSystem_MultiRL/)
+* **Cluttered Drawer**: [Browse & Download](http://slap-data.s3-website.us-east-2.amazonaws.com/#trained_policies/multi_rl/ClutteredDrawerTAMPSystem_MultiRL/)
+* **Cleanup Table**: [Browse & Download](http://slap-data.s3-website.us-east-2.amazonaws.com/#trained_policies/multi_rl/CleanupTableTAMPSystem_MultiRL/)
 
 ### Evaluate Pre-trained SLAP Shortcut Policies
 
@@ -85,15 +81,9 @@ We provide example sets of shortcut data for you to train SLAP policies directly
 
 Training data is organized by environment and contains graph-based shortcuts:
 
-```bash
-wget https://slap-data.s3.amazonaws.com/training_data_v1.tar.gz
-tar -xzf training_data_v1.tar.gz -C training_data/
-```
-
-Or download individual datasets:
-- **Obstacle Tower**: [Browse & Download](https://slap-data.s3.amazonaws.com/index.html#training_data/obstacle_tower/)
-- **Cluttered Drawer**: [Browse & Download](https://slap-data.s3.amazonaws.com/index.html#training_data/cluttered_drawer/)
-- **2D Obstacle Navigation**: [Browse & Download](https://slap-data.s3.amazonaws.com/index.html#training_data/obstacle2d/)
+* **Obstacle Tower**: [Browse & Download](http://slap-data.s3-website.us-east-2.amazonaws.com/#training_data/multi_rl/GraphObstacleTowerTAMPSystem_MultiRL/)
+* **Cluttered Drawer**: [Browse & Download](http://slap-data.s3-website.us-east-2.amazonaws.com/#training_data/multi_rl/ClutteredDrawerTAMPSystem_MultiRL/)
+* **Cleanup Table**: [Browse & Download](http://slap-data.s3-website.us-east-2.amazonaws.com/#training_data/multi_rl/CleanupTableTAMPSystem_MultiRL/)
 
 ### Training Data Structure
 
@@ -114,6 +104,8 @@ training_data/
 ### Train SLAP Shortcut Policies
 
 ```bash
+python -m experiments.slap_train --env obstacle2d --seed 42
+
 python -m experiments.slap_train --env obstacle_tower --seed 42
 
 python -m experiments.slap_train --env cluttered_drawer --seed 42
@@ -223,9 +215,7 @@ class YourGymEnvironment(gym.Env):
 
         Required for SLAP to reset to graph node states during training.
         """
-        # Set internal state
         self._state = state
-        # Return observation
         obs = self._get_observation()
         return obs, {}
 
@@ -238,7 +228,6 @@ class YourGymEnvironment(gym.Env):
 
         Enables SLAP to train policies on object-centric features.
         """
-        # Extract and return features for relevant_objects
         features = self._compute_features(obs, relevant_objects)
         return features
 ```
@@ -254,18 +243,3 @@ pytest -s tests/benchmarks/test_my_custom_env.py
 
 - Create a configuration file for the new environment at `experiments/configs/my_custom_env.yaml`
 - Add the environment to training script `experiments/slap_train.py`
-
----
-
-## Reference
-
-If you used our work in your research, or you find our work useful, please cite us as:
-
-```bibtex
-@article{liu2025slap,
-  title={SLAP: Shortcut Learning for Abstract Planning},
-  author={Liu, Y Isabel and Li, Bowen and Eysenbach, Benjamin and Silver, Tom},
-  journal={to be added},
-  year={2025}
-}
-```

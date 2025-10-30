@@ -66,7 +66,6 @@ def train_pure_rl_obstacle2d(
     print("\n=== Results ===")
     print(f"Success Rate: {metrics.success_rate:.2%}")
     print(f"Average Episode Length: {metrics.avg_episode_length:.2f}")
-    print(f"Average Reward: {metrics.avg_reward:.2f}")
 
     results_file = Path(save_dir) / "Obstacle2DTAMPSystem_PureRL_PPO" / "results.txt"
     results_file.parent.mkdir(parents=True, exist_ok=True)
@@ -75,7 +74,6 @@ def train_pure_rl_obstacle2d(
         f.write(f"seed: {seed}\n")
         f.write(f"success_rate: {metrics.success_rate:.4f}\n")
         f.write(f"avg_episode_length: {metrics.avg_episode_length:.2f}\n")
-        f.write(f"avg_reward: {metrics.avg_reward:.2f}\n")
 
     return metrics
 
@@ -131,7 +129,6 @@ def train_pure_rl_pybullet(
     print("\n=== Results ===")
     print(f"Success Rate: {metrics.success_rate:.2%}")
     print(f"Average Episode Length: {metrics.avg_episode_length:.2f}")
-    print(f"Average Reward: {metrics.avg_reward:.2f}")
 
     results_file = Path(save_dir) / f"{system_cls.__name__}_PureRL_PPO" / "results.txt"
     results_file.parent.mkdir(parents=True, exist_ok=True)
@@ -140,7 +137,6 @@ def train_pure_rl_pybullet(
         f.write(f"seed: {seed}\n")
         f.write(f"success_rate: {metrics.success_rate:.4f}\n")
         f.write(f"avg_episode_length: {metrics.avg_episode_length:.2f}\n")
-        f.write(f"avg_reward: {metrics.avg_reward:.2f}\n")
 
     return metrics
 

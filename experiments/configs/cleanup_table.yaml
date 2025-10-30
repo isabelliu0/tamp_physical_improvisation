@@ -7,7 +7,7 @@ num_episodes: 1
 max_steps: 600
 max_training_steps_per_shortcut: 300
 collect_episodes: 1
-episodes_per_scenario: 150
+episodes_per_scenario: 100
 force_collect: false
 render: false
 training_record_interval: 10
@@ -15,8 +15,8 @@ batch_size: 16
 
 use_random_rollouts: true
 num_rollouts_per_node: 50
-max_steps_per_rollout: 500
-shortcut_success_threshold: 1
+max_steps_per_rollout: 300
+shortcut_success_threshold: 2
 
 learning_rate: 3.0e-4
 rl_batch_size: 16

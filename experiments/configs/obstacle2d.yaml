@@ -7,11 +7,11 @@ seed: 42
 num_episodes: 5
 max_steps: 50
 max_training_steps_per_shortcut: 50
-collect_episodes: 3
-episodes_per_scenario: 1000
-force_collect: false
+collect_episodes: 5
+episodes_per_scenario: 200
+force_collect: true
 render: false
-training_record_interval: 125
+training_record_interval: 10
 batch_size: 32
 
 use_random_rollouts: true
@@ -23,7 +23,7 @@ learning_rate: 3.0e-4
 rl_batch_size: 32
 n_epochs: 10
 gamma: 0.99
-ent_coef: 0.05
+ent_coef: 0.01
 deterministic: false
 
 training_data_dir: training_data/multi_rl

@@ -151,19 +151,14 @@ class GraphObstacle2DEnv(gym.Env):
 
         # Position block 1 and 2 randomly but in the hardest positions for the task
         block_2_x = self.np_random.choice([target_left, target_x, target_right])
-        block_1_x = self.np_random.choice([0.0, 1.0])
         state = Obstacle2DState(
             robot_position=np.array([0.5, 1.0], dtype=np.float32),
-            block_1_position=np.array([block_1_x, 0.0], dtype=np.float32),
+            block_1_position=np.array([0.8, 0.0], dtype=np.float32),
             block_2_position=np.array([block_2_x, 0.0], dtype=np.float32),
             gripper_status=0.0,
         )
         if self.n_blocks > 2:
-            block_3_x = (
-                np.random.uniform(0.9, 1.0)
-                if block_1_x == 0.0
-                else np.random.uniform(0.0, 0.2)
-            )
+            block_3_x = np.random.uniform(0.0, 0.2)
             state = Obstacle2DState(
                 robot_position=state.robot_position,
                 block_1_position=state.block_1_position,
@@ -633,11 +628,9 @@ class Obstacle2DEnv(gym.Env):
 
         # Position block 1 and 2 in random but hardest positions for the task
         block_2_x = self.np_random.choice([target_left, target_x, target_right])
-        block_1_x = self.np_random.choice([0.0, 1.0])
-
         return Obstacle2DState(
             robot_position=np.array([0.5, 1.0], dtype=np.float32),
-            block_1_position=np.array([block_1_x, 0.0], dtype=np.float32),
+            block_1_position=np.array([0.8, 0.0], dtype=np.float32),
             block_2_position=np.array([block_2_x, 0.0], dtype=np.float32),
             gripper_status=0.0,
         )

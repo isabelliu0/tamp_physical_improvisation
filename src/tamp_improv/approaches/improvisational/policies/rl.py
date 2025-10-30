@@ -144,18 +144,46 @@ class TrainingProgressCallback(BaseCallback):
             print("No episodes completed during training.")
 
         if self.save_checkpoints and self.checkpoints:
-            best_episode, best_success_rate, best_path = max(
-                self.checkpoints, key=lambda x: x[1]
-            )
-            print(
-                f"\nBest checkpoint: Episode {best_episode} (success rate: {best_success_rate:.2%})"  # pylint: disable=line-too-long
-            )
-            self.best_checkpoint_path = best_path
-            for _, _, path in self.checkpoints:
-                if path != best_path:
-                    zip_path = Path(f"{path}.zip")
-                    if zip_path.exists():
-                        zip_path.unlink()
+            best_checkpoint = self._select_stable_checkpoint()
+            if best_checkpoint:
+                best_episode, best_success_rate, best_path = best_checkpoint
+                print(
+                    f"\nBest checkpoint: Episode {best_episode} (success rate: {best_success_rate:.2%})"  # pylint: disable=line-too-long
+                )
+                self.best_checkpoint_path = best_path
+                for _, _, path in self.checkpoints:
+                    if path != best_path:
+                        zip_path = Path(f"{path}.zip")
+                        if zip_path.exists():
+                            zip_path.unlink()
+
+    def _select_stable_checkpoint(
+        self, min_success_rate: float = 0.1
+    ) -> tuple[int, float, str] | None:
+        """Select checkpoint with stable performance."""
+        if not self.checkpoints:
+            return None
+
+        sorted_checkpoints = sorted(self.checkpoints, key=lambda x: x[0])
+        stable_candidates: list[tuple[int, float, str]] = []
+        for i, (episode, success_rate, path) in enumerate(sorted_checkpoints):
+            is_stable = True
+            if i > 0:
+                _, prev_success_rate, _ = sorted_checkpoints[i - 1]
+                if prev_success_rate < min_success_rate:
+                    is_stable = False
+            if i < len(sorted_checkpoints) - 1:
+                _, next_success_rate, _ = sorted_checkpoints[i + 1]
+                if next_success_rate < min_success_rate:
+                    is_stable = False
+            if is_stable:
+                stable_candidates.append((episode, success_rate, path))
+
+        if stable_candidates:
+            best_stable = max(stable_candidates, key=lambda x: x[1])
+            return best_stable
+
+        return None
 
     @property
     def _get_success_rate(self) -> float:

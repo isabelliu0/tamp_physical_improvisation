@@ -7,10 +7,10 @@ num_episodes: 1
 max_steps: 500
 max_training_steps_per_shortcut: 100
 collect_episodes: 1
-episodes_per_scenario: 475
+episodes_per_scenario: 400
 force_collect: false
 render: false
-training_record_interval: 25
+training_record_interval: 100
 batch_size: 16
 
 use_random_rollouts: true

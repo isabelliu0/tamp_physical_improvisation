@@ -95,9 +95,6 @@ def main(cfg: DictConfig) -> float:
     print("=" * 80)
     print(f"Success Rate: {metrics.success_rate:.2%}")
     print(f"Average Episode Length: {metrics.avg_episode_length:.2f}")
-    print(f"Average Reward: {metrics.avg_reward:.2f}")
-    print(f"Training Time: {metrics.training_time:.2f}s")
-    print(f"Total Time: {metrics.total_time:.2f}s")
     print("=" * 80)
 
     output_dir = Path(HydraConfig.get().runtime.output_dir)
@@ -107,7 +104,6 @@ def main(cfg: DictConfig) -> float:
         f.write(f"seed: {cfg.seed}\n")
         f.write(f"success_rate: {metrics.success_rate}\n")
         f.write(f"avg_episode_length: {metrics.avg_episode_length}\n")
-        f.write(f"avg_reward: {metrics.avg_reward}\n")
 
     return metrics.success_rate
 
