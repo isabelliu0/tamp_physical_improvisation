@@ -592,7 +592,7 @@ def train_and_evaluate_rl_baseline(
             success_reward=config.success_reward,
         )
     else:
-        hierarchical_env = HierarchicalRLWrapper(
+        wrapped_env = HierarchicalRLWrapper(
             tamp_system=system,
             max_episode_steps=config.max_steps,
             max_skill_steps=max_skill_steps,
@@ -601,19 +601,10 @@ def train_and_evaluate_rl_baseline(
             action_scale=config.action_scale,
             skill_failure_penalty=skill_failure_penalty,
             single_step_skills=single_step_skills,
+            goal_conditioned=(rl_algorithm == "sac_her"),
+            max_atom_size=max_atom_size,
+            success_reward=config.success_reward,
         )
-        if rl_algorithm == "sac_her":
-            wrapped_env = SACHERWrapper(
-                env=hierarchical_env,
-                perceiver=system.perceiver,
-                goal_atoms=goal_atoms,
-                max_atom_size=max_atom_size,
-                max_episode_steps=config.max_steps,
-                step_penalty=config.step_penalty,
-                success_reward=config.success_reward,
-            )
-        else:
-            wrapped_env = hierarchical_env
 
     start_time = time.time()
     print(f"\nTraining {baseline_name} policy...")
@@ -635,9 +626,8 @@ def train_and_evaluate_rl_baseline(
         system.wrapped_env = wrapped_env
         approach = SACHERApproach(system, policy, seed)
     else:
-        assert isinstance(
-            wrapped_env, HierarchicalRLWrapper
-        ), "Expected HierarchicalRLWrapper"
+        assert isinstance(wrapped_env, HierarchicalRLWrapper)
+        system.env = wrapped_env
         approach = HierarchicalRLApproach(system, policy, seed, wrapped_env)
 
     print(f"\nEvaluating {baseline_name} policy on {system.name}...")
