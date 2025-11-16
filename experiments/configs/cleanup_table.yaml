@@ -1,7 +1,9 @@
 env_name: CleanupTableTAMPSystem
 render_mode: null
 action_scale: 0.005
+max_atom_size: 60
 
+algorithm: ppo
 seed: 42
 num_episodes: 1
 max_steps: 600

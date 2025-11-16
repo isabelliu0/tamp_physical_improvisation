@@ -2,7 +2,9 @@ env_name: GraphObstacle2DTAMPSystem
 n_blocks: 2
 render_mode: null
 action_scale: 1.0
+max_atom_size: 14
 
+algorithm: ppo
 seed: 42
 num_episodes: 5
 max_steps: 50

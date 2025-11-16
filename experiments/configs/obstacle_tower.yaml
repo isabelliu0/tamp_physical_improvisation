@@ -2,7 +2,9 @@ env_name: GraphObstacleTowerTAMPSystem
 num_obstacle_blocks: 3
 render_mode: null
 action_scale: 0.015
+max_atom_size: 42
 
+algorithm: ppo
 seed: 42
 num_episodes: 1
 max_steps: 500

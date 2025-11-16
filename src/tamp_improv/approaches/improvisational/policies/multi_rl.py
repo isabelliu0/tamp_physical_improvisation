@@ -25,6 +25,7 @@ from tamp_improv.approaches.improvisational.policies.rl import (
     RLPolicy,
     TrainingProgressCallback,
 )
+from tamp_improv.benchmarks.shortcut_her_wrapper import ShortcutHERWrapper
 
 ObsType = TypeVar("ObsType")
 ActType = TypeVar("ActType")
@@ -159,6 +160,14 @@ class MultiRLPolicy(Policy[ObsType, ActType]):
                 policy_env = copy.deepcopy(env)
 
             self._configure_env_recursively(policy_env, group_data)
+
+            if self.config.algorithm == "sac_her":
+                policy_env = ShortcutHERWrapper(
+                    policy_env,
+                    max_atom_size=self.config.max_atom_size,
+                    success_reward=100.0,
+                    step_penalty=-1.0,
+                )
 
             policies_to_train[policy_key] = (
                 self.policies[policy_key],

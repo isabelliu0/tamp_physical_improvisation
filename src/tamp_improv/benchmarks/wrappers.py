@@ -123,6 +123,7 @@ class ImprovWrapper(gym.Env):
         obs, _, _, truncated, info = self.env.step(action)
         self.steps += 1
         current_atoms = self.perceiver.step(obs)
+        self.current_atom_set = current_atoms
 
         if self.relevant_objects is not None:
             assert hasattr(self.env, "extract_relevant_object_features")  # type: ignore[unreachable]   # pylint: disable=line-too-long

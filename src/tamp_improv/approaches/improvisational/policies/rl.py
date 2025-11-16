@@ -9,7 +9,7 @@ import numpy as np
 import torch
 from numpy.typing import NDArray
 from relational_structs import GroundAtom
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, SAC, HerReplayBuffer
 from stable_baselines3.common.callbacks import BaseCallback
 from torch import Tensor
 
@@ -27,6 +27,7 @@ from tamp_improv.utils.gpu_utils import DeviceContext
 class RLConfig:
     """Configuration for RL policy."""
 
+    algorithm: str = "ppo"
     learning_rate: float = 1e-4
     batch_size: int = 32
     n_epochs: int = 5
@@ -34,6 +35,7 @@ class RLConfig:
     ent_coef: float = 0.01
     device: str = "cuda"
     deterministic: bool = False
+    max_atom_size: int = 50
 
 
 class TrainingProgressCallback(BaseCallback):
@@ -219,28 +221,64 @@ class RLPolicy(Policy[ObsType, ActType]):
         self._torch_generator = torch.Generator(device=self.device_ctx.device)
         self._torch_generator.manual_seed(seed)
 
-        self.model: PPO | None = None
+        self.model: PPO | SAC | None = None
+        self._env: gym.Env | None = None
 
         self.trained_shortcuts: set[tuple[frozenset, frozenset]] = set()
         self._current_atoms: set[GroundAtom] | None = None
         self._goal_atoms: set[GroundAtom] | None = None
 
+        self.atom_to_index: dict[str, int] = {}
+        self._next_atom_index: int = 0
+        self.max_atom_size: int = self.config.max_atom_size
+
     def initialize(self, env: gym.Env) -> None:
         """Initialize policy with environment."""
+        self._env = env
         if self.model is None:
-            self.model = PPO(
-                "MlpPolicy",
-                env,
-                learning_rate=self.config.learning_rate,
-                n_steps=100,  # Default value, will be updated in train()
-                batch_size=self.config.batch_size,
-                n_epochs=self.config.n_epochs,
-                gamma=self.config.gamma,
-                ent_coef=self.config.ent_coef,
-                device=self.device_ctx.device,
-                seed=self._seed,
-                verbose=1,
-            )
+            if self.config.algorithm == "ppo":
+                self.model = PPO(
+                    "MlpPolicy",
+                    env,
+                    learning_rate=self.config.learning_rate,
+                    n_steps=100,  # Default value, will be updated in train()
+                    batch_size=self.config.batch_size,
+                    n_epochs=self.config.n_epochs,
+                    gamma=self.config.gamma,
+                    ent_coef=self.config.ent_coef,
+                    device=self.device_ctx.device,
+                    seed=self._seed,
+                    verbose=1,
+                )
+            elif self.config.algorithm in ["sac", "sac_her"]:
+                replay_buffer_class = (
+                    HerReplayBuffer if self.config.algorithm == "sac_her" else None
+                )
+                replay_buffer_kwargs = (
+                    {"goal_selection_strategy": "future", "n_sampled_goal": 4}
+                    if self.config.algorithm == "sac_her"
+                    else None
+                )
+                policy_type = (
+                    "MultiInputPolicy"
+                    if self.config.algorithm == "sac_her"
+                    else "MlpPolicy"
+                )
+                learning_starts = 200 if self.config.algorithm == "sac_her" else 100
+                self.model = SAC(
+                    policy_type,
+                    env,
+                    learning_rate=self.config.learning_rate,
+                    buffer_size=100000,
+                    batch_size=self.config.batch_size,
+                    gamma=self.config.gamma,
+                    learning_starts=learning_starts,
+                    replay_buffer_class=replay_buffer_class,
+                    replay_buffer_kwargs=replay_buffer_kwargs,
+                    device=self.device_ctx.device,
+                    seed=self._seed,
+                    verbose=1,
+                )
 
     def can_initiate(self):
         """Check whether the policy can be executed given the current
@@ -277,12 +315,79 @@ class RLPolicy(Policy[ObsType, ActType]):
                 raise ValueError(
                     "Environment does not have max_episode_steps attribute"
                 )
-            wrapped_env = FlattenGraphObsWrapper(env)
+
+            has_dict_obs = isinstance(env.observation_space, gym.spaces.Dict)
+
+            wrapped_env: gym.Env
+            if not has_dict_obs:
+                wrapped_env = FlattenGraphObsWrapper(env)
+            else:
+                wrapped_env = env
+
+            self._env = wrapped_env
+
+            if self.config.algorithm == "ppo":
+                policy_type = "MultiInputPolicy" if has_dict_obs else "MlpPolicy"
+                self.model = PPO(
+                    policy_type,
+                    wrapped_env,
+                    learning_rate=self.config.learning_rate,
+                    n_steps=max_steps,
+                    batch_size=self.config.batch_size,
+                    n_epochs=self.config.n_epochs,
+                    gamma=self.config.gamma,
+                    ent_coef=self.config.ent_coef,
+                    device=self.device_ctx.device,
+                    seed=self._seed,
+                    verbose=1,
+                )
+            elif self.config.algorithm in ["sac", "sac_her"]:
+                replay_buffer_class = (
+                    HerReplayBuffer if self.config.algorithm == "sac_her" else None
+                )
+                replay_buffer_kwargs = (
+                    {"goal_selection_strategy": "future", "n_sampled_goal": 4}
+                    if self.config.algorithm == "sac_her"
+                    else None
+                )
+                policy_type = "MultiInputPolicy" if has_dict_obs else "MlpPolicy"
+                learning_starts = (
+                    max(max_steps * 2, 200)
+                    if self.config.algorithm == "sac_her"
+                    else 100
+                )
+                self.model = SAC(
+                    policy_type,
+                    wrapped_env,
+                    learning_rate=self.config.learning_rate,
+                    buffer_size=100000,
+                    batch_size=self.config.batch_size,
+                    gamma=self.config.gamma,
+                    learning_starts=learning_starts,
+                    replay_buffer_class=replay_buffer_class,
+                    replay_buffer_kwargs=replay_buffer_kwargs,
+                    device=self.device_ctx.device,
+                    seed=self._seed,
+                    verbose=1,
+                )
+
+            if callback is None:
+                callback = TrainingProgressCallback()
+            total_timesteps = 1_000_000  # Adjust as needed
+            assert self.model is not None
+            self.model.learn(total_timesteps=total_timesteps, callback=callback)
+            return
+
+        # Call base class train to initialize and configure env
+        super().train(env, train_data)
+        self._env = env
+
+        if self.config.algorithm == "ppo":
             self.model = PPO(
                 "MlpPolicy",
-                wrapped_env,
+                env,
                 learning_rate=self.config.learning_rate,
-                n_steps=max_steps,
+                n_steps=train_data.config.get("max_training_steps_per_shortcut", 100),
                 batch_size=self.config.batch_size,
                 n_epochs=self.config.n_epochs,
                 gamma=self.config.gamma,
@@ -291,28 +396,38 @@ class RLPolicy(Policy[ObsType, ActType]):
                 seed=self._seed,
                 verbose=1,
             )
-            if callback is None:
-                callback = TrainingProgressCallback()
-            total_timesteps = 1_000_000  # Adjust as needed
-            self.model.learn(total_timesteps=total_timesteps, callback=callback)
-            return
-
-        # Call base class train to initialize and configure env
-        super().train(env, train_data)
-
-        self.model = PPO(
-            "MlpPolicy",
-            env,
-            learning_rate=self.config.learning_rate,
-            n_steps=train_data.config.get("max_training_steps_per_shortcut", 100),
-            batch_size=self.config.batch_size,
-            n_epochs=self.config.n_epochs,
-            gamma=self.config.gamma,
-            ent_coef=self.config.ent_coef,
-            device=self.device_ctx.device,
-            seed=self._seed,
-            verbose=1,
-        )
+        elif self.config.algorithm in ["sac", "sac_her"]:
+            replay_buffer_class = (
+                HerReplayBuffer if self.config.algorithm == "sac_her" else None
+            )
+            replay_buffer_kwargs = (
+                {"goal_selection_strategy": "future", "n_sampled_goal": 4}
+                if self.config.algorithm == "sac_her"
+                else None
+            )
+            policy_type = (
+                "MultiInputPolicy"
+                if self.config.algorithm == "sac_her"
+                else "MlpPolicy"
+            )
+            max_steps = train_data.config.get("max_training_steps_per_shortcut", 100)
+            learning_starts = (
+                max(max_steps * 2, 200) if self.config.algorithm == "sac_her" else 100
+            )
+            self.model = SAC(
+                policy_type,
+                env,
+                learning_rate=self.config.learning_rate,
+                buffer_size=100000,
+                batch_size=self.config.batch_size,
+                gamma=self.config.gamma,
+                learning_starts=learning_starts,
+                replay_buffer_class=replay_buffer_class,
+                replay_buffer_kwargs=replay_buffer_kwargs,
+                device=self.device_ctx.device,
+                seed=self._seed,
+                verbose=1,
+            )
 
         if callback is None:
             callback = TrainingProgressCallback(
@@ -329,6 +444,7 @@ class RLPolicy(Policy[ObsType, ActType]):
         print(f"Total scenarios: {len(train_data.states)}")
         print(f"Total training timesteps: {total_timesteps}")
 
+        assert self.model is not None
         self.model.learn(total_timesteps=total_timesteps, callback=callback)
 
         for current_atoms, goal_atoms in zip(
@@ -343,9 +459,24 @@ class RLPolicy(Policy[ObsType, ActType]):
         if self.model is None:
             raise ValueError("Policy not trained or loaded")
 
-        if hasattr(obs, "nodes"):
+        obs_numpy: np.ndarray | dict[str, np.ndarray]
+        if self.config.algorithm == "sac_her":
+            if isinstance(obs, dict):
+                obs_numpy = obs
+            else:
+                if hasattr(obs, "nodes"):
+                    obs_flat = obs.nodes.flatten().astype(np.float32)
+                else:
+                    obs_flat = np.array(obs, dtype=np.float32)
+                achieved_goal = self._create_atom_vector(self._current_atoms or set())
+                desired_goal = self._create_atom_vector(self._goal_atoms or set())
+                obs_numpy = {
+                    "observation": obs_flat,
+                    "achieved_goal": achieved_goal,
+                    "desired_goal": desired_goal,
+                }
+        elif hasattr(obs, "nodes"):
             obs_flat = obs.nodes.flatten()
-            # Pad to match training observation space if needed
             assert self.model.observation_space.shape is not None
             expected_size = self.model.observation_space.shape[0]
             if len(obs_flat) < expected_size:
@@ -357,9 +488,7 @@ class RLPolicy(Policy[ObsType, ActType]):
             obs_numpy = obs_flat
         else:
             obs_tensor = self.device_ctx(obs)
-            obs_cpu = (
-                obs_tensor.cpu() if isinstance(obs_tensor, Tensor) else obs_tensor
-            )  # move to CPU for stable_baselines3
+            obs_cpu = obs_tensor.cpu() if isinstance(obs_tensor, Tensor) else obs_tensor
             obs_numpy = self.device_ctx.numpy(obs_cpu)
 
         with torch.no_grad():
@@ -367,10 +496,29 @@ class RLPolicy(Policy[ObsType, ActType]):
                 obs_numpy, deterministic=self.config.deterministic
             )
 
-        # Convert back to original type
         if isinstance(obs, (int, float)):
             return cast(ActType, int(action[0]))
         return cast(ActType, action)
+
+    def _get_atom_index(self, atom_str: str) -> int:
+        """Get unique index for atom string."""
+        if atom_str in self.atom_to_index:
+            return self.atom_to_index[atom_str]
+        if self._next_atom_index >= self.max_atom_size:
+            return -1
+        idx = self._next_atom_index
+        self.atom_to_index[atom_str] = idx
+        self._next_atom_index += 1
+        return idx
+
+    def _create_atom_vector(self, atoms: set[GroundAtom]) -> np.ndarray:
+        """Create multi-hot vector from atoms."""
+        vector = np.zeros(self.max_atom_size, dtype=np.float32)
+        for atom in atoms:
+            idx = self._get_atom_index(str(atom))
+            if idx >= 0:
+                vector[idx] = 1.0
+        return vector
 
     def save(self, path: str) -> None:
         """Save policy."""
@@ -380,7 +528,16 @@ class RLPolicy(Policy[ObsType, ActType]):
 
     def load(self, path: str) -> None:
         """Load policy."""
-        self.model = PPO.load(path)
+        if self.config.algorithm == "ppo":
+            self.model = PPO.load(path)
+        elif self.config.algorithm == "sac":
+            self.model = SAC.load(path)
+        elif self.config.algorithm == "sac_her":
+            if self._env is None:
+                raise ValueError(
+                    "Environment must be set before loading SAC+HER model. Call initialize() or train() first."  # pylint: disable=line-too-long
+                )
+            self.model = SAC.load(path, env=self._env)
 
 
 class FlattenGraphObsWrapper(gym.ObservationWrapper):

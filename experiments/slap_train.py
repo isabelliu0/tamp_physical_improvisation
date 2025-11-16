@@ -51,6 +51,7 @@ def main(cfg: DictConfig) -> float:
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     rl_config = RLConfig(
+        algorithm=cfg.algorithm,
         learning_rate=cfg.learning_rate,
         batch_size=cfg.rl_batch_size,
         n_epochs=cfg.n_epochs,
@@ -58,6 +59,7 @@ def main(cfg: DictConfig) -> float:
         ent_coef=cfg.ent_coef,
         deterministic=cfg.deterministic,
         device=device,
+        max_atom_size=cfg.max_atom_size,
     )
     print(f"\nUsing device: {device}")
 
