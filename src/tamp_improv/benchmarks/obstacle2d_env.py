@@ -246,7 +246,7 @@ class GraphObstacle2DEnv(gym.Env):
                 "robot_pos", np.array([0.5, 1.0], dtype=np.float32)
             ).copy()
             block_1_pos = options.get(
-                "block_1_pos", np.array([0.0, 0.0], dtype=np.float32)
+                "block_1_pos", np.array([0.8, 0.0], dtype=np.float32)
             ).copy()
             block_2_pos = options.get(
                 "block_2_pos", np.array([0.5, 0.0], dtype=np.float32)
