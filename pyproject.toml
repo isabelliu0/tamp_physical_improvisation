@@ -30,7 +30,7 @@ dependencies = [
     "task-then-motion-planning@git+https://github.com/tomsilver/task-then-motion-planning.git",
     "relational-structs@git+https://github.com/Princeton-Robot-Planning-and-Learning/prpl-mono.git#subdirectory=relational-structs",
     "pybullet-blocks@git+https://github.com/tomsilver/pybullet-blocks.git",
-    "pybullet_helpers@git+https://github.com/tomsilver/pybullet-helpers.git",
+    "pybullet_helpers@git+https://github.com/Princeton-Robot-Planning-and-Learning/prpl-mono.git#subdirectory=pybullet-helpers",
 ]
 
 [project.optional-dependencies]
