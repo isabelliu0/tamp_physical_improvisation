@@ -27,7 +27,11 @@ jobs:
         enable-cache: true
         cache-dependency-glob: "pyproject.toml"
     - name: Set up Python ${{ matrix.python-version }}
-      run: uv python install ${{ matrix.python-version }}    
+      run: uv python install ${{ matrix.python-version }}   
+    - name: Clean uv cache
+      run: |
+        rm -f uv.lock
+        uv cache clean 
     - name: Install the project
       run: uv sync --all-extras --dev
     - name: Lint

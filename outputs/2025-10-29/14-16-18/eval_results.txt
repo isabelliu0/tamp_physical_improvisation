@@ -1,0 +1,6 @@
+env_name: ClutteredDrawerTAMPSystem
+policy_path: trained_policies/multi_rl/ClutteredDrawerTAMPSystem_MultiRL
+seed: 42
+success_rate: 1.0
+avg_episode_length: 157.0
+avg_reward: 0.8

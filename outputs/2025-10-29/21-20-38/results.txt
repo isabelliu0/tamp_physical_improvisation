@@ -1,0 +1,4 @@
+env_name: GraphObstacle2DTAMPSystem
+seed: 42
+success_rate: 1.0
+avg_episode_length: 22.6

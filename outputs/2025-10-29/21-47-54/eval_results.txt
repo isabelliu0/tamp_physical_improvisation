@@ -1,0 +1,5 @@
+env_name: GraphObstacle2DTAMPSystem
+policy_path: trained_policies/multi_rl/GraphObstacle2DTAMPSystem_MultiRL
+seed: 42
+success_rate: 1.0
+avg_episode_length: 19.2
