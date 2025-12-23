@@ -1,4 +1,0 @@
-env_name: GraphObstacleTowerTAMPSystem
-seed: 42
-success_rate: 1.0
-avg_episode_length: 233.0

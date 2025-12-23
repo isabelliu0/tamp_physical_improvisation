@@ -1,5 +1,0 @@
-env_name: GraphObstacleTowerTAMPSystem
-policy_path: trained_policies/multi_rl/GraphObstacleTowerTAMPSystem_MultiRL
-seed: 42
-success_rate: 1.0
-avg_episode_length: 40.0
