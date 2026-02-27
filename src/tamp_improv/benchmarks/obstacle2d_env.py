@@ -240,34 +240,35 @@ class GraphObstacle2DEnv(gym.Env):
         super().reset(seed=seed)
 
         if options is None:
-            self.state = self._get_default_state()
-        else:
-            robot_pos = options.get(
-                "robot_pos", np.array([0.5, 1.0], dtype=np.float32)
+            options = {}
+        #     self.state = self._get_default_state()
+        # else:
+        robot_pos = options.get(
+            "robot_pos", np.array([0.5, 1.0], dtype=np.float32)
+        ).copy()
+        block_1_pos = options.get(
+            "block_1_pos", np.array([0.8, 0.0], dtype=np.float32)
+        ).copy()
+        block_2_pos = options.get(
+            "block_2_pos", np.array([0.5, 0.0], dtype=np.float32)
+        ).copy()
+        block_3_pos = None
+        if self.n_blocks > 2:
+            block_3_pos = options.get(
+                "block_3_pos", np.array([1.0, 0.0], dtype=np.float32)
             ).copy()
-            block_1_pos = options.get(
-                "block_1_pos", np.array([0.0, 0.0], dtype=np.float32)
-            ).copy()
-            block_2_pos = options.get(
-                "block_2_pos", np.array([0.5, 0.0], dtype=np.float32)
-            ).copy()
-            block_3_pos = None
-            if self.n_blocks > 2:
-                block_3_pos = options.get(
-                    "block_3_pos", np.array([1.0, 0.0], dtype=np.float32)
-                ).copy()
 
-            self.block_positions = [block_1_pos, block_2_pos]
-            if self.n_blocks > 2 and block_3_pos is not None:
-                self.block_positions.append(block_3_pos)
+        self.block_positions = [block_1_pos, block_2_pos]
+        if self.n_blocks > 2 and block_3_pos is not None:
+            self.block_positions.append(block_3_pos)
 
-            self.state = Obstacle2DState(
-                robot_position=robot_pos,
-                block_1_position=block_1_pos,
-                block_2_position=block_2_pos,
-                block_3_position=block_3_pos,
-                gripper_status=0.0,
-            )
+        self.state = Obstacle2DState(
+            robot_position=robot_pos,
+            block_1_position=block_1_pos,
+            block_2_position=block_2_pos,
+            block_3_position=block_3_pos,
+            gripper_status=0.0,
+        )
 
         return self._get_obs(), self._get_info()
 

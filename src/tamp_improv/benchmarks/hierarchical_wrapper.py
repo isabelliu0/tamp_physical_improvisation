@@ -43,6 +43,9 @@ class HierarchicalRLWrapper(gym.Env):
         action_scale: float = 1.0,
         skill_failure_penalty: float = -1.0,
         single_step_skills: bool = True,
+        goal_conditioned: bool = False,
+        max_atom_size: int = 50,
+        success_reward: float = 100.0,
     ) -> None:
         """Initialize hierarchical wrapper."""
         self.tamp_system = tamp_system
@@ -55,6 +58,9 @@ class HierarchicalRLWrapper(gym.Env):
         self.action_scale = action_scale
         self.skill_failure_penalty = skill_failure_penalty
         self.single_step_skills = single_step_skills
+        self.goal_conditioned = goal_conditioned
+        self.max_atom_size = max_atom_size
+        self.success_reward = success_reward
 
         self.steps = 0
         self.current_obs: Union[ObsType, None] = None
@@ -65,7 +71,33 @@ class HierarchicalRLWrapper(gym.Env):
         self.current_skill_operator: Union[GroundOperator, None] = None
         self.skill_steps_taken: int = 0
 
-        self.observation_space = self.env.observation_space
+        self.atom_to_index: dict[str, int] = {}
+        self._next_index = 0
+        self.goal_atom_vector: np.ndarray = np.zeros(max_atom_size, dtype=np.float32)
+
+        if goal_conditioned:
+            base_obs_space = self.env.observation_space
+            if hasattr(base_obs_space, "shape"):
+                obs_shape = base_obs_space.shape
+            else:
+                sample_obs = base_obs_space.sample()
+                obs_shape = (np.array(sample_obs).flatten().shape[0],)
+
+            self.observation_space = gym.spaces.Dict(
+                {
+                    "observation": gym.spaces.Box(
+                        low=-np.inf, high=np.inf, shape=obs_shape, dtype=np.float32
+                    ),
+                    "achieved_goal": gym.spaces.Box(
+                        0, 1, shape=(max_atom_size,), dtype=np.float32
+                    ),
+                    "desired_goal": gym.spaces.Box(
+                        0, 1, shape=(max_atom_size,), dtype=np.float32
+                    ),
+                }
+            )
+        else:
+            self.observation_space = self.env.observation_space
 
         (
             self.ground_skill_operators,
@@ -123,11 +155,11 @@ class HierarchicalRLWrapper(gym.Env):
         *,
         seed: Union[int, None] = None,
         options: Union[dict[str, Any], None] = None,
-    ) -> tuple[ObsType, dict[str, Any]]:
+    ) -> tuple[Union[ObsType, dict[str, np.ndarray]], dict[str, Any]]:
         """Reset environment."""
         self.steps = 0
 
-        obs, info = self.tamp_system.reset(seed=seed)
+        obs, info = self.env.reset(seed=seed)
         self.current_obs = obs
 
         self.current_skill = None
@@ -137,6 +169,7 @@ class HierarchicalRLWrapper(gym.Env):
         _, current_atoms, goal_atoms = self.perceiver.reset(obs, info)
         self.current_atoms = current_atoms
         self.goal_atoms = goal_atoms
+        self.goal_atom_vector = self.create_atom_vector(goal_atoms)
 
         info.update(
             {
@@ -146,11 +179,22 @@ class HierarchicalRLWrapper(gym.Env):
             }
         )
 
+        if self.goal_conditioned:
+            achieved_vector = self.create_atom_vector(current_atoms)
+            dict_obs = {
+                "observation": self._ensure_array(obs),
+                "achieved_goal": achieved_vector,
+                "desired_goal": self.goal_atom_vector,
+            }
+            return dict_obs, info
+
         return obs, info  # type: ignore
 
     def step(
         self, action: NDArray[np.float32]
-    ) -> tuple[ObsType, float, bool, bool, dict[str, Any]]:
+    ) -> tuple[
+        Union[ObsType, dict[str, np.ndarray]], float, bool, bool, dict[str, Any]
+    ]:
         """Execute action (either low-level or skill).
 
         Args:
@@ -190,8 +234,16 @@ class HierarchicalRLWrapper(gym.Env):
         self.current_atoms = self.perceiver.step(obs)  # type: ignore
         goal_achieved = self.goal_atoms.issubset(self.current_atoms)
 
+        if self.goal_conditioned:
+            goal_indices = np.where(self.goal_atom_vector > 0.5)[0]
+            achieved_vector = self.create_atom_vector(self.current_atoms)
+            goal_achieved = bool(np.all(achieved_vector[goal_indices] > 0.5))
+            reward = self.success_reward if goal_achieved else self.step_penalty
+        else:
+            if goal_achieved:
+                reward += self.achievement_bonus
+
         if goal_achieved:
-            reward += self.achievement_bonus
             terminated = True
 
         truncated = truncated or self.steps >= self.max_episode_steps
@@ -202,8 +254,18 @@ class HierarchicalRLWrapper(gym.Env):
                 "current_atoms": self.current_atoms,
                 "goal_atoms": self.goal_atoms,
                 "steps": self.steps,
+                "is_success": goal_achieved,
             }
         )
+
+        if self.goal_conditioned:
+            achieved_vector = self.create_atom_vector(self.current_atoms)
+            dict_obs = {
+                "observation": self._ensure_array(obs),
+                "achieved_goal": achieved_vector,
+                "desired_goal": self.goal_atom_vector,
+            }
+            return dict_obs, reward, terminated, truncated, info
 
         return obs, reward, terminated, truncated, info
 
@@ -462,6 +524,69 @@ class HierarchicalRLWrapper(gym.Env):
         groundings = list(itertools.product(*param_objects))
 
         return groundings
+
+    def _get_atom_index(self, atom_str: str) -> int:
+        """Get or create index for atom."""
+        if atom_str in self.atom_to_index:
+            return self.atom_to_index[atom_str]
+        assert (
+            self._next_index < self.max_atom_size
+        ), f"Increase max_atom_size (currently {self.max_atom_size})."
+        idx = self._next_index
+        self.atom_to_index[atom_str] = idx
+        self._next_index += 1
+        return idx
+
+    def create_atom_vector(self, atoms: set[GroundAtom]) -> np.ndarray:
+        """Create binary vector representation of atoms."""
+        vector = np.zeros(self.max_atom_size, dtype=np.float32)
+        for atom in atoms:
+            idx = self._get_atom_index(str(atom))
+            vector[idx] = 1.0
+        return vector
+
+    def _ensure_array(self, obs: ObsType) -> np.ndarray:
+        """Flatten and ensure observation is a numpy array."""
+        if hasattr(obs, "nodes"):
+            flattened = obs.nodes.flatten().astype(np.float32)
+            if self.goal_conditioned:
+                assert isinstance(self.observation_space, gym.spaces.Dict)
+                obs_space = self.observation_space["observation"]
+                assert isinstance(obs_space, gym.spaces.Box)
+                obs_shape = obs_space.shape
+                assert obs_shape is not None
+                expected_size = obs_shape[0]
+                if len(flattened) < expected_size:
+                    padded = np.zeros(expected_size, dtype=np.float32)
+                    padded[: len(flattened)] = flattened
+                    return padded
+                if len(flattened) > expected_size:
+                    return flattened[:expected_size]
+            return flattened
+        if isinstance(obs, np.ndarray):
+            return obs.astype(np.float32)
+        return np.array(obs, dtype=np.float32)
+
+    def compute_reward(
+        self,
+        achieved_goal: np.ndarray,
+        desired_goal: np.ndarray,
+        _info: dict[str, Any],
+    ) -> np.ndarray:
+        """Compute reward for HER goal relabeling."""
+        if achieved_goal.ndim == 1:
+            achieved_goal = achieved_goal.reshape(1, -1)
+        if desired_goal.ndim == 1:
+            desired_goal = desired_goal.reshape(1, -1)
+
+        rewards = np.zeros(achieved_goal.shape[0], dtype=np.float32)
+
+        for i in range(achieved_goal.shape[0]):
+            goal_indices = np.where(desired_goal[i] > 0.5)[0]
+            goal_satisfied = np.all(achieved_goal[i][goal_indices] > 0.5)
+            rewards[i] = self.success_reward if goal_satisfied else self.step_penalty
+
+        return rewards
 
     @property
     def render_mode(self):

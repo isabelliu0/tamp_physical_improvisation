@@ -55,6 +55,12 @@ class GraphPickUpSkill(BaseObstacle2DSkill):
         assert block_id in block_positions
         block_pos = block_positions[block_id]
 
+        # If already holding the block, skill is complete
+        if np.isclose(robot_pos[0], block_pos[0], atol=1e-3) and np.isclose(
+            robot_pos[1], block_pos[1], atol=1e-3
+        ):
+            return np.array([0.0, 0.0, 0.0])
+
         # Find the other blocks
         other_block_positions = []
         for other_id, other_pos in block_positions.items():
@@ -107,7 +113,9 @@ class GraphPutDownSkill(BaseObstacle2DSkill):
         objects: Sequence[Object],
         obs: GraphInstance,  # type: ignore[override]
     ) -> NDArray[np.float32]:
-        robot_pos, _, gripper_status = self._extract_positions_from_graph(obs)
+        robot_pos, block_positions, gripper_status = self._extract_positions_from_graph(
+            obs
+        )
         robot_height = 0.2
         block_height = 0.2
 
@@ -118,12 +126,14 @@ class GraphPutDownSkill(BaseObstacle2DSkill):
         else:
             target_x, target_y = 0.0, 0.0
 
-        # Check if block is already on the target surface
-        if np.isclose(robot_pos[0], target_x, atol=1e-3) and np.isclose(
-            robot_pos[1], target_y, atol=1e-3
+        block_obj = objects[1]
+        block_id = int(block_obj.name.replace("block", ""))
+        block_pos = block_positions[block_id]
+
+        # Check if block is already placed on ground at target location
+        if np.isclose(block_pos[0], target_x, atol=1e-3) and np.isclose(
+            block_pos[1], 0.0, atol=1e-3
         ):
-            if gripper_status > 0.0:
-                return np.array([0.0, 0.0, -1.0])
             return np.array([0.0, 0.0, 0.0])
 
         # Target position above drop location
@@ -139,8 +149,8 @@ class GraphPutDownSkill(BaseObstacle2DSkill):
             dx = np.clip(target_x - robot_pos[0], -0.1, 0.1)
             return np.array([dx, 0.0, gripper_status])
 
-        # If aligned and holding block, release it
-        if gripper_status > 0.0:
+        # If aligned and block is still elevated, release it
+        if block_pos[1] > 0.1:
             return np.array([0.0, 0.0, -1.0])
 
         return np.array([0.0, 0.0, 0.0])
@@ -228,12 +238,13 @@ class GraphObstacle2DPerceiver(Perceiver[GraphInstance]):
         atoms.add(self.predicates["NotIsTarget"]([self._table]))
 
         held_block_id = -1
-        if robot_gripper > 0.5:
-            for i in range(self.n_blocks):
-                block_id = i + 1
-                if block_id in block_positions and np.allclose(
-                    block_positions[block_id], robot_pos, atol=1e-3
-                ):
+        for i in range(self.n_blocks):
+            block_id = i + 1
+            if block_id in block_positions and np.allclose(
+                block_positions[block_id], robot_pos, atol=1e-3
+            ):
+                block_is_elevated = block_positions[block_id][1] > 0.1
+                if robot_gripper > 0.5 or (robot_gripper >= 0.0 and block_is_elevated):
                     atoms.add(
                         self.predicates["Holding"]([self._robot, self._blocks[i]])
                     )
@@ -311,6 +322,9 @@ class GraphObstacle2DPerceiver(Perceiver[GraphInstance]):
 
         # Block needs at least its width to fit
         return free_width < block_width
+
+    def _get_objects(self) -> set[Object]:
+        return {self._robot, self._table, self._target_area} | set(self._blocks)
 
 
 class BaseGraphObstacle2DTAMPSystem(BaseTAMPSystem[GraphInstance, NDArray[np.float32]]):

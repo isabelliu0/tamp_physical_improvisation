@@ -549,6 +549,7 @@ def train_and_evaluate_rl_baseline(
     single_step_skills: bool = True,
     max_skill_steps: int = 50,
     skill_failure_penalty: float = -1.0,
+    rl_algorithm: str = "ppo",
 ) -> Metrics:
     """Train and evaluate a baseline RL policy on a system."""
     if baseline_type not in ["pure_rl", "sac_her", "hierarchical"]:
@@ -600,6 +601,9 @@ def train_and_evaluate_rl_baseline(
             action_scale=config.action_scale,
             skill_failure_penalty=skill_failure_penalty,
             single_step_skills=single_step_skills,
+            goal_conditioned=(rl_algorithm == "sac_her"),
+            max_atom_size=max_atom_size,
+            success_reward=config.success_reward,
         )
 
     start_time = time.time()
@@ -622,9 +626,8 @@ def train_and_evaluate_rl_baseline(
         system.wrapped_env = wrapped_env
         approach = SACHERApproach(system, policy, seed)
     else:
-        assert isinstance(
-            wrapped_env, HierarchicalRLWrapper
-        ), "Expected HierarchicalRLWrapper"
+        assert isinstance(wrapped_env, HierarchicalRLWrapper)
+        system.env = wrapped_env
         approach = HierarchicalRLApproach(system, policy, seed, wrapped_env)
 
     print(f"\nEvaluating {baseline_name} policy on {system.name}...")

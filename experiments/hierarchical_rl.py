@@ -22,6 +22,7 @@ def train_hierarchical_rl_obstacle2d(
     render: bool = False,
     save_dir: str = "trained_policies/hierarchical_rl",
     single_step_skills: bool = False,
+    algorithm: str = "ppo",
 ):
     """Train Hierarchical RL baseline on Obstacle2D."""
     print("\n=== Training Hierarchical RL on Obstacle2D ===")
@@ -40,6 +41,7 @@ def train_hierarchical_rl_obstacle2d(
     )
 
     rl_config = RLConfig(
+        algorithm=algorithm,
         learning_rate=3e-4,
         batch_size=32,
         n_epochs=10,
@@ -65,6 +67,8 @@ def train_hierarchical_rl_obstacle2d(
         single_step_skills=single_step_skills,
         max_skill_steps=20,
         skill_failure_penalty=-1.0,
+        rl_algorithm=algorithm,
+        max_atom_size=14,
     )
 
     print("\n=== Results ===")
@@ -77,6 +81,7 @@ def train_hierarchical_rl_obstacle2d(
     results_file.parent.mkdir(parents=True, exist_ok=True)
     with open(results_file, "w", encoding="utf-8") as f:
         f.write("Environment: Obstacle2D\n")
+        f.write(f"algorithm: {algorithm}\n")
         f.write(f"seed: {seed}\n")
         f.write(f"single_step_skills: {single_step_skills}\n")
         f.write(f"success_rate: {metrics.success_rate:.4f}\n")
@@ -92,6 +97,8 @@ def train_hierarchical_rl_pybullet(
     save_dir: str = "trained_policies/hierarchical_rl",
     action_scale: float = 0.015,
     single_step_skills: bool = False,
+    algorithm: str = "ppo",
+    max_atom_size: int = 42,
 ):
     """Train Hierarchical RL baseline on PyBullet environments."""
     print(f"\n=== Training Hierarchical RL on {system_cls.__name__} ===")
@@ -110,6 +117,7 @@ def train_hierarchical_rl_pybullet(
     )
 
     rl_config = RLConfig(
+        algorithm=algorithm,
         learning_rate=3e-4,
         batch_size=32,
         n_epochs=10,
@@ -135,6 +143,8 @@ def train_hierarchical_rl_pybullet(
         single_step_skills=single_step_skills,
         max_skill_steps=200,
         skill_failure_penalty=-1.0,
+        rl_algorithm=algorithm,
+        max_atom_size=max_atom_size,
     )
 
     print("\n=== Results ===")
@@ -147,6 +157,7 @@ def train_hierarchical_rl_pybullet(
     results_file.parent.mkdir(parents=True, exist_ok=True)
     with open(results_file, "w", encoding="utf-8") as f:
         f.write(f"Environment: {system_cls.__name__}\n")
+        f.write(f"algorithm: {algorithm}\n")
         f.write(f"seed: {seed}\n")
         f.write(f"single_step_skills: {single_step_skills}\n")
         f.write(f"success_rate: {metrics.success_rate:.4f}\n")
@@ -179,6 +190,13 @@ if __name__ == "__main__":
         action="store_true",
         help="Use single-step skills instead of multi-step",
     )
+    parser.add_argument(
+        "--algorithm",
+        type=str,
+        default="ppo",
+        choices=["ppo", "sac", "sac_her"],
+        help="RL algorithm to use",
+    )
 
     args = parser.parse_args()
 
@@ -188,6 +206,7 @@ if __name__ == "__main__":
             render=args.render,
             save_dir=args.save_dir,
             single_step_skills=args.single_step_skills,
+            algorithm=args.algorithm,
         )
     elif args.env == "obstacle_tower":
         train_hierarchical_rl_pybullet(
@@ -197,6 +216,8 @@ if __name__ == "__main__":
             save_dir=args.save_dir,
             action_scale=0.015,
             single_step_skills=args.single_step_skills,
+            algorithm=args.algorithm,
+            max_atom_size=42,
         )
     elif args.env == "cluttered_drawer":
         train_hierarchical_rl_pybullet(
@@ -206,6 +227,8 @@ if __name__ == "__main__":
             save_dir=args.save_dir,
             action_scale=0.005,
             single_step_skills=args.single_step_skills,
+            algorithm=args.algorithm,
+            max_atom_size=72,
         )
     elif args.env == "cleanup_table":
         train_hierarchical_rl_pybullet(
@@ -215,4 +238,6 @@ if __name__ == "__main__":
             save_dir=args.save_dir,
             action_scale=0.005,
             single_step_skills=args.single_step_skills,
+            algorithm=args.algorithm,
+            max_atom_size=60,
         )

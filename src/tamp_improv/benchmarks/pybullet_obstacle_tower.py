@@ -99,7 +99,7 @@ class BaseObstacleTowerTAMPSystem(
             use_gui=False,
         )
         pybullet_skills = {
-            s(sim, max_motion_planning_time=0.1)  # type:ignore[abstract]
+            s(sim, max_motion_planning_time=0.1)  # type: ignore[abstract]
             for s in SKILLS
         }
         skills: set[Skill[NDArray[np.float32], NDArray[np.float32]]] = cast(
@@ -168,7 +168,7 @@ class ObstacleTowerTAMPSystem(
             use_gui=False,
         )
         pybullet_skills = {
-            s(sim, max_motion_planning_time=0.1)  # type:ignore[abstract]
+            s(sim, max_motion_planning_time=0.1)  # type: ignore[abstract]
             for s in SKILLS
         }
         skills: set[Skill[NDArray[np.float32], NDArray[np.float32]]] = cast(
