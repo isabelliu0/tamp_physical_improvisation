@@ -385,7 +385,7 @@ class RLPolicy(Policy[ObsType, ActType]):
         if self.config.algorithm == "ppo":
             self.model = PPO(
                 "MlpPolicy",
-                env,
+                wrapped_env,
                 learning_rate=self.config.learning_rate,
                 n_steps=train_data.config.get("max_training_steps_per_shortcut", 100),
                 batch_size=self.config.batch_size,

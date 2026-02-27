@@ -25,10 +25,10 @@ dependencies = [
     "trimesh==4.7.1",
     "matplotlib-inline==0.1.7",
     "tqdm==4.66.5",
-    "tomsutils@git+https://github.com/tomsilver/toms-utils.git",
-    "tomsgeoms2d@git+https://github.com/tomsilver/toms-geoms-2d.git",
+    "prpl_utils@git+https://github.com/Princeton-Robot-Planning-and-Learning/prpl-mono.git#subdirectory=prpl-utils",
+    "tomsgeoms2d@git+https://github.com/Princeton-Robot-Planning-and-Learning/prpl-mono.git#subdirectory=toms-geoms-2d",
     "task-then-motion-planning@git+https://github.com/tomsilver/task-then-motion-planning.git",
-    "relational-structs@git+https://github.com/Princeton-Robot-Planning-and-Learning/prpl-mono.git#subdirectory=relational-structs",
+    "relational_structs@git+https://github.com/Princeton-Robot-Planning-and-Learning/prpl-mono.git#subdirectory=relational-structs",
     "pybullet-blocks@git+https://github.com/tomsilver/pybullet-blocks.git",
     "pybullet_helpers@git+https://github.com/Princeton-Robot-Planning-and-Learning/prpl-mono.git#subdirectory=pybullet-helpers",
 ]
