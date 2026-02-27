@@ -105,7 +105,7 @@ class BaseGraphObstacleTowerTAMPSystem(
             use_gui=False,
         )
         pybullet_skills = {
-            s(sim, max_motion_planning_time=0.1)  # type:ignore[abstract]
+            s(sim, max_motion_planning_time=0.1)  # type: ignore[abstract]
             for s in SKILLS
         }
         skills: set[Skill[GraphInstance, NDArray[np.float32]]] = cast(
@@ -189,7 +189,7 @@ class GraphObstacleTowerTAMPSystem(
             use_gui=False,
         )
         pybullet_skills = {
-            s(sim, max_motion_planning_time=0.1)  # type:ignore[abstract]
+            s(sim, max_motion_planning_time=0.1)  # type: ignore[abstract]
             for s in SKILLS
         }
         skills: set[Skill[GraphInstance, NDArray[np.float32]]] = cast(

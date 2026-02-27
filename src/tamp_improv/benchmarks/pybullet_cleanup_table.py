@@ -96,7 +96,7 @@ class BaseCleanupTableTAMPSystem(BaseTAMPSystem[GraphInstance, NDArray[np.float3
             use_gui=False,
         )
         pybullet_skills = {
-            s(sim, max_motion_planning_time=0.1)  # type:ignore[abstract]
+            s(sim, max_motion_planning_time=0.1)  # type: ignore[abstract]
             for s in SKILLS_CLEANUP
         }
         skills: set[Skill[GraphInstance, NDArray[np.float32]]] = cast(
@@ -163,7 +163,7 @@ class CleanupTableTAMPSystem(
             use_gui=False,
         )
         pybullet_skills = {
-            s(sim, max_motion_planning_time=0.1)  # type:ignore[abstract]
+            s(sim, max_motion_planning_time=0.1)  # type: ignore[abstract]
             for s in SKILLS_CLEANUP
         }
         skills: set[Skill[GraphInstance, NDArray[np.float32]]] = cast(
